@@ -109,6 +109,12 @@ final class Router {
 		$path   = $request->path();
 		$method = $request->method();
 
+		// HEAD wird wie GET behandelt: der Webserver verwirft den Rumpf.
+		// Sonst scheitern Health-Checks, Monitoring und "curl -I" mit 405.
+		if ( 'HEAD' === $method ) {
+			$method = 'GET';
+		}
+
 		$pathMatched = false;
 
 		foreach ( $this->routes as $route ) {
