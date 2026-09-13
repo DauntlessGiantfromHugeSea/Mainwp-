@@ -131,6 +131,35 @@
 		}
 	});
 
+	/** Navigation auf schmalen Schirmen ein- und ausklappen. */
+	document.addEventListener('click', function (event) {
+		var toggle = event.target.closest('[data-nav-toggle]');
+		if (!toggle) {
+			return;
+		}
+
+		var sidebar = document.getElementById('sidebar');
+		if (!sidebar) {
+			return;
+		}
+
+		var open = sidebar.classList.toggle('open');
+		toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+	});
+
+	/** Nach der Auswahl eines Menüpunkts wieder einklappen. */
+	document.addEventListener('click', function (event) {
+		var link = event.target.closest('#sidebar-nav a');
+		if (!link) {
+			return;
+		}
+
+		var sidebar = document.getElementById('sidebar');
+		if (sidebar) {
+			sidebar.classList.remove('open');
+		}
+	});
+
 	/** Aufklappbare Bereiche. */
 	document.addEventListener('click', function (event) {
 		var toggle = event.target.closest('[data-toggle]');

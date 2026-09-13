@@ -93,11 +93,30 @@ code { color: var(--ink-2); }
 	z-index: 2;
 }
 
+.sidebar-head { display: flex; align-items: center; justify-content: space-between; }
+
 .sidebar .brand {
 	display: flex; align-items: center; gap: 10px;
 	padding: 20px 18px 18px;
 	color: var(--ink); font-weight: 600; font-size: 15.5px; letter-spacing: -.02em;
 }
+
+/* Nur auf schmalen Schirmen sichtbar. */
+.nav-toggle {
+	display: none;
+	width: 44px; height: 44px; margin-right: 10px;
+	border: 1px solid var(--line-strong); border-radius: var(--radius-sm);
+	background: rgba(255, 255, 255, .05);
+	cursor: pointer; padding: 0;
+	flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+}
+.nav-toggle span {
+	display: block; width: 17px; height: 2px; border-radius: 2px;
+	background: var(--ink-2); transition: transform .16s, opacity .16s;
+}
+.sidebar.open .nav-toggle span:nth-child(1) { transform: translateY(6px) rotate(45deg); }
+.sidebar.open .nav-toggle span:nth-child(2) { opacity: 0; }
+.sidebar.open .nav-toggle span:nth-child(3) { transform: translateY(-6px) rotate(-45deg); }
 .sidebar .brand:hover { text-decoration: none; }
 .brand-mark {
 	width: 28px; height: 28px; border-radius: 9px;
@@ -450,12 +469,75 @@ dl.meta dd { margin: 0; color: var(--ink); }
 
 @media (max-width: 800px) {
 	.shell { flex-direction: column; }
-	.sidebar { width: 100%; flex: none; height: auto; position: static; border-right: 0; border-bottom: 1px solid var(--line); }
-	.nav { display: flex; flex-wrap: wrap; gap: 4px; }
-	.nav-label { display: none; }
+	.shell::before { position: absolute; }
+
+	.sidebar {
+		width: 100%; flex: none; height: auto;
+		position: sticky; top: 0; z-index: 30;
+		border-right: 0; border-bottom: 1px solid var(--line);
+		overflow: visible;
+	}
+	.sidebar .brand { padding: 14px 16px; }
+	.nav-toggle { display: flex; }
+
+	/* Navigation ist eingeklappt, bis sie gebraucht wird — sonst steht auf jeder
+	   Seite ein halber Bildschirm Menü vor dem eigentlichen Inhalt. */
+	.nav { display: none; padding: 4px 10px 14px; border-top: 1px solid var(--line); }
+	.sidebar.open .nav { display: block; }
+	.nav a { padding: 11px 12px; }
+	.nav-label { padding-top: 12px; }
+
 	.sidebar-foot { display: none; }
-	.grid.cols-2, .grid.cols-4 { grid-template-columns: minmax(0, 1fr); }
+	.sidebar.open .sidebar-foot { display: block; }
+
+	.topbar { position: static; padding: 14px 16px; flex-wrap: wrap; row-gap: 10px; }
+	.topbar h1 { font-size: 19px; }
+	.topbar .btn-row { width: 100%; }
+	.topbar .btn-row .btn { flex: 1; }
+
+	.content { padding: 16px 16px 48px; }
+
+	.grid { gap: 14px; }
+	.grid.cols-2 { grid-template-columns: minmax(0, 1fr); }
+	.grid.cols-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 	.form-grid { grid-template-columns: minmax(0, 1fr); }
-	.content, .topbar { padding-left: 16px; padding-right: 16px; }
+
+	.stat { padding: 13px 14px; }
+	.stat .value { font-size: 23px; }
+
+	.card-head { padding: 13px 15px; }
+	.card-body { padding: 15px; }
+
+	/* Breite Tabellen sollen waagerecht scrollen statt die Spalten zu quetschen.
+	   Die erste Spalte trägt Name und URL und braucht dafür spürbar mehr Platz. */
+	.table-wrap { -webkit-overflow-scrolling: touch; }
+	.table-wrap table.data { min-width: 720px; }
+	.table-wrap table.data th:first-child,
+	.table-wrap table.data td:first-child { min-width: 200px; }
+
+	.filters .field { min-width: 100%; }
+	.filters .btn { flex: 1; }
+
+	/* Fingerfreundliche Ziele. */
+	.btn { min-height: 42px; padding: 10px 15px; }
+	.btn.sm { min-height: 36px; padding: 8px 12px; }
+	input[type=text], input[type=email], input[type=password], input[type=url],
+	input[type=number], input[type=search], select { min-height: 44px; }
+	input[type=checkbox], input[type=radio] { width: 19px; height: 19px; }
+	.field.inline { gap: 11px; padding: 3px 0; }
+
+	.copy-row { flex-wrap: wrap; }
+	.copy-row input { min-width: 100%; }
+	.copy-row .btn { width: 100%; }
+
+	.truncate { max-width: 190px; }
+	.tabs { gap: 0; overflow-x: auto; flex-wrap: nowrap; }
+	.tabs a, .tabs button { white-space: nowrap; }
+
 	.auth-card { padding: 28px 22px; }
+}
+
+@media (max-width: 430px) {
+	.grid.cols-4 { grid-template-columns: minmax(0, 1fr); }
+	.topbar .btn-row .btn { flex: 1 1 100%; }
 }

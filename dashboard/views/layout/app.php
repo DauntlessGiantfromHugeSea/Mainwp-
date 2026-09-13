@@ -37,17 +37,24 @@ $navKey = static fn( string $prefix ): string => str_starts_with( $nav, $prefix 
 <body>
 <div class="shell">
 
-	<aside class="sidebar">
-		<a class="brand" href="<?= e( url( '/' ) ) ?>">
-			<?php if ( '' !== $logo ) : ?>
-				<img class="brand-logo" src="<?= e( $logo ) ?>" alt="<?= e( $agencyName ) ?>">
-			<?php else : ?>
-				<span class="brand-mark">N</span>
-				<span><?= e( $agencyName ) ?></span>
-			<?php endif; ?>
-		</a>
+	<aside class="sidebar" id="sidebar">
+		<div class="sidebar-head">
+			<a class="brand" href="<?= e( url( '/' ) ) ?>">
+				<?php if ( '' !== $logo ) : ?>
+					<img class="brand-logo" src="<?= e( $logo ) ?>" alt="<?= e( $agencyName ) ?>">
+				<?php else : ?>
+					<span class="brand-mark">N</span>
+					<span><?= e( $agencyName ) ?></span>
+				<?php endif; ?>
+			</a>
 
-		<nav class="nav">
+			<button type="button" class="nav-toggle" data-nav-toggle
+				aria-controls="sidebar-nav" aria-expanded="false" aria-label="Navigation ein- und ausblenden">
+				<span></span><span></span><span></span>
+			</button>
+		</div>
+
+		<nav class="nav" id="sidebar-nav">
 			<div class="nav-label">Überblick</div>
 			<a href="<?= e( url( '/' ) ) ?>" class="<?= e( 'dashboard' === $nav ? 'active' : '' ) ?>">Dashboard</a>
 			<a href="<?= e( url( '/sites' ) ) ?>" class="<?= e( $navKey( 'sites' ) ) ?>">

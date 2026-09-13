@@ -1,13 +1,13 @@
 <?php
 /**
  * Plugin Name:       NorthLab Child
- * Plugin URI:        https://northlab.agency/
+ * Plugin URI:        https://north-lab.de/
  * Description:       Verbindet diese WordPress-Seite mit dem NorthLab Control Panel. Erlaubt zentrale Updates, Status-Abfragen, Wartung, Sicherheitschecks und Reports.
  * Version:           1.0.0
  * Requires at least: 6.0
  * Requires PHP:      7.4
  * Author:            NorthLab
- * Author URI:        https://northlab.agency/
+ * Author URI:        https://north-lab.de/
  * License:           GPL-3.0-or-later
  * Text Domain:       north-lab-child
  */
