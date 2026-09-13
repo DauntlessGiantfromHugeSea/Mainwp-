@@ -102,6 +102,7 @@ final class Setting {
 			'auto_update_excludes' => '',
 			'auto_update_window'   => '',
 			'uptime_secret'        => '',
+			'uptime_global_token'  => '',
 			'notify_email'         => '',
 			'notify_on'            => json_encode( array( 'site.offline', 'sync.failed', 'update.failed' ) ),
 			'report_default_freq'  => 'monthly',

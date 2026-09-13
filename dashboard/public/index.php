@@ -84,6 +84,7 @@ $router->post( '/updates/apply', array( UpdateController::class, 'apply' ) );
 
 // Uptime
 $router->get( '/uptime', array( UptimeController::class, 'index' ) );
+$router->get( '/uptime/export', array( UptimeController::class, 'export' ) );
 
 // Kunden
 $router->get( '/clients', array( ClientController::class, 'index' ) );

@@ -198,6 +198,46 @@ $get = static fn( string $key, string $default = '' ): string => $settings[ $key
 				HetrixTools sowie generisches JSON <code>{"status":"up"|"down"}</code>.
 			</p>
 
+			<h3 class="mt">Sammel-URL für alle Seiten</h3>
+			<?php $globalToken = $get( 'uptime_global_token' ); ?>
+			<?php if ( '' !== $globalToken ) : ?>
+				<p class="small muted">
+					Eine einzige Benachrichtigung im Monitoring genügt. Das Panel ordnet jede Meldung
+					anhand der überwachten Adresse der passenden Seite zu — verglichen wird der Hostname.
+				</p>
+				<div class="copy-row" style="max-width:640px">
+					<input type="text" id="uptime-global" readonly class="mono"
+						value="<?= e( rtrim( (string) $config['app_url'], '/' ) . '/api/uptime/' . $globalToken ) ?>">
+					<button class="btn sm" type="button" data-copy="#uptime-global">Kopieren</button>
+				</div>
+				<div class="btn-row mt">
+					<form method="post" action="<?= e( url( '/settings' ) ) ?>"
+						data-confirm="Neues Sammel-Token erzeugen? Die alte URL wird sofort ungültig.">
+						<?= csrf_field() ?>
+						<input type="hidden" name="section" value="uptime_token">
+						<button class="btn sm">Token neu erzeugen</button>
+					</form>
+					<form method="post" action="<?= e( url( '/settings' ) ) ?>"
+						data-confirm="Sammel-URL abschalten? Danach gelten nur noch die Adressen je Seite.">
+						<?= csrf_field() ?>
+						<input type="hidden" name="section" value="uptime_token">
+						<input type="hidden" name="disable" value="1">
+						<button class="btn sm danger">Abschalten</button>
+					</form>
+				</div>
+			<?php else : ?>
+				<p class="small muted">
+					Noch nicht eingerichtet. Ohne Sammel-URL musst du je Monitor die seitenspezifische
+					Adresse eintragen.
+				</p>
+				<form method="post" action="<?= e( url( '/settings' ) ) ?>">
+					<?= csrf_field() ?>
+					<input type="hidden" name="section" value="uptime_token">
+					<button class="btn primary">Sammel-URL erzeugen</button>
+				</form>
+			<?php endif; ?>
+
+			<h3 class="mt">Signaturprüfung</h3>
 			<form method="post" action="<?= e( url( '/settings' ) ) ?>">
 				<?= csrf_field() ?>
 				<input type="hidden" name="section" value="monitoring">

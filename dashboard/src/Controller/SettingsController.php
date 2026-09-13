@@ -101,6 +101,20 @@ final class SettingsController extends BaseController {
 				);
 				break;
 
+			case 'uptime_token':
+				Setting::set(
+					'uptime_global_token',
+					$request->bool( 'disable' ) ? '' : Crypto::monitorToken()
+				);
+				$this->respond(
+					$request,
+					true,
+					$request->bool( 'disable' )
+						? 'Sammel-Token deaktiviert. Es gelten nur noch die seitenspezifischen URLs.'
+						: 'Neues Sammel-Token erzeugt. Bitte die Benachrichtigung im Monitoring aktualisieren.',
+					'/settings#monitoring'
+				);
+
 			case 'cron_token':
 				Setting::set( 'cron_token', Crypto::secret( 16 ) );
 				$this->respond( $request, true, 'Neues Cron-Token erzeugt. Bitte den Aufruf im Monitoring/Cron anpassen.', '/settings' );

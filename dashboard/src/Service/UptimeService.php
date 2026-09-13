@@ -100,7 +100,7 @@ final class UptimeService {
 	 * Pingdom, StatusCake und HetrixTools.
 	 *
 	 * @param array<string,mixed> $body
-	 * @return array{status:string,source:string,http_code:int,response_ms:int,message:string}|null
+	 * @return array{status:string,source:string,http_code:int,response_ms:int,message:string,monitor_url:string}|null
 	 */
 	public static function normalize( array $body ): ?array {
 		// Generisch: {"status":"up"} — hat Vorrang, wenn eindeutig.
@@ -112,7 +112,8 @@ final class UptimeService {
 					(string) ( $body['source'] ?? 'generic' ),
 					(int) ( $body['http_code'] ?? $body['status_code'] ?? 0 ),
 					(int) ( $body['response_ms'] ?? $body['response_time'] ?? 0 ),
-					(string) ( $body['message'] ?? $body['reason'] ?? '' )
+					(string) ( $body['message'] ?? $body['reason'] ?? '' ),
+					self::monitorUrl( $body )
 				);
 			}
 		}
@@ -125,7 +126,8 @@ final class UptimeService {
 				'uptimerobot',
 				0,
 				0,
-				(string) ( $body['alertDetails'] ?? $body['alertTypeFriendlyName'] ?? '' )
+				(string) ( $body['alertDetails'] ?? $body['alertTypeFriendlyName'] ?? '' ),
+				self::monitorUrl( $body )
 			);
 		}
 
@@ -136,7 +138,8 @@ final class UptimeService {
 				'betterstack',
 				(int) ( $body['data']['attributes']['response_code'] ?? 0 ),
 				0,
-				(string) ( $body['data']['attributes']['cause'] ?? '' )
+				(string) ( $body['data']['attributes']['cause'] ?? '' ),
+				self::monitorUrl( $body )
 			);
 		}
 
@@ -147,7 +150,8 @@ final class UptimeService {
 				'uptimekuma',
 				0,
 				(int) ( $body['heartbeat']['ping'] ?? 0 ),
-				(string) ( $body['heartbeat']['msg'] ?? '' )
+				(string) ( $body['heartbeat']['msg'] ?? '' ),
+				self::monitorUrl( $body )
 			);
 		}
 
@@ -158,7 +162,8 @@ final class UptimeService {
 				'pingdom',
 				0,
 				0,
-				(string) ( $body['long_description'] ?? $body['description'] ?? '' )
+				(string) ( $body['long_description'] ?? $body['description'] ?? '' ),
+				self::monitorUrl( $body )
 			);
 		}
 
@@ -169,7 +174,8 @@ final class UptimeService {
 				'statuscake',
 				(int) ( $body['StatusCode'] ?? 0 ),
 				0,
-				(string) ( $body['Name'] ?? '' )
+				(string) ( $body['Name'] ?? '' ),
+				self::monitorUrl( $body )
 			);
 		}
 
@@ -180,7 +186,8 @@ final class UptimeService {
 				'hetrixtools',
 				0,
 				0,
-				is_scalar( $body['monitor_errors'] ?? null ) ? (string) $body['monitor_errors'] : ''
+				is_scalar( $body['monitor_errors'] ?? null ) ? (string) $body['monitor_errors'] : '',
+				self::monitorUrl( $body )
 			);
 		}
 
@@ -204,15 +211,45 @@ final class UptimeService {
 	}
 
 	/**
-	 * @return array{status:string,source:string,http_code:int,response_ms:int,message:string}
+	 * @return array{status:string,source:string,http_code:int,response_ms:int,message:string,monitor_url:string}
 	 */
-	private static function result( string $status, string $source, int $httpCode, int $responseMs, string $message ): array {
+	private static function result( string $status, string $source, int $httpCode, int $responseMs, string $message, string $monitorUrl = '' ): array {
 		return array(
 			'status'      => $status,
 			'source'      => substr( $source, 0, 40 ),
 			'http_code'   => $httpCode,
 			'response_ms' => $responseMs,
 			'message'     => $message,
+			'monitor_url' => $monitorUrl,
 		);
+	}
+
+	/**
+	 * Liest die überwachte Adresse aus dem Payload — nötig, wenn eine einzige
+	 * Sammel-URL für alle Monitore verwendet wird und die Seite erst zugeordnet
+	 * werden muss.
+	 *
+	 * @param array<string,mixed> $body
+	 */
+	public static function monitorUrl( array $body ): string {
+		$candidates = array(
+			$body['monitor']['url'] ?? null,          // Uptime Kuma
+			$body['monitor']['hostname'] ?? null,     // Uptime Kuma (Ping/Port-Monitore)
+			$body['monitorURL'] ?? null,              // UptimeRobot
+			$body['data']['attributes']['url'] ?? null, // Better Stack
+			$body['check']['url'] ?? null,
+			$body['URL'] ?? null,                     // StatusCake
+			$body['monitor_target'] ?? null,          // HetrixTools
+			$body['url'] ?? null,                     // generisch
+			$body['site'] ?? null,                    // generisch
+		);
+
+		foreach ( $candidates as $candidate ) {
+			if ( is_string( $candidate ) && '' !== trim( $candidate ) ) {
+				return trim( $candidate );
+			}
+		}
+
+		return '';
 	}
 }

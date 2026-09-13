@@ -24,9 +24,15 @@ final class ApiController {
 	 * Body: JSON des Dienstes oder {"status":"up"|"down"}
 	 */
 	public function uptime( Request $request ): void {
-		$site = SiteRepository::findByMonitorToken( (string) ( $request->params['token'] ?? '' ) );
+		$token  = (string) ( $request->params['token'] ?? '' );
+		$global = trim( Setting::get( 'uptime_global_token', '' ) );
 
-		if ( null === $site ) {
+		// Zwei Betriebsarten: ein Token je Seite, oder ein Sammel-Token für alle
+		// Monitore — dann wird die Seite anhand der gemeldeten Adresse zugeordnet.
+		$isGlobal = '' !== $global && hash_equals( $global, $token );
+		$site     = $isGlobal ? null : SiteRepository::findByMonitorToken( $token );
+
+		if ( ! $isGlobal && null === $site ) {
 			Response::json( array( 'ok' => false, 'error' => 'Unbekanntes Monitoring-Token.' ), 404 );
 			return;
 		}
@@ -46,6 +52,39 @@ final class ApiController {
 		}
 
 		$normalized = UptimeService::normalize( $body );
+
+		if ( $isGlobal ) {
+			$monitorUrl = null !== $normalized && '' !== $normalized['monitor_url']
+				? $normalized['monitor_url']
+				: UptimeService::monitorUrl( $body );
+
+			if ( '' === $monitorUrl ) {
+				Response::json(
+					array(
+						'ok'    => false,
+						'error' => 'Sammel-Token verwendet, aber im Payload steht keine Adresse. '
+							. 'Sende die überwachte URL mit (bei Uptime Kuma ist das monitor.url) '
+							. 'oder nutze die seitenspezifische Monitoring-URL.',
+					),
+					422
+				);
+				return;
+			}
+
+			$site = SiteRepository::findByLooseUrl( $monitorUrl );
+
+			if ( null === $site ) {
+				Response::json(
+					array(
+						'ok'    => false,
+						'error' => sprintf( 'Keine Seite mit dem Host "%s" im Panel registriert.', SiteRepository::hostKey( $monitorUrl ) ),
+						'hint'  => 'Die Zuordnung läuft über den Hostnamen. Prüfe, ob die Seite im Panel dieselbe Domain hat.',
+					),
+					404
+				);
+				return;
+			}
+		}
 
 		if ( null === $normalized ) {
 			Response::json(
@@ -76,6 +115,7 @@ final class ApiController {
 				'site'    => array( 'id' => (int) $site['id'], 'name' => (string) $site['name'] ),
 				'status'  => $normalized['status'],
 				'source'  => $normalized['source'],
+				'matched' => $isGlobal ? 'url' : 'token',
 				'changed' => $changed,
 			)
 		);

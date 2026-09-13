@@ -30,6 +30,50 @@ final class SiteRepository {
 	}
 
 	/**
+	 * Findet eine Seite anhand einer beliebig geschriebenen URL.
+	 *
+	 * Externe Monitore melden die Adresse nicht zwingend so, wie sie hier hinterlegt ist:
+	 * mal mit http statt https, mal mit "www.", mal mit Pfad oder abschliessendem Slash.
+	 * Verglichen wird deshalb nur der Hostname.
+	 *
+	 * @return array<string,mixed>|null
+	 */
+	public static function findByLooseUrl( string $url ): ?array {
+		$needle = self::hostKey( $url );
+
+		if ( '' === $needle ) {
+			return null;
+		}
+
+		foreach ( Database::select( 'SELECT * FROM `' . Database::table( 'sites' ) . '`' ) as $site ) {
+			if ( self::hostKey( (string) $site['url'] ) === $needle ) {
+				return $site;
+			}
+		}
+
+		return null;
+	}
+
+	/**
+	 * Vergleichbarer Hostname: ohne Schema, ohne "www.", ohne Port, klein geschrieben.
+	 */
+	public static function hostKey( string $url ): string {
+		$url = trim( $url );
+
+		if ( '' === $url ) {
+			return '';
+		}
+		if ( ! preg_match( '#^[a-z][a-z0-9+.-]*://#i', $url ) ) {
+			$url = 'https://' . $url;
+		}
+
+		$host = (string) ( parse_url( $url, PHP_URL_HOST ) ?: '' );
+		$host = strtolower( rtrim( $host, '.' ) );
+
+		return preg_replace( '/^www\./', '', $host ) ?? $host;
+	}
+
+	/**
 	 * @return array<string,mixed>|null
 	 */
 	public static function findByMonitorToken( string $token ): ?array {

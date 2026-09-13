@@ -3,6 +3,7 @@
  * @var array<int,array<string,mixed>> $rows
  * @var array<int,array<string,mixed>> $feed
  * @var int                            $days
+ * @var string                         $globalUrl
  */
 
 use NorthLab\Core\View;
@@ -40,12 +41,51 @@ $average = $rows ? $sum / count( $rows ) : 100.0;
 	</div>
 </div>
 
-<div class="notice">
-	<strong>Datenquellen:</strong> Das Panel prüft die Erreichbarkeit selbst über regelmäßige Heartbeats.
-	Zusätzlich nimmt jede Seite Statusmeldungen eines externen Monitorings per Webhook entgegen —
-	die passende URL steht auf der jeweiligen Seitenübersicht.
-	Erkannt werden UptimeRobot, Better Stack, Uptime Kuma, Pingdom, StatusCake, HetrixTools und
-	beliebige Dienste, die <code>{"status":"up"}</code> bzw. <code>{"status":"down"}</code> senden.
+<div class="card">
+	<div class="card-head">
+		<h2>Monitoring anbinden</h2>
+		<div class="spacer"></div>
+		<a class="btn sm" href="<?= e( url( '/uptime/export' ) ) ?>">Alle URLs als CSV</a>
+	</div>
+	<div class="card-body">
+		<?php if ( '' !== $globalUrl ) : ?>
+			<p class="small">
+				<strong>Sammel-URL für alle Seiten.</strong> Eine einzige Benachrichtigung im Monitoring genügt —
+				das Panel ordnet die Meldung anhand der überwachten Adresse selbst der richtigen Seite zu.
+			</p>
+			<div class="copy-row" style="max-width:640px">
+				<input type="text" id="global-url" readonly class="mono" value="<?= e( $globalUrl ) ?>">
+				<button class="btn sm" type="button" data-copy="#global-url">Kopieren</button>
+			</div>
+			<p class="hint">
+				In <strong>Uptime Kuma</strong>: <em>Einstellungen → Benachrichtigungen → Benachrichtigung einrichten</em>,
+				Typ <em>Webhook</em>, diese URL eintragen, Inhaltstyp <code>application/json</code>.
+				Dann <em>Standardmäßig aktiviert</em> und <em>Auf alle bestehenden Monitore anwenden</em> ankreuzen —
+				damit sind alle Monitore auf einmal angebunden.
+			</p>
+		<?php else : ?>
+			<p class="small">
+				Bisher hat jede Seite eine eigene Monitoring-URL — die musst du je Monitor einzeln eintragen.
+				Bequemer ist eine <strong>Sammel-URL</strong>: eine Benachrichtigung, die auf alle Monitore angewendet wird.
+				Das Panel erkennt die Seite dann an der überwachten Adresse.
+			</p>
+			<?php if ( \NorthLab\Core\Auth::isAdmin() ) : ?>
+				<form method="post" action="<?= e( url( '/settings' ) ) ?>">
+					<?= csrf_field() ?>
+					<input type="hidden" name="section" value="uptime_token">
+					<button class="btn primary">Sammel-URL erzeugen</button>
+				</form>
+			<?php else : ?>
+				<p class="hint">Ein Administrator kann sie unter Einstellungen → Monitoring erzeugen.</p>
+			<?php endif; ?>
+		<?php endif; ?>
+
+		<p class="small muted mt mb0">
+			Zusätzlich prüft das Panel die Erreichbarkeit selbst per Heartbeat. Erkannt werden
+			UptimeRobot, Better Stack, Uptime Kuma, Pingdom, StatusCake, HetrixTools und beliebige
+			Dienste, die <code>{"status":"up"}</code> bzw. <code>{"status":"down"}</code> senden.
+		</p>
+	</div>
 </div>
 
 <div class="card">
