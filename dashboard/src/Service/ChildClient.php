@@ -37,14 +37,23 @@ final class ChildClient {
 			JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE
 		);
 
-		$response = Http::postJson(
-			self::endpoint( $site, '/connect' ),
-			(string) $body,
-			array(),
-			(int) Config::get( 'http.timeout', 60 ),
-			self::verifySsl( $site ),
-			self::basicAuth( $site )
-		);
+		$response = array();
+
+		foreach ( array( 'pretty', 'query' ) as $index => $style ) {
+			$response = Http::postJson(
+				self::endpoint( $site, '/connect', $style ),
+				(string) $body,
+				array(),
+				(int) Config::get( 'http.timeout', 60 ),
+				self::verifySsl( $site ),
+				self::basicAuth( $site )
+			);
+
+			if ( 404 !== $response['status'] ) {
+				self::rememberStyle( $site, $style );
+				break;
+			}
+		}
 
 		return self::interpret( $response );
 	}
@@ -110,24 +119,40 @@ final class ChildClient {
 			'Accept'          => 'application/json',
 		);
 
-		$url = self::endpoint( $site, $route );
-		if ( $query ) {
-			$url .= ( str_contains( $url, '?' ) ? '&' : '?' ) . http_build_query( $query );
-		}
-
 		if ( null !== $body ) {
 			$headers['Content-Type'] = 'application/json';
 		}
 
-		$response = Http::request(
-			$method,
-			$url,
-			null === $body ? null : $json,
-			$headers,
-			$timeout ?? (int) Config::get( 'http.timeout', 60 ),
-			self::verifySsl( $site ),
-			self::basicAuth( $site )
-		);
+		$timeout  = $timeout ?? (int) Config::get( 'http.timeout', 60 );
+		$primary  = (string) ( $site['rest_style'] ?? 'pretty' );
+		$styles   = 'pretty' === $primary ? array( 'pretty', 'query' ) : array( 'query', 'pretty' );
+		$response = array();
+
+		foreach ( $styles as $index => $style ) {
+			$url = self::endpoint( $site, $route, $style );
+			if ( $query ) {
+				$url .= ( str_contains( $url, '?' ) ? '&' : '?' ) . http_build_query( $query );
+			}
+
+			$response = Http::request(
+				$method,
+				$url,
+				null === $body ? null : $json,
+				$headers,
+				$timeout,
+				self::verifySsl( $site ),
+				self::basicAuth( $site )
+			);
+
+			// Ein 404 heisst hier meist: diese Adressform gibt es auf der Seite nicht.
+			// Alles andere — auch Fehler — ist eine echte Antwort und wird ausgewertet.
+			if ( 404 !== $response['status'] || $index === count( $styles ) - 1 ) {
+				if ( 404 !== $response['status'] ) {
+					self::rememberStyle( $site, $style );
+				}
+				break;
+			}
+		}
 
 		$result = self::interpret( $response );
 
@@ -157,7 +182,10 @@ final class ChildClient {
 			$message = (string) ( $data['message'] ?? sprintf( 'HTTP %d', $response['status'] ) );
 
 			if ( 404 === $response['status'] ) {
-				$message = 'Endpunkt nicht gefunden (HTTP 404). Ist das NorthLab-Child-Plugin aktiv und die WordPress-REST-API erreichbar?';
+				$message = 'Endpunkt nicht gefunden (HTTP 404). Das Panel hat beide Adressformen probiert '
+					. '(/wp-json/… und ?rest_route=…). Prüfe: Ist das NorthLab-Child-Plugin aktiv? '
+					. 'Blockiert ein Sicherheits-Plugin oder eine Firewall die REST-API? '
+					. 'Zeigt die eingetragene URL auf die WordPress-Installation selbst (nicht auf eine Weiterleitung)?';
 			} elseif ( 'nlc_not_connected' === $code ) {
 				$message = 'Das Child-Plugin kennt diese Verbindung nicht mehr. Bitte die Seite neu verbinden.';
 			} elseif ( 401 === $response['status'] ) {
@@ -185,10 +213,35 @@ final class ChildClient {
 	}
 
 	/**
+	 * Adresse des Endpunkts.
+	 *
+	 * WordPress bietet die REST-API in zwei Formen an: unter /wp-json/… nur dann,
+	 * wenn sprechende Permalinks aktiv sind, sonst ausschliesslich über den
+	 * Parameter ?rest_route=. Welche Form eine Seite versteht, merkt sich das Panel.
+	 *
 	 * @param array<string,mixed> $site
 	 */
-	private static function endpoint( array $site, string $route ): string {
-		return rtrim( (string) $site['url'], '/' ) . '/wp-json' . self::NAMESPACE_PATH . $route;
+	private static function endpoint( array $site, string $route, ?string $style = null ): string {
+		$base  = rtrim( (string) $site['url'], '/' );
+		$style = $style ?? (string) ( $site['rest_style'] ?? 'pretty' );
+
+		if ( 'query' === $style ) {
+			return $base . '/?rest_route=' . rawurlencode( self::NAMESPACE_PATH . $route );
+		}
+
+		return $base . '/wp-json' . self::NAMESPACE_PATH . $route;
+	}
+
+	/**
+	 * Hält fest, über welche Form die Seite antwortet — der Rückfall soll
+	 * nicht bei jeder Anfrage erneut durchlaufen werden.
+	 *
+	 * @param array<string,mixed> $site
+	 */
+	private static function rememberStyle( array $site, string $style ): void {
+		if ( (string) ( $site['rest_style'] ?? 'pretty' ) !== $style && ! empty( $site['id'] ) ) {
+			SiteRepository::update( (int) $site['id'], array( 'rest_style' => $style ) );
+		}
 	}
 
 	/**

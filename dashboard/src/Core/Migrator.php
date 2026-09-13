@@ -9,7 +9,7 @@ namespace NorthLab\Core;
  */
 final class Migrator {
 
-	public const SCHEMA_VERSION = 2;
+	public const SCHEMA_VERSION = 3;
 
 	/**
 	 * Alle Tabellen anlegen (idempotent).
@@ -32,6 +32,11 @@ final class Migrator {
 	 */
 	private static function upgradeColumns(): void {
 		$columns = array(
+			// Schema 3: Form der REST-Adresse je Seite.
+			'sites' => array(
+				'rest_style' => "VARCHAR(10) NOT NULL DEFAULT 'pretty'",
+			),
+
 			// Schema 2: Zwei-Faktor-Anmeldung und Seitenzuordnung.
 			'users' => array(
 				'totp_secret'       => "VARCHAR(255) NOT NULL DEFAULT ''",
