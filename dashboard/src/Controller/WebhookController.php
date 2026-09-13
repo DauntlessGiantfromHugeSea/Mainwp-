@@ -85,6 +85,35 @@ final class WebhookController extends BaseController {
 		);
 	}
 
+	/**
+	 * Erstbefüllung: den kompletten Stand an alle Endpunkte schicken.
+	 */
+	public function snapshot( Request $request ): void {
+		Auth::requireWrite();
+
+		$queued = WebhookService::sendSnapshot(
+			max( 1, min( 365, $request->int( 'days', 30 ) ) ),
+			$request->int( 'webhook_id' )
+		);
+
+		if ( 0 === $queued ) {
+			$this->respond(
+				$request,
+				false,
+				'Kein passender Endpunkt. Der Gesamtstand geht nur an aktive Endpunkte ohne Kundenbindung, '
+					. 'die das Ereignis "snapshot.full" abonniert haben.',
+				'/webhooks'
+			);
+		}
+
+		$this->respond(
+			$request,
+			true,
+			sprintf( 'Gesamtstand an %d Endpunkt(e) eingereiht — wird binnen einer Minute zugestellt.', $queued ),
+			'/webhooks'
+		);
+	}
+
 	public function retry( Request $request ): void {
 		Auth::requireWrite();
 

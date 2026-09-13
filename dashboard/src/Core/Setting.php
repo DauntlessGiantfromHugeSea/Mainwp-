@@ -104,6 +104,7 @@ final class Setting {
 			'uptime_secret'        => '',
 			'uptime_global_token'  => '',
 			'api_token'            => '',
+			'snapshot_daily'       => '1',
 			'notify_email'         => '',
 			'notify_on'            => json_encode( array( 'site.offline', 'sync.failed', 'update.failed' ) ),
 			'report_default_freq'  => 'monthly',

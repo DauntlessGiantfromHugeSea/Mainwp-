@@ -79,6 +79,36 @@ final class ReportService {
 	}
 
 	/**
+	 * Gesamtstand als Datenpaket — Grundlage für den API-Abruf und die
+	 * Vollsynchronisation per Webhook. Beide sollen dasselbe liefern.
+	 *
+	 * @return array<string,mixed>
+	 */
+	public static function snapshot( int $days = 30, ?int $clientId = null ): array {
+		$from = gmdate( 'Y-m-d H:i:s', time() - max( 1, min( 365, $days ) ) * 86400 );
+		$to   = nl_utc();
+
+		$client = $clientId ? ClientRepository::find( $clientId ) : null;
+		$sites  = SiteRepository::all( $clientId ? array( 'client_id' => $clientId ) : array() );
+
+		$payload = self::buildPayload( $client, $sites, $from, $to );
+
+		$payload['clients'] = array_map(
+			static fn( array $row ): array => array(
+				'id'              => (int) $row['id'],
+				'name'            => (string) $row['name'],
+				'contact'         => (string) $row['contact_name'],
+				'email'           => (string) $row['email'],
+				'sites'           => (int) $row['site_count'],
+				'pending_updates' => (int) $row['pending_updates'],
+			),
+			ClientRepository::all()
+		);
+
+		return $payload;
+	}
+
+	/**
 	 * @param array<string,mixed>|null      $client
 	 * @param array<int,array<string,mixed>> $sites
 	 * @return array<string,mixed>

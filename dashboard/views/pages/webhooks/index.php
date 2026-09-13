@@ -68,7 +68,28 @@ $canWrite = Auth::canWrite();
 				</div>
 				<button class="btn primary">Hinzufügen</button>
 			</form>
-			<p class="hint mb0">Neue Endpunkte bekommen <strong>alle Ereignisse</strong> und ein Secret. Beides lässt sich danach einschränken.</p>
+			<p class="hint">Neue Endpunkte bekommen <strong>alle Ereignisse</strong> und ein Secret. Beides lässt sich danach einschränken.</p>
+
+			<hr style="border:0;border-top:1px solid var(--line);margin:16px 0">
+
+			<form method="post" action="<?= e( url( '/webhooks/snapshot' ) ) ?>" class="btn-row" style="align-items:flex-end">
+				<?= csrf_field() ?>
+				<div class="field" style="margin:0">
+					<label for="snap_days">Zeitraum</label>
+					<select id="snap_days" name="days" style="width:auto">
+						<option value="30" selected>letzte 30 Tage</option>
+						<option value="90">letztes Quartal</option>
+						<option value="365">letztes Jahr</option>
+					</select>
+				</div>
+				<button class="btn" data-busy="Wird eingereiht…">Gesamtstand jetzt senden</button>
+			</form>
+			<p class="hint mb0">
+				Schickt <strong>alles auf einmal</strong> — Kunden, Seiten, Verfügbarkeit, eingespielte und
+				offene Updates, Sicherheitsbefunde. Gedacht für die Erstbefüllung eines angeschlossenen
+				Portals. Danach halten die laufenden Ereignisse den Stand aktuell, und einmal täglich
+				geht automatisch ein frischer Gesamtstand raus.
+			</p>
 		</div>
 	<?php endif; ?>
 
@@ -239,6 +260,7 @@ X-NorthLab-Signature: sha256=&lt;HMAC über "timestamp.body" mit deinem Secret&g
 					'report.generated'  => 'wenn ein Kundenbericht erstellt wurde, mit allen Kennzahlen',
 					'site.connected'    => 'wenn eine Seite verbunden wurde',
 					'site.disconnected' => 'wenn eine Seite entfernt wurde',
+					'snapshot.full'     => 'kompletter Stand aller Kunden und Seiten — manuell per Knopf und einmal täglich automatisch',
 				);
 				foreach ( $catalog as $event => $label ) :
 					?>

@@ -113,12 +113,19 @@ final class Scheduler {
 				$hooks    = WebhookRepository::prune( 30 );
 				$sessions = Auth::pruneSessions();
 
+				// Ein täglicher Gesamtstand fängt auf, wenn einzelne Ereignisse
+				// unterwegs verloren gegangen sind.
+				$snapshot = Setting::getBool( 'snapshot_daily', true )
+					? WebhookService::sendSnapshot( 30 )
+					: 0;
+
 				return sprintf(
-					'%d Protokoll, %d Uptime, %d Zustellungen, %d Sitzungen entfernt',
+					'%d Protokoll, %d Uptime, %d Zustellungen, %d Sitzungen entfernt, %d Gesamtstand',
 					$activity,
 					$uptime,
 					$hooks,
-					$sessions
+					$sessions,
+					$snapshot
 				);
 		}
 

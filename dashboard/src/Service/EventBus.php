@@ -33,6 +33,7 @@ final class EventBus {
 			'security.changed'  => 'Sicherheitsbewertung verschlechtert',
 			'maintenance.done'  => 'Wartung abgeschlossen',
 			'report.generated'  => 'Bericht erstellt',
+			'snapshot.full'     => 'Gesamtstand (Vollsynchronisation)',
 		);
 	}
 

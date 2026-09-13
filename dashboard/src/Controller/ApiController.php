@@ -187,29 +187,9 @@ final class ApiController {
 			return;
 		}
 
-		$days = max( 1, min( 365, $request->int( 'days', 30 ) ) );
-		$from = gmdate( 'Y-m-d H:i:s', time() - $days * 86400 );
-		$to   = nl_utc();
-
 		$clientId = $request->int( 'client_id' );
-		$sites    = SiteRepository::all( $clientId > 0 ? array( 'client_id' => $clientId ) : array() );
-		$client   = $clientId > 0 ? ClientRepository::find( $clientId ) : null;
 
-		$payload = ReportService::buildPayload( $client, $sites, $from, $to );
-
-		$payload['clients'] = array_map(
-			static fn( array $row ): array => array(
-				'id'              => (int) $row['id'],
-				'name'            => (string) $row['name'],
-				'contact'         => (string) $row['contact_name'],
-				'email'           => (string) $row['email'],
-				'sites'           => (int) $row['site_count'],
-				'pending_updates' => (int) $row['pending_updates'],
-			),
-			ClientRepository::all()
-		);
-
-		Response::json( $payload );
+		Response::json( ReportService::snapshot( $request->int( 'days', 30 ), $clientId > 0 ? $clientId : null ) );
 	}
 
 	/**

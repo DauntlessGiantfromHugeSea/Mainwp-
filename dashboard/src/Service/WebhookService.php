@@ -186,6 +186,59 @@ final class WebhookService {
 	}
 
 	/**
+	 * Schickt den kompletten Stand an alle passenden Endpunkte.
+	 *
+	 * Gedacht fuer die Erstbefuellung eines angeschlossenen Portals und als
+	 * taeglicher Abgleich — Ereignisse allein koennen auseinanderlaufen, wenn
+	 * eine Zustellung dauerhaft scheitert.
+	 *
+	 * @return int Zahl der eingereihten Zustellungen.
+	 */
+	public static function sendSnapshot( int $days = 30, int $webhookId = 0 ): int {
+		$payload = ReportService::snapshot( $days );
+
+		$envelope = array(
+			'event'         => 'snapshot.full',
+			'occurred_at'   => gmdate( 'c' ),
+			'agency'        => Setting::get( 'agency_name', 'NorthLab' ),
+			'dashboard_url' => rtrim( (string) Config::get( 'app.url', '' ), '/' ),
+			'message'       => sprintf(
+				'Gesamtstand: %d Seite(n), Zeitraum %d Tage.',
+				(int) ( $payload['summary']['sites'] ?? 0 ),
+				$days
+			),
+			'data'          => $payload,
+		);
+
+		$queued = 0;
+
+		foreach ( WebhookRepository::active() as $webhook ) {
+			if ( $webhookId > 0 && (int) $webhook['id'] !== $webhookId ) {
+				continue;
+			}
+			// Kundengebundene Endpunkte bekommen keinen Gesamtstand ueber alle Kunden.
+			if ( ! empty( $webhook['client_id'] ) ) {
+				continue;
+			}
+			if ( ! in_array( 'snapshot.full', WebhookRepository::events( $webhook ), true ) ) {
+				continue;
+			}
+
+			self::enqueue( (int) $webhook['id'], 'snapshot.full', $envelope );
+			$queued++;
+		}
+
+		if ( $queued > 0 ) {
+			ActivityRepository::log(
+				'snapshot.sent',
+				sprintf( 'Gesamtstand an %d Endpunkt(e) eingereiht.', $queued )
+			);
+		}
+
+		return $queued;
+	}
+
+	/**
 	 * Testzustellung mit Beispieldaten.
 	 *
 	 * @return array{success:bool,code:int,message:string}

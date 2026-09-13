@@ -106,6 +106,7 @@ $router->post( '/webhooks', array( WebhookController::class, 'store' ) );
 $router->post( '/webhooks/{id:\d+}', array( WebhookController::class, 'update' ) );
 $router->post( '/webhooks/{id:\d+}/delete', array( WebhookController::class, 'destroy' ) );
 $router->post( '/webhooks/{id:\d+}/test', array( WebhookController::class, 'test' ) );
+$router->post( '/webhooks/snapshot', array( WebhookController::class, 'snapshot' ) );
 $router->post( '/webhooks/deliveries/{id:\d+}/retry', array( WebhookController::class, 'retry' ) );
 
 // Berichte
