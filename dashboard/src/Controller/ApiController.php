@@ -54,6 +54,20 @@ final class ApiController {
 			unset( $body['token'] );
 		}
 
+		// Probezustellung freundlich quittieren, statt den Prüfklick abzuweisen.
+		if ( UptimeService::isTestPayload( $body ) ) {
+			Response::json(
+				array(
+					'ok'      => true,
+					'test'    => true,
+					'message' => $isGlobal
+						? 'Testzustellung angekommen. Die Verbindung steht. Bei echten Meldungen ordnet das Panel die Seite anhand der überwachten Adresse zu.'
+						: sprintf( 'Testzustellung angekommen. Die Verbindung zu "%s" steht.', $site['name'] ),
+				)
+			);
+			return;
+		}
+
 		$normalized = UptimeService::normalize( $body );
 
 		if ( $isGlobal ) {

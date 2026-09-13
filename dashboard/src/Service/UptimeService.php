@@ -225,6 +225,37 @@ final class UptimeService {
 	}
 
 	/**
+	 * Erkennt die Probezustellung eines Monitoring-Dienstes.
+	 *
+	 * Uptime Kuma schickt beim Test weder Monitor noch Heartbeat, sondern nur
+	 * eine Nachricht. Ohne diese Unterscheidung beantwortet das Panel genau den
+	 * Klick mit einem Fehler, mit dem die Einrichtung geprüft werden soll.
+	 *
+	 * @param array<string,mixed> $body
+	 */
+	public static function isTestPayload( array $body ): bool {
+		// Ausdrücklich als Test gekennzeichnet.
+		if ( ! empty( $body['test'] ) ) {
+			return true;
+		}
+
+		// Gar kein Inhalt — dann gibt es nichts zu verbuchen.
+		if ( ! $body ) {
+			return true;
+		}
+
+		$hasHeartbeat = isset( $body['heartbeat'] ) && is_array( $body['heartbeat'] );
+		$hasMonitor   = isset( $body['monitor'] ) && is_array( $body['monitor'] );
+
+		// Uptime Kuma: {"heartbeat":null,"monitor":null,"msg":"Testing"}
+		if ( ! $hasHeartbeat && ! $hasMonitor && isset( $body['msg'] ) ) {
+			return true;
+		}
+
+		return false;
+	}
+
+	/**
 	 * Liest die überwachte Adresse aus dem Payload — nötig, wenn eine einzige
 	 * Sammel-URL für alle Monitore verwendet wird und die Seite erst zugeordnet
 	 * werden muss.

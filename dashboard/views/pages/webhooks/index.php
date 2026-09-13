@@ -35,6 +35,10 @@ $canWrite = Auth::canWrite();
 				<em>Standardmäßig aktiviert</em> und <em>Auf alle bestehenden Monitore anwenden</em> ankreuzen.
 				Damit sind alle Monitore in einem Schritt verbunden.
 			</p>
+			<p class="hint mb0">
+				Kumas <em>Test</em>-Knopf bestätigt nur, dass die Adresse erreichbar ist —
+				er schickt keine Seitenangabe mit. Zugeordnet wird erst bei einer echten Statusmeldung.
+			</p>
 		<?php else : ?>
 			<p class="small muted mb0">Ein Administrator muss die Empfangs-URL einmalig erzeugen — sie erscheint hier automatisch beim nächsten Aufruf.</p>
 		<?php endif; ?>
