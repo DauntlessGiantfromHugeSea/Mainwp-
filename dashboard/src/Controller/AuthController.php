@@ -22,6 +22,7 @@ final class AuthController extends BaseController {
 			'login',
 			array(
 				'agencyName' => Setting::get( 'agency_name', 'NorthLab' ),
+				'agencyLogo' => Setting::get( 'agency_logo_url', '' ),
 				'flash'      => Session::takeFlash(),
 				'email'      => (string) Session::get( '_login_email', '' ),
 			),

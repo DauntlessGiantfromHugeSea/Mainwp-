@@ -25,7 +25,14 @@ $navKey = static fn( string $prefix ): string => str_starts_with( $nav, $prefix 
 	<meta name="robots" content="noindex, nofollow">
 	<title><?= e( $pageTitle ?? 'Übersicht' ) ?> · <?= e( $agencyName ?? 'NorthLab' ) ?></title>
 	<link rel="stylesheet" href="<?= e( url( '/assets/css/app.css' ) ) ?>">
-	<style>:root { --brand: <?= e( $brand ) ?>; }</style>
+	<style>
+		:root {
+			--brand: <?= e( $brand ) ?>;
+			--brand-ink: <?= e( nl_brand_ink( $brand ) ) ?>;
+			--brand-soft: color-mix(in srgb, <?= e( $brand ) ?> 14%, transparent);
+			--brand-line: color-mix(in srgb, <?= e( $brand ) ?> 32%, transparent);
+		}
+	</style>
 </head>
 <body>
 <div class="shell">

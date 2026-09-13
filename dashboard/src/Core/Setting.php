@@ -93,8 +93,8 @@ final class Setting {
 		$defaults = array(
 			'agency_name'          => 'NorthLab',
 			'agency_email'         => '',
-			'agency_logo_url'      => '',
-			'agency_color'         => '#2f6df6',
+			'agency_logo_url'      => 'https://north-flow.de/api/assets/9f7184443fbc433bbbbb552fd9c76809',
+			'agency_color'         => '#f9907a',
 			'sync_interval'        => '900',
 			'heartbeat_enabled'    => '1',
 			'heartbeat_interval'   => '300',

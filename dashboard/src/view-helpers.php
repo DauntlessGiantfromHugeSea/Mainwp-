@@ -138,3 +138,35 @@ if ( ! function_exists( 'nl_old' ) ) {
 		return is_scalar( $value ) ? (string) $value : $default;
 	}
 }
+
+if ( ! function_exists( 'nl_brand_ink' ) ) {
+	/**
+	 * Lesbare Schriftfarbe auf der Akzentfläche — dunkel auf hellen, weiss auf dunklen Tönen.
+	 */
+	function nl_brand_ink( string $hex ): string {
+		$hex = ltrim( trim( $hex ), '#' );
+
+		if ( 6 !== strlen( $hex ) || ! ctype_xdigit( $hex ) ) {
+			return '#1a1012';
+		}
+
+		$r = hexdec( substr( $hex, 0, 2 ) ) / 255;
+		$g = hexdec( substr( $hex, 2, 2 ) ) / 255;
+		$b = hexdec( substr( $hex, 4, 2 ) ) / 255;
+
+		// Relative Leuchtdichte nach WCAG.
+		$channel = static function ( float $c ): float {
+			return $c <= 0.03928 ? $c / 12.92 : ( ( $c + 0.055 ) / 1.055 ) ** 2.4;
+		};
+
+		$luminance = 0.2126 * $channel( $r ) + 0.7152 * $channel( $g ) + 0.0722 * $channel( $b );
+
+		// Beide Kandidaten durchrechnen und den besseren Kontrast nehmen. Eine feste
+		// Helligkeitsschwelle liegt gerade bei mittleren Tönen wie Koralle daneben.
+		$dark  = 0.00544; // Leuchtdichte von #1a1012
+		$white = ( 1.0 + 0.05 ) / ( $luminance + 0.05 );
+		$black = ( $luminance + 0.05 ) / ( $dark + 0.05 );
+
+		return $black >= $white ? '#1a1012' : '#ffffff';
+	}
+}
