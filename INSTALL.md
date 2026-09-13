@@ -186,13 +186,33 @@ cp /var/www/northlab/config.php /sicher/northlab-config-$(date +%F).php
 
 ### Aktualisieren
 
+Ein Befehl:
+
 ```bash
-cd /var/www/northlab
-# Dateien austauschen, config.php und storage/ unangetastet lassen
-sudo -u www-data php bin/cron.php --list   # führt fällige Schema-Migrationen aus
+/opt/northlab-src/dashboard/bin/update.sh
 ```
 
-Schema-Änderungen laufen beim ersten Aufruf automatisch.
+Das Skript holt den neuen Stand, spiegelt die Dateien ins Installationsverzeichnis,
+setzt die Rechte wieder wie vorher, zieht fällige Schema-Änderungen nach und prüft
+zum Schluss, ob die Anmeldeseite antwortet. `config.php`, Logs und Cache bleiben
+unangetastet. Bei einem Fehler bricht es ab, statt einen halben Stand zu hinterlassen.
+
+Bequemer noch als Kurzbefehl:
+
+```bash
+ln -s /opt/northlab-src/dashboard/bin/update.sh /usr/local/bin/northlab-update
+# ab dann genügt:
+northlab-update
+```
+
+Abweichende Pfade lassen sich über Umgebungsvariablen setzen:
+
+```bash
+NL_SRC=/pfad/zum/klon NL_TARGET=/var/www/northlab NL_USER=www-data northlab-update
+```
+
+Von Hand geht es weiterhin — Dateien austauschen, dabei `config.php` und `storage/`
+auslassen; Schema-Änderungen laufen beim ersten Aufruf automatisch.
 
 ### Fehlersuche
 
