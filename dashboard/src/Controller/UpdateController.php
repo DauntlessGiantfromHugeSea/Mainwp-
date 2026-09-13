@@ -21,6 +21,7 @@ final class UpdateController extends BaseController {
 			'type'            => $request->string( 'type' ),
 			'search'          => $request->string( 'q' ),
 			'include_ignored' => $request->bool( 'ignored' ),
+			'site_ids'        => Auth::visibleSiteIds(),
 		);
 
 		$this->view(
@@ -28,10 +29,10 @@ final class UpdateController extends BaseController {
 			array(
 				'grouped'  => UpdateRepository::grouped( $filters ),
 				'rows'     => UpdateRepository::query( $filters ),
-				'counts'   => UpdateRepository::countsByType(),
+				'counts'   => UpdateRepository::countsByType( Auth::visibleSiteIds() ),
 				'clients'  => ClientRepository::options(),
 				'filters'  => $filters,
-				'sites'    => SiteRepository::all( array( 'has_updates' => true ) ),
+				'sites'    => SiteRepository::all( array( 'has_updates' => true, 'site_ids' => Auth::visibleSiteIds() ) ),
 				'excludes' => UpdateService::excludes(),
 			)
 		);
@@ -47,7 +48,7 @@ final class UpdateController extends BaseController {
 
 		switch ( $mode ) {
 			case 'all':
-				$results = UpdateService::applyEverything();
+				$results = UpdateService::applyEverything( Auth::visibleSiteIds() );
 				$this->respond( $request, true, $this->summarize( $results ), $this->back( $request, '/updates' ), array( 'results' => $results ) );
 				// no break — respond() beendet die Ausführung.
 
@@ -59,12 +60,12 @@ final class UpdateController extends BaseController {
 					$this->respond( $request, false, 'Typ und Slug fehlen.', $this->back( $request, '/updates' ) );
 				}
 
-				$results = UpdateService::applyAcrossSites( $type, $slug );
+				$results = UpdateService::applyAcrossSites( $type, $slug, Auth::visibleSiteIds() );
 				$this->respond( $request, true, $this->summarize( $results ), $this->back( $request, '/updates' ), array( 'results' => $results ) );
 
 			case 'site':
 				$siteId = $request->int( 'site_id' );
-				$site   = SiteRepository::find( $siteId );
+				$site   = Auth::canSeeSite( $siteId ) ? SiteRepository::find( $siteId ) : null;
 
 				if ( null === $site ) {
 					$this->respond( $request, false, 'Seite nicht gefunden.', $this->back( $request, '/updates' ) );
@@ -104,7 +105,7 @@ final class UpdateController extends BaseController {
 				$results = array();
 
 				foreach ( $bySite as $siteId => $items ) {
-					$site = SiteRepository::find( $siteId );
+					$site = Auth::canSeeSite( (int) $siteId ) ? SiteRepository::find( (int) $siteId ) : null;
 					if ( null === $site ) {
 						continue;
 					}

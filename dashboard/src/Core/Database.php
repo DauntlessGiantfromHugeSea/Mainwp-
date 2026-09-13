@@ -231,6 +231,30 @@ final class Database {
 		}
 	}
 
+	/**
+	 * Baut eine IN-Bedingung mit benannten Platzhaltern.
+	 *
+	 * @param array<int,int> $ids
+	 * @return array{0:string,1:array<string,int>} SQL-Fragment und Parameter.
+	 */
+	public static function inClause( array $ids, string $prefix = 'in' ): array {
+		if ( ! $ids ) {
+			// Leere Liste heisst "nichts sichtbar" — niemals "alles".
+			return array( '1=0', array() );
+		}
+
+		$placeholders = array();
+		$params       = array();
+
+		foreach ( array_values( array_unique( array_map( 'intval', $ids ) ) ) as $index => $id ) {
+			$key                  = $prefix . $index;
+			$placeholders[]       = ':' . $key;
+			$params[ $key ]       = $id;
+		}
+
+		return array( '(' . implode( ', ', $placeholders ) . ')', $params );
+	}
+
 	public static function tableExists( string $table ): bool {
 		$name = self::table( $table );
 		try {

@@ -118,7 +118,124 @@ final class Auth {
 			UserRepository::updatePassword( (int) $user['id'], $password );
 		}
 
+		// Passwort stimmt. Ist ein zweiter Faktor eingerichtet, gilt die Anmeldung
+		// erst nach dessen Prüfung — bis dahin wird nur ein Vormerker gesetzt.
+		if ( ! empty( $user['totp_enabled'] ) ) {
+			Database::update( 'users', array( 'failed_attempts' => 0, 'locked_until' => null ), array( 'id' => (int) $user['id'] ) );
+
+			Session::regenerate();
+			Session::set( '_2fa_user', (int) $user['id'] );
+			Session::set( '_2fa_since', time() );
+
+			return self::CHALLENGE_REQUIRED;
+		}
+
 		self::login( $user, $request );
+
+		return null;
+	}
+
+	/**
+	 * Kennzeichnet, dass nach dem Passwort noch der zweite Faktor fehlt.
+	 */
+	public const CHALLENGE_REQUIRED = '__2fa__';
+
+	/** Nach dieser Zeit ohne zweiten Faktor beginnt die Anmeldung von vorn. */
+	private const CHALLENGE_TTL = 300;
+
+	/**
+	 * Wartet gerade eine Anmeldung auf den zweiten Faktor?
+	 *
+	 * @return array<string,mixed>|null
+	 */
+	public static function pendingUser(): ?array {
+		$userId = (int) Session::get( '_2fa_user', 0 );
+		$since  = (int) Session::get( '_2fa_since', 0 );
+
+		if ( $userId <= 0 ) {
+			return null;
+		}
+
+		if ( time() - $since > self::CHALLENGE_TTL ) {
+			self::clearChallenge();
+			return null;
+		}
+
+		$user = UserRepository::find( $userId );
+
+		return ( null !== $user && ! empty( $user['is_active'] ) ) ? $user : null;
+	}
+
+	public static function clearChallenge(): void {
+		Session::forget( '_2fa_user' );
+		Session::forget( '_2fa_since' );
+	}
+
+	/**
+	 * Prüft den zweiten Faktor und schliesst die Anmeldung ab.
+	 * Gibt bei Erfolg null zurück, sonst die Fehlermeldung.
+	 */
+	public static function completeChallenge( string $code, Request $request ): ?string {
+		$user = self::pendingUser();
+
+		if ( null === $user ) {
+			return 'Die Anmeldung ist abgelaufen. Bitte erneut mit E-Mail und Passwort beginnen.';
+		}
+
+		$code = trim( $code );
+
+		if ( '' === $code ) {
+			return 'Bitte den Code aus deiner Authenticator-App eingeben.';
+		}
+
+		$attempts = (int) Session::get( '_2fa_tries', 0 ) + 1;
+		Session::set( '_2fa_tries', $attempts );
+
+		if ( $attempts > 6 ) {
+			self::clearChallenge();
+			Session::forget( '_2fa_tries' );
+
+			ActivityRepository::log(
+				'auth.2fa_blocked',
+				sprintf( 'Zu viele falsche 2FA-Codes für %s.', $user['email'] ),
+				array( 'level' => 'warning', 'user_id' => (int) $user['id'] )
+			);
+
+			return 'Zu viele Fehlversuche. Bitte erneut anmelden.';
+		}
+
+		$secret = UserRepository::totpSecret( $user );
+		$valid  = '' !== $secret && Totp::verify( $secret, $code );
+		$viaRecovery = false;
+
+		if ( ! $valid ) {
+			$valid       = UserRepository::consumeRecoveryCode( $user, $code );
+			$viaRecovery = $valid;
+		}
+
+		if ( ! $valid ) {
+			return 'Der Code stimmt nicht. Prüfe die Uhrzeit deines Geräts oder nimm einen Ersatzcode.';
+		}
+
+		self::clearChallenge();
+		Session::forget( '_2fa_tries' );
+
+		self::login( $user, $request );
+
+		if ( $viaRecovery ) {
+			$left = UserRepository::recoveryCodesLeft( UserRepository::find( (int) $user['id'] ) ?? $user );
+
+			ActivityRepository::log(
+				'auth.recovery_used',
+				sprintf( 'Ersatzcode verwendet. Noch %d übrig.', $left ),
+				array( 'level' => 'warning', 'user_id' => (int) $user['id'] )
+			);
+
+			Session::flash(
+				'warning',
+				sprintf( 'Mit Ersatzcode angemeldet. Es sind noch %d Ersatzcodes übrig.', $left )
+			);
+		}
 
 		return null;
 	}
@@ -216,6 +333,52 @@ final class Auth {
 				sprintf( 'Konto %s nach %d Fehlversuchen gesperrt.', $user['email'], $attempts ),
 				array( 'level' => 'warning' )
 			);
+		}
+	}
+
+	/* -------------------------------------------------- Sichtbare Seiten */
+
+	/**
+	 * Auf welche Seiten darf das angemeldete Konto sehen?
+	 *
+	 * null bedeutet: alle. Ein Array schränkt auf genau diese IDs ein —
+	 * ein leeres Array heisst also "keine einzige".
+	 *
+	 * @return array<int,int>|null
+	 */
+	public static function visibleSiteIds(): ?array {
+		$user = self::user();
+
+		if ( null === $user || 'admin' === $user['role'] ) {
+			return null;
+		}
+
+		if ( 'assigned' !== ( $user['site_access'] ?? 'all' ) ) {
+			return null;
+		}
+
+		return UserRepository::siteIds( (int) $user['id'] );
+	}
+
+	public static function seesAllSites(): bool {
+		return null === self::visibleSiteIds();
+	}
+
+	public static function canSeeSite( int $siteId ): bool {
+		$visible = self::visibleSiteIds();
+
+		return null === $visible || in_array( $siteId, $visible, true );
+	}
+
+	/**
+	 * Bricht ab, wenn die Seite für dieses Konto nicht freigegeben ist.
+	 */
+	public static function requireSite( int $siteId ): void {
+		self::requireLogin();
+
+		if ( ! self::canSeeSite( $siteId ) ) {
+			Response::forbidden( 'Diese Seite ist deinem Konto nicht zugeordnet.' );
+			exit;
 		}
 	}
 

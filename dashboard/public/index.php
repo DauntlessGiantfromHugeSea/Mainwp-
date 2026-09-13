@@ -59,6 +59,8 @@ $router->any( '/api/cron/{token:[A-Za-z0-9]{16,80}}', array( ApiController::clas
 
 $router->get( '/login', array( AuthController::class, 'showLogin' ) );
 $router->post( '/login', array( AuthController::class, 'login' ) );
+$router->get( '/login/2fa', array( AuthController::class, 'showChallenge' ) );
+$router->post( '/login/2fa', array( AuthController::class, 'challenge' ) );
 $router->post( '/logout', array( AuthController::class, 'logout' ) );
 
 $router->get( '/', array( DashboardController::class, 'index' ) );
@@ -122,7 +124,10 @@ $router->get( '/users', array( UserController::class, 'index' ) );
 $router->post( '/users', array( UserController::class, 'store' ) );
 $router->post( '/users/{id:\d+}', array( UserController::class, 'update' ) );
 $router->post( '/users/{id:\d+}/delete', array( UserController::class, 'destroy' ) );
+$router->post( '/users/{id:\d+}/reset-2fa', array( UserController::class, 'resetTwoFactor' ) );
 $router->post( '/profile', array( UserController::class, 'updateProfile' ) );
+$router->get( '/profile/2fa', array( UserController::class, 'showTwoFactor' ) );
+$router->post( '/profile/2fa', array( UserController::class, 'twoFactor' ) );
 
 /* ------------------------------------------------------- CSRF-Prüfung */
 

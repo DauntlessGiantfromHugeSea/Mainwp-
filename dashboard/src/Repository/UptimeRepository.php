@@ -180,12 +180,22 @@ final class UptimeRepository {
 	 *
 	 * @return array<int,array<string,mixed>>
 	 */
-	public static function feed( int $limit = 100 ): array {
+	public static function feed( int $limit = 100, ?array $siteIds = null ): array {
+		$scope  = '';
+		$params = array();
+
+		if ( null !== $siteIds ) {
+			[ $in, $params ] = Database::inClause( $siteIds, 'vis' );
+			$scope           = ' WHERE e.site_id IN ' . $in;
+		}
+
 		return Database::select(
 			'SELECT e.*, s.name AS site_name, s.url AS site_url
 			 FROM `' . Database::table( 'uptime_events' ) . '` e
-			 INNER JOIN `' . Database::table( 'sites' ) . '` s ON s.id = e.site_id
-			 ORDER BY e.occurred_at DESC, e.id DESC LIMIT ' . max( 1, min( 500, $limit ) )
+			 INNER JOIN `' . Database::table( 'sites' ) . '` s ON s.id = e.site_id'
+			 . $scope . '
+			 ORDER BY e.occurred_at DESC, e.id DESC LIMIT ' . max( 1, min( 500, $limit ) ),
+			$params
 		);
 	}
 

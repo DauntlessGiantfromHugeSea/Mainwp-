@@ -1,6 +1,8 @@
 <?php
 /**
  * @var array<int,array<string,mixed>> $users
+ * @var array<int,array<int,int>>      $assignment
+ * @var array<int,array<string,mixed>> $allSites
  * @var array<string,string>           $roles
  * @var array<int,array<string,mixed>> $sessions
  * @var array<string,mixed>            $currentUser
@@ -43,14 +45,60 @@ View::set( 'pageTitle', 'Benutzer' );
 								</div>
 							</div>
 
+							<?php $assigned = $assignment[ (int) $user['id'] ] ?? array(); ?>
+							<?php $restricted = 'assigned' === ( $user['site_access'] ?? 'all' ); ?>
+
+							<?php if ( 'admin' === $user['role'] ) : ?>
+								<p class="hint">Administratoren sehen immer alle Seiten.</p>
+								<input type="hidden" name="site_access" value="all">
+							<?php else : ?>
+								<div class="field">
+									<label>Sichtbare Seiten</label>
+									<label class="small" style="display:flex;gap:6px;align-items:center;margin-bottom:4px">
+										<input type="radio" name="site_access" value="all" <?= $restricted ? '' : 'checked' ?>>
+										alle Seiten
+									</label>
+									<label class="small" style="display:flex;gap:6px;align-items:center">
+										<input type="radio" name="site_access" value="assigned" <?= $restricted ? 'checked' : '' ?>>
+										nur zugeordnete
+										<?php if ( $restricted ) : ?>
+											<span class="badge info"><?= e( (string) count( $assigned ) ) ?></span>
+										<?php endif; ?>
+									</label>
+
+									<?php if ( $allSites ) : ?>
+										<div style="max-height:190px;overflow:auto;border:1px solid var(--line);border-radius:var(--radius-sm);padding:10px;margin-top:8px">
+											<div class="grid cols-2" style="gap:2px 14px">
+												<?php foreach ( $allSites as $site ) : ?>
+													<label class="small" style="display:flex;gap:6px;align-items:flex-start">
+														<input type="checkbox" name="site_ids[]" value="<?= e( (string) $site['id'] ) ?>"
+															<?= in_array( (int) $site['id'], $assigned, true ) ? 'checked' : '' ?>>
+														<span><?= e( (string) $site['name'] ) ?><br>
+															<span class="muted" style="font-size:11px"><?= e( nl_host( (string) $site['url'] ) ) ?></span></span>
+													</label>
+												<?php endforeach; ?>
+											</div>
+										</div>
+										<div class="hint">Wirkt erst mit der Auswahl „nur zugeordnete“.</div>
+									<?php else : ?>
+										<div class="hint">Noch keine Seiten im Panel.</div>
+									<?php endif; ?>
+								</div>
+							<?php endif; ?>
+
 							<div class="btn-row">
 								<label class="small" style="display:flex;gap:6px;align-items:center">
 									<input type="checkbox" name="is_active" value="1" <?= ! empty( $user['is_active'] ) ? 'checked' : '' ?>> aktiv
 								</label>
 								<button class="btn primary sm">Speichern</button>
 								<span style="flex:1"></span>
+								<?php if ( ! empty( $user['totp_enabled'] ) ) : ?>
+									<span class="badge ok"><span class="dot"></span>2FA aktiv</span>
+								<?php else : ?>
+									<span class="badge warn">ohne 2FA</span>
+								<?php endif; ?>
 								<span class="muted small">
-									Letzte Anmeldung: <?= e( nl_ago( $user['last_login_at'] ) ) ?>
+									Anmeldung <?= e( nl_ago( $user['last_login_at'] ) ) ?>
 									<?php if ( ! empty( $user['locked_until'] ) && strtotime( (string) $user['locked_until'] . ' UTC' ) > time() ) : ?>
 										· <span class="badge bad">gesperrt</span>
 									<?php endif; ?>
@@ -62,6 +110,17 @@ View::set( 'pageTitle', 'Benutzer' );
 										onclick="return confirm('Konto <?= e( (string) $user['email'] ) ?> wirklich löschen?')">Löschen</button>
 								<?php endif; ?>
 							</div>
+
+							<?php if ( ! empty( $user['totp_enabled'] ) ) : ?>
+								<div class="btn-row mt">
+									<button class="btn sm" type="submit"
+										formaction="<?= e( url( '/users/' . $user['id'] . '/reset-2fa' ) ) ?>"
+										formnovalidate
+										onclick="return confirm('Zwei-Faktor-Anmeldung für <?= e( (string) $user['email'] ) ?> zurücksetzen? Das Konto muss sie danach neu einrichten.')">
+										2FA zurücksetzen
+									</button>
+								</div>
+							<?php endif; ?>
 						</form>
 					</div>
 				<?php endforeach; ?>
@@ -158,6 +217,9 @@ View::set( 'pageTitle', 'Benutzer' );
 					</div>
 					<button class="btn">Profil speichern</button>
 				</form>
+			</div>
+			<div class="card-foot">
+				<a class="btn sm" href="<?= e( url( '/profile/2fa' ) ) ?>">Zwei-Faktor-Anmeldung verwalten</a>
 			</div>
 		</div>
 	</div>

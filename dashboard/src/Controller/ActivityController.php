@@ -25,13 +25,14 @@ final class ActivityController extends BaseController {
 			'search'  => $request->string( 'q' ),
 			'limit'   => $perPage,
 			'offset'  => ( $page - 1 ) * $perPage,
+			'site_ids' => Auth::visibleSiteIds(),
 		);
 
 		$this->view(
 			'activity/index',
 			array(
 				'entries' => ActivityRepository::query( $filters ),
-				'sites'   => SiteRepository::all(),
+				'sites'   => SiteRepository::all( array( 'site_ids' => Auth::visibleSiteIds() ) ),
 				'catalog' => EventBus::catalog(),
 				'filters' => $filters,
 				'page'    => $page,

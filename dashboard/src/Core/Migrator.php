@@ -9,7 +9,7 @@ namespace NorthLab\Core;
  */
 final class Migrator {
 
-	public const SCHEMA_VERSION = 1;
+	public const SCHEMA_VERSION = 2;
 
 	/**
 	 * Alle Tabellen anlegen (idempotent).
@@ -19,7 +19,48 @@ final class Migrator {
 			Database::pdo()->exec( $sql );
 		}
 
+		self::upgradeColumns();
+
 		Setting::set( 'schema_version', (string) self::SCHEMA_VERSION );
+	}
+
+	/**
+	 * Spalten nachrüsten, die in späteren Versionen dazugekommen sind.
+	 *
+	 * CREATE TABLE IF NOT EXISTS lässt bestehende Tabellen unangetastet, deshalb
+	 * werden neue Spalten hier einzeln geprüft und angelegt.
+	 */
+	private static function upgradeColumns(): void {
+		$columns = array(
+			// Schema 2: Zwei-Faktor-Anmeldung und Seitenzuordnung.
+			'users' => array(
+				'totp_secret'       => "VARCHAR(255) NOT NULL DEFAULT ''",
+				'totp_enabled'      => 'TINYINT(1) NOT NULL DEFAULT 0',
+				'totp_confirmed_at' => 'DATETIME NULL DEFAULT NULL',
+				'recovery_codes'    => 'TEXT NULL',
+				'site_access'       => "VARCHAR(10) NOT NULL DEFAULT 'all'",
+			),
+		);
+
+		foreach ( $columns as $table => $definitions ) {
+			foreach ( $definitions as $column => $definition ) {
+				self::addColumn( $table, $column, $definition );
+			}
+		}
+	}
+
+	private static function addColumn( string $table, string $column, string $definition ): void {
+		$name = Database::table( $table );
+
+		$exists = Database::selectOne(
+			'SELECT COLUMN_NAME FROM information_schema.COLUMNS
+			 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = :t AND COLUMN_NAME = :c',
+			array( 't' => $name, 'c' => $column )
+		);
+
+		if ( null === $exists ) {
+			Database::pdo()->exec( sprintf( 'ALTER TABLE `%s` ADD COLUMN `%s` %s', $name, $column, $definition ) );
+		}
 	}
 
 	public static function needsMigration(): bool {
@@ -219,6 +260,13 @@ final class Migrator {
 				`is_running` TINYINT(1) NOT NULL DEFAULT 0,
 				`locked_at` DATETIME NULL DEFAULT NULL,
 				PRIMARY KEY (`name`)
+			) {$charset}",
+
+			"CREATE TABLE IF NOT EXISTS `{$p}user_sites` (
+				`user_id` BIGINT UNSIGNED NOT NULL,
+				`site_id` BIGINT UNSIGNED NOT NULL,
+				PRIMARY KEY (`user_id`, `site_id`),
+				KEY `site_id` (`site_id`)
 			) {$charset}",
 
 			"CREATE TABLE IF NOT EXISTS `{$p}sessions` (

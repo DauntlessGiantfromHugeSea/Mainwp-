@@ -74,6 +74,12 @@ $navKey = static fn( string $prefix ): string => str_starts_with( $nav, $prefix 
 
 			<div class="nav-label">System</div>
 			<a href="<?= e( url( '/download' ) ) ?>" class="<?= e( $navKey( 'download' ) ) ?>">Plugin-Download</a>
+			<a href="<?= e( url( '/profile/2fa' ) ) ?>" class="<?= e( $navKey( 'users/two-factor' ) ) ?>">
+				Mein Zugang
+				<?php if ( empty( $currentUser['totp_enabled'] ) ) : ?>
+					<span class="count alert">2FA</span>
+				<?php endif; ?>
+			</a>
 			<?php if ( Auth::isAdmin() ) : ?>
 				<a href="<?= e( url( '/settings' ) ) ?>" class="<?= e( $navKey( 'settings' ) ) ?>">Einstellungen</a>
 				<a href="<?= e( url( '/users' ) ) ?>" class="<?= e( $navKey( 'users' ) ) ?>">Benutzer</a>

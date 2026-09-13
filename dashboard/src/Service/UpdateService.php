@@ -100,12 +100,13 @@ final class UpdateService {
 	/**
 	 * Ein bestimmtes Plugin/Theme auf allen betroffenen Seiten aktualisieren.
 	 *
+	 * @param array<int,int>|null $siteIds Auf diese Seiten einschränken; null = alle.
 	 * @return array<int,array{site_id:int,site:string,success:bool,message:string}>
 	 */
-	public static function applyAcrossSites( string $type, string $slug ): array {
+	public static function applyAcrossSites( string $type, string $slug, ?array $siteIds = null ): array {
 		$out = array();
 
-		foreach ( UpdateRepository::query( array( 'type' => $type ) ) as $row ) {
+		foreach ( UpdateRepository::query( array( 'type' => $type, 'site_ids' => $siteIds ) ) as $row ) {
 			if ( (string) $row['slug'] !== $slug ) {
 				continue;
 			}
@@ -126,12 +127,16 @@ final class UpdateService {
 	/**
 	 * Alle offenen Updates auf allen Seiten einspielen.
 	 *
+	 * @param array<int,int>|null $siteIds Auf diese Seiten einschränken; null = alle.
 	 * @return array<int,array{site_id:int,site:string,success:bool,message:string}>
 	 */
-	public static function applyEverything(): array {
+	public static function applyEverything( ?array $siteIds = null ): array {
 		$out = array();
 
 		foreach ( SiteRepository::active() as $site ) {
+			if ( null !== $siteIds && ! in_array( (int) $site['id'], $siteIds, true ) ) {
+				continue;
+			}
 			if ( (int) $site['pending_updates'] < 1 ) {
 				continue;
 			}

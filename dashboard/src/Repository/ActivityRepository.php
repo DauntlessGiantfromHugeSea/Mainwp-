@@ -68,6 +68,13 @@ final class ActivityRepository {
 			$where[]          = '(a.message LIKE :search OR a.action LIKE :search)';
 			$params['search'] = '%' . (string) $args['search'] . '%';
 		}
+		if ( isset( $args['site_ids'] ) && is_array( $args['site_ids'] ) ) {
+			// Einträge ohne Seitenbezug (Anmeldungen, Systemmeldungen) bleiben ausgeblendet,
+			// wenn ein Konto nur bestimmte Seiten sehen darf.
+			[ $in, $inParams ] = Database::inClause( $args['site_ids'], 'vis' );
+			$where[]           = 'a.site_id IN ' . $in;
+			$params            = array_merge( $params, $inParams );
+		}
 
 		$limit  = max( 1, min( 1000, (int) ( $args['limit'] ?? 100 ) ) );
 		$offset = max( 0, (int) ( $args['offset'] ?? 0 ) );

@@ -20,7 +20,7 @@ final class ReportController extends BaseController {
 			'reports/index',
 			array(
 				'reports' => ReportRepository::recent( 60, $request->int( 'client_id' ) ),
-				'clients' => ClientRepository::all(),
+				'clients' => ClientRepository::all( Auth::visibleSiteIds() ),
 			)
 		);
 	}
@@ -36,7 +36,8 @@ final class ReportController extends BaseController {
 			$clientId > 0 ? $clientId : null,
 			gmdate( 'Y-m-d H:i:s', time() - $days * 86400 ),
 			nl_utc(),
-			$deliver
+			$deliver,
+			Auth::visibleSiteIds()
 		);
 
 		if ( 0 === $id ) {

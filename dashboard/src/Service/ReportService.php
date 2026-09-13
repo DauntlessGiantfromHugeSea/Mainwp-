@@ -21,16 +21,22 @@ use NorthLab\Repository\UptimeRepository;
 final class ReportService {
 
 	/**
+	 * @param array<int,int>|null $siteIds Auf diese Seiten einschränken; null = alle des Kunden.
 	 * @return array{0:int,1:string|null} Bericht-ID und Fehlermeldung.
 	 */
-	public static function generate( ?int $clientId, string $from, string $to, bool $deliver = true ): array {
+	public static function generate( ?int $clientId, string $from, string $to, bool $deliver = true, ?array $siteIds = null ): array {
 		$client = $clientId ? ClientRepository::find( $clientId ) : null;
 
 		if ( $clientId && null === $client ) {
 			return array( 0, 'Kunde nicht gefunden.' );
 		}
 
-		$sites = SiteRepository::all( $clientId ? array( 'client_id' => $clientId ) : array() );
+		$sites = SiteRepository::all(
+			array_filter(
+				array( 'client_id' => $clientId, 'site_ids' => $siteIds ),
+				static fn( $value ): bool => null !== $value
+			)
+		);
 
 		if ( ! $sites ) {
 			return array( 0, 'Für diesen Bericht sind keine Seiten hinterlegt.' );

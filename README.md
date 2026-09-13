@@ -54,8 +54,10 @@ Ersteller des Plugins ist **NorthLab**.
 - Vierzehn Sicherheitsprüfungen mit Punktwert 0–100; einige Punkte lassen sich per Klick beheben
 - Plugins und Themes aktivieren, deaktivieren, löschen und aus dem wordpress.org-Verzeichnis installieren
 
-**Betrieb**
+**Benutzer und Zugriff**
 - Mehrbenutzerfähig mit drei Rollen (Administrator, Mitarbeiter, Nur Lesen)
+- **Zwei-Faktor-Anmeldung** (TOTP nach RFC 6238) mit QR-Code, acht Ersatzcodes und Rücksetzung durch einen Administrator
+- **Seitenzuordnung je Konto**: ein Mitarbeiter sieht entweder alle Seiten oder nur die ihm zugewiesenen — die Einschränkung greift in Übersicht, Seitenliste, Updates, Uptime, Kunden, Berichten und Protokoll
 - Anmeldung mit Sperre nach Fehlversuchen, Sitzungsverwaltung, CSRF-Schutz auf allen Formularen
 - Durchsuchbares Aktivitätsprotokoll, einstellbare Aufbewahrungsfristen
 - Lese-API für eigene Integrationen (`/api/…`)
@@ -81,6 +83,12 @@ hinweg und kein Passwort, das über die Leitung geht.
 
 Der erste Kontakt läuft über einen Einmal-Code, den das Child-Plugin erzeugt: 32 Hex-Zeichen,
 nur als Hash gespeichert, 60 Minuten gültig, nach einmaliger Verwendung verbraucht.
+
+Die Zwei-Faktor-Anmeldung arbeitet mit zeitbasierten Einmalpasswörtern (SHA1, 30 Sekunden,
+sechs Stellen) — kompatibel mit Aegis, 2FAS, Google Authenticator, 1Password und Bitwarden.
+Der QR-Code wird im Browser aus einer mitgelieferten Bibliothek erzeugt, das Geheimnis
+verlässt den eigenen Server also nicht. Gespeichert wird es verschlüsselt, die Ersatzcodes
+nur als Hash.
 
 Auf der Kundenseite lässt sich je Installation einschränken, was das Panel darf
 (Updates, Installationen, Benutzerverwaltung, Wartung, Inhalte), dazu eine IP-Allowlist

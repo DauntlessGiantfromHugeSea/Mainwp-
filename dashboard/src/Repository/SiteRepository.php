@@ -120,6 +120,11 @@ final class SiteRepository {
 		if ( isset( $args['include_paused'] ) && ! $args['include_paused'] ) {
 			$where[] = 's.is_paused = 0';
 		}
+		if ( isset( $args['site_ids'] ) && is_array( $args['site_ids'] ) ) {
+			[ $in, $inParams ] = Database::inClause( $args['site_ids'], 'vis' );
+			$where[]           = 's.id IN ' . $in;
+			$params            = array_merge( $params, $inParams );
+		}
 
 		$allowed = array( 'name', 'url', 'status', 'last_sync_at', 'pending_updates', 'security_score', 'created_at', 'uptime_status' );
 		$orderBy = in_array( (string) ( $args['orderby'] ?? '' ), $allowed, true ) ? (string) $args['orderby'] : 'name';
@@ -151,9 +156,18 @@ final class SiteRepository {
 	}
 
 	/**
+	 * @param array<int,int>|null $siteIds Auf diese Seiten einschränken; null = alle.
 	 * @return array<string,int>
 	 */
-	public static function stats(): array {
+	public static function stats( ?array $siteIds = null ): array {
+		$scope  = '';
+		$params = array();
+
+		if ( null !== $siteIds ) {
+			[ $in, $params ] = Database::inClause( $siteIds, 'vis' );
+			$scope           = ' AND `id` IN ' . $in;
+		}
+
 		$row = Database::selectOne(
 			'SELECT
 				COUNT(*) AS total,
@@ -162,7 +176,8 @@ final class SiteRepository {
 				SUM(CASE WHEN `uptime_status` = "down" THEN 1 ELSE 0 END) AS offline,
 				SUM(`pending_updates`) AS updates,
 				AVG(NULLIF(`security_score`, 0)) AS avg_security
-			FROM `' . Database::table( 'sites' ) . '` WHERE `is_paused` = 0'
+			FROM `' . Database::table( 'sites' ) . '` WHERE `is_paused` = 0' . $scope,
+			$params
 		) ?? array();
 
 		return array(
@@ -215,6 +230,7 @@ final class SiteRepository {
 	}
 
 	public static function delete( int $id ): void {
+		Database::delete( 'user_sites', array( 'site_id' => $id ) );
 		Database::delete( 'site_data', array( 'site_id' => $id ) );
 		Database::delete( 'updates', array( 'site_id' => $id ) );
 		Database::delete( 'uptime_events', array( 'site_id' => $id ) );

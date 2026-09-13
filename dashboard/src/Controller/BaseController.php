@@ -29,7 +29,7 @@ abstract class BaseController {
 			'currentUser'  => Auth::user(),
 			'agencyName'   => Setting::get( 'agency_name', 'NorthLab' ),
 			'agencyColor'  => Setting::get( 'agency_color', '#2f6df6' ),
-			'stats'        => SiteRepository::stats(),
+			'stats'        => SiteRepository::stats( Auth::visibleSiteIds() ),
 			'cronHealthy'  => Scheduler::isCronHealthy(),
 			'old'          => Session::oldInput(),
 		);

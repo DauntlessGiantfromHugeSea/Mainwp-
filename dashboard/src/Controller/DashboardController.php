@@ -19,7 +19,8 @@ final class DashboardController extends BaseController {
 	public function index( Request $request ): void {
 		Auth::requireLogin();
 
-		$sites = SiteRepository::all( array( 'orderby' => 'pending_updates', 'order' => 'DESC' ) );
+		$visible = Auth::visibleSiteIds();
+		$sites   = SiteRepository::all( array( 'orderby' => 'pending_updates', 'order' => 'DESC', 'site_ids' => $visible ) );
 
 		$attention = array_values(
 			array_filter(
@@ -37,10 +38,10 @@ final class DashboardController extends BaseController {
 			array(
 				'sites'         => $sites,
 				'attention'     => array_slice( $attention, 0, 12 ),
-				'updateCounts'  => UpdateRepository::countsByType(),
-				'topUpdates'    => array_slice( UpdateRepository::grouped(), 0, 8, true ),
+				'updateCounts'  => UpdateRepository::countsByType( $visible ),
+				'topUpdates'    => array_slice( UpdateRepository::grouped( array( 'site_ids' => $visible ) ), 0, 8, true ),
 				'clients'       => ClientRepository::all(),
-				'activity'      => ActivityRepository::query( array( 'limit' => 12 ) ),
+				'activity'      => ActivityRepository::query( array( 'limit' => 12, 'site_ids' => $visible ) ),
 				'uptimeFeed'    => UptimeRepository::feed( 8 ),
 				'queue'         => WebhookRepository::queueStats(),
 				'jobs'          => Scheduler::overview(),

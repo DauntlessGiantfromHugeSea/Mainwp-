@@ -23,7 +23,7 @@ final class UptimeController extends BaseController {
 
 		$rows = array();
 
-		foreach ( SiteRepository::all() as $site ) {
+		foreach ( SiteRepository::all( array( 'site_ids' => Auth::visibleSiteIds() ) ) as $site ) {
 			$siteId = (int) $site['id'];
 
 			$rows[] = array(
@@ -46,7 +46,7 @@ final class UptimeController extends BaseController {
 			'uptime/index',
 			array(
 				'rows'      => $rows,
-				'feed'      => UptimeRepository::feed( 60 ),
+				'feed'      => UptimeRepository::feed( 60, Auth::visibleSiteIds() ),
 				'days'      => $days,
 				'globalUrl' => '' !== $globalToken ? self::baseUrl() . '/api/uptime/' . $globalToken : '',
 			)
@@ -61,7 +61,7 @@ final class UptimeController extends BaseController {
 
 		$rows = array();
 
-		foreach ( SiteRepository::all() as $site ) {
+		foreach ( SiteRepository::all( array( 'site_ids' => Auth::visibleSiteIds() ) ) as $site ) {
 			$rows[] = array(
 				(string) $site['name'],
 				(string) $site['url'],

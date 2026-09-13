@@ -17,7 +17,7 @@ final class ClientController extends BaseController {
 	public function index( Request $request ): void {
 		Auth::requireLogin();
 
-		$this->view( 'clients/index', array( 'clients' => ClientRepository::all() ) );
+		$this->view( 'clients/index', array( 'clients' => ClientRepository::all( Auth::visibleSiteIds() ) ) );
 	}
 
 	public function show( Request $request ): void {
@@ -31,9 +31,16 @@ final class ClientController extends BaseController {
 			return;
 		}
 
+		// Ein eingeschränktes Konto sieht einen Kunden nur, wenn ihm mindestens
+		// eine von dessen Seiten zugeordnet ist.
+		if ( ! Auth::seesAllSites() && ! SiteRepository::all( array( 'client_id' => $clientId, 'site_ids' => Auth::visibleSiteIds() ) ) ) {
+			Response::forbidden( 'Dieser Kunde ist deinem Konto nicht zugeordnet.' );
+			return;
+		}
+
 		$from  = gmdate( 'Y-m-d H:i:s', time() - 30 * 86400 );
 		$to    = nl_utc();
-		$sites = SiteRepository::all( array( 'client_id' => $clientId ) );
+		$sites = SiteRepository::all( array( 'client_id' => $clientId, 'site_ids' => Auth::visibleSiteIds() ) );
 
 		$uptime = array();
 		foreach ( $sites as $site ) {

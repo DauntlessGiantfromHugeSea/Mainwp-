@@ -29,7 +29,22 @@ final class ClientRepository {
 	/**
 	 * @return array<int,array<string,mixed>>
 	 */
-	public static function all(): array {
+	public static function all( ?array $siteIds = null ): array {
+		// Bei eingeschränktem Konto zählen nur die freigegebenen Seiten, und
+		// Kunden ganz ohne solche Seite tauchen gar nicht erst auf.
+		if ( null !== $siteIds ) {
+			[ $in, $params ] = Database::inClause( $siteIds, 'vis' );
+
+			return Database::select(
+				'SELECT c.*, COUNT(s.id) AS site_count, COALESCE(SUM(s.pending_updates), 0) AS pending_updates
+				 FROM `' . Database::table( 'clients' ) . '` c
+				 INNER JOIN `' . Database::table( 'sites' ) . '` s ON s.client_id = c.id AND s.id IN ' . $in . '
+				 GROUP BY c.id
+				 ORDER BY c.name ASC',
+				$params
+			);
+		}
+
 		return Database::select(
 			'SELECT c.*, COUNT(s.id) AS site_count, COALESCE(SUM(s.pending_updates), 0) AS pending_updates
 			 FROM `' . Database::table( 'clients' ) . '` c

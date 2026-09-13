@@ -31,6 +31,7 @@ final class SiteController extends BaseController {
 			'search'         => $request->string( 'q' ),
 			'tag'            => $request->string( 'tag' ),
 			'has_updates'    => $request->bool( 'updates' ),
+			'site_ids'       => Auth::visibleSiteIds(),
 			'orderby'        => $request->string( 'orderby', 'name' ),
 			'order'          => $request->string( 'order', 'ASC' ),
 		);
@@ -88,7 +89,8 @@ final class SiteController extends BaseController {
 		Auth::requireLogin();
 
 		$siteId = (int) $request->params['id'];
-		$site   = SiteRepository::find( $siteId );
+		Auth::requireSite( $siteId );
+		$site = SiteRepository::find( $siteId );
 
 		if ( null === $site ) {
 			Response::notFound( 'Diese Seite ist nicht im Panel registriert.' );
@@ -120,6 +122,7 @@ final class SiteController extends BaseController {
 		Auth::requireWrite();
 
 		$siteId = (int) $request->params['id'];
+		Auth::requireSite( $siteId );
 
 		$error = SiteService::updateSettings(
 			$siteId,
@@ -148,6 +151,8 @@ final class SiteController extends BaseController {
 		Auth::requireWrite();
 
 		$siteId = (int) $request->params['id'];
+		Auth::requireSite( $siteId );
+
 		$result = SyncService::site( $siteId, true );
 
 		$this->respond(
@@ -162,7 +167,9 @@ final class SiteController extends BaseController {
 		Auth::requireWrite();
 
 		$siteId = (int) $request->params['id'];
-		$error  = SiteService::reconnect( $siteId, $request->string( 'connect_code' ) );
+		Auth::requireSite( $siteId );
+
+		$error = SiteService::reconnect( $siteId, $request->string( 'connect_code' ) );
 
 		$this->respond(
 			$request,
@@ -176,7 +183,9 @@ final class SiteController extends BaseController {
 		Auth::requireWrite();
 
 		$siteId = (int) $request->params['id'];
-		$ok     = SiteService::remove( $siteId );
+		Auth::requireSite( $siteId );
+
+		$ok = SiteService::remove( $siteId );
 
 		$this->respond( $request, $ok, $ok ? 'Seite entfernt.' : 'Seite nicht gefunden.', '/sites' );
 	}
@@ -185,6 +194,8 @@ final class SiteController extends BaseController {
 		Auth::requireWrite();
 
 		$siteId = (int) $request->params['id'];
+		Auth::requireSite( $siteId );
+
 		$result = MaintenanceService::run( $siteId, $request->arrayOfStrings( 'tasks' ) );
 
 		$message = $result['ok']
@@ -198,6 +209,8 @@ final class SiteController extends BaseController {
 		Auth::requireWrite();
 
 		$siteId = (int) $request->params['id'];
+		Auth::requireSite( $siteId );
+
 		$checks = $request->arrayOfStrings( 'checks' );
 
 		$result = $checks
@@ -214,7 +227,9 @@ final class SiteController extends BaseController {
 	public function extensions( Request $request ): void {
 		Auth::requireWrite();
 
-		$siteId  = (int) $request->params['id'];
+		$siteId = (int) $request->params['id'];
+		Auth::requireSite( $siteId );
+
 		$kind    = 'theme' === $request->string( 'kind' ) ? 'theme' : 'plugin';
 		$action  = $request->string( 'extension_action' );
 		$targets = $request->arrayOfStrings( 'targets' );
@@ -238,6 +253,8 @@ final class SiteController extends BaseController {
 		Auth::requireWrite();
 
 		$siteId = (int) $request->params['id'];
+		Auth::requireSite( $siteId );
+
 		SiteRepository::rotateMonitorToken( $siteId );
 
 		$this->respond( $request, true, 'Monitoring-Token neu erzeugt. Bitte im Monitoring-Dienst aktualisieren.', '/sites/' . $siteId );
@@ -260,7 +277,7 @@ final class SiteController extends BaseController {
 
 		foreach ( $siteIds as $siteId ) {
 			$site = SiteRepository::find( $siteId );
-			if ( null === $site ) {
+			if ( null === $site || ! Auth::canSeeSite( $siteId ) ) {
 				continue;
 			}
 

@@ -115,6 +115,11 @@ final class UpdateRepository {
 		if ( empty( $args['include_ignored'] ) ) {
 			$where[] = 'u.is_ignored = 0';
 		}
+		if ( isset( $args['site_ids'] ) && is_array( $args['site_ids'] ) ) {
+			[ $in, $inParams ] = Database::inClause( $args['site_ids'], 'vis' );
+			$where[]           = 'u.site_id IN ' . $in;
+			$params            = array_merge( $params, $inParams );
+		}
 
 		return Database::select(
 			'SELECT u.*, s.name AS site_name, s.url AS site_url, s.client_id
@@ -173,15 +178,25 @@ final class UpdateRepository {
 	}
 
 	/**
+	 * @param array<int,int>|null $siteIds
 	 * @return array<string,int>
 	 */
-	public static function countsByType(): array {
+	public static function countsByType( ?array $siteIds = null ): array {
+		$scope  = '';
+		$params = array();
+
+		if ( null !== $siteIds ) {
+			[ $in, $params ] = Database::inClause( $siteIds, 'vis' );
+			$scope           = ' AND u.site_id IN ' . $in;
+		}
+
 		$rows = Database::select(
 			'SELECT u.type, COUNT(*) AS total
 			 FROM `' . Database::table( 'updates' ) . '` u
 			 INNER JOIN `' . Database::table( 'sites' ) . '` s ON s.id = u.site_id
-			 WHERE u.is_ignored = 0 AND s.is_paused = 0
-			 GROUP BY u.type'
+			 WHERE u.is_ignored = 0 AND s.is_paused = 0' . $scope . '
+			 GROUP BY u.type',
+			$params
 		);
 
 		$counts = array( 'core' => 0, 'plugin' => 0, 'theme' => 0 );
