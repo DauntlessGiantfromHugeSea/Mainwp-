@@ -1,0 +1,16 @@
+# Instanzspezifische Konfiguration — enthält Zugangsdaten und den Verschlüsselungsschlüssel.
+dashboard/config.php
+
+# Laufzeitdaten
+dashboard/storage/logs/*
+dashboard/storage/cache/*
+dashboard/storage/tmp/*
+!dashboard/storage/*/.gitkeep
+!dashboard/storage/*/.htaccess
+
+# Betriebssystem und Editoren
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/

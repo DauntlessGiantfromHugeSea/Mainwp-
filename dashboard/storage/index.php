@@ -1,0 +1,2 @@
+<?php
+// Kein direkter Zugriff.

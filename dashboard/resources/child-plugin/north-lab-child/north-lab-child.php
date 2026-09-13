@@ -1,0 +1,50 @@
+<?php
+/**
+ * Plugin Name:       NorthLab Child
+ * Plugin URI:        https://northlab.agency/
+ * Description:       Verbindet diese WordPress-Seite mit dem NorthLab Control Panel. Erlaubt zentrale Updates, Status-Abfragen, Wartung, Sicherheitschecks und Reports.
+ * Version:           1.0.0
+ * Requires at least: 6.0
+ * Requires PHP:      7.4
+ * Author:            NorthLab
+ * Author URI:        https://northlab.agency/
+ * License:           GPL-3.0-or-later
+ * Text Domain:       north-lab-child
+ */
+
+defined( 'ABSPATH' ) || exit;
+
+define( 'NLC_VERSION', '1.0.0' );
+define( 'NLC_FILE', __FILE__ );
+define( 'NLC_PATH', plugin_dir_path( __FILE__ ) );
+define( 'NLC_URL', plugin_dir_url( __FILE__ ) );
+define( 'NLC_REST_NS', 'northlab-child/v1' );
+
+require_once NLC_PATH . 'includes/class-nlc-options.php';
+require_once NLC_PATH . 'includes/class-nlc-auth.php';
+require_once NLC_PATH . 'includes/class-nlc-info.php';
+require_once NLC_PATH . 'includes/class-nlc-updates.php';
+require_once NLC_PATH . 'includes/class-nlc-actions.php';
+require_once NLC_PATH . 'includes/class-nlc-security.php';
+require_once NLC_PATH . 'includes/class-nlc-maintenance.php';
+require_once NLC_PATH . 'includes/class-nlc-rest.php';
+require_once NLC_PATH . 'includes/class-nlc-admin.php';
+
+/**
+ * Bootstrap.
+ */
+function nlc_boot() {
+	NLC_REST::instance()->hooks();
+	if ( is_admin() ) {
+		NLC_Admin::instance()->hooks();
+	}
+}
+add_action( 'plugins_loaded', 'nlc_boot' );
+
+/**
+ * Aktivierung: Verbindungsdaten unangetastet lassen, nur Defaults setzen.
+ */
+function nlc_activate() {
+	NLC_Options::bootstrap_defaults();
+}
+register_activation_hook( __FILE__, 'nlc_activate' );

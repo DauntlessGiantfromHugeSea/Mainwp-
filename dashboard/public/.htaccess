@@ -1,0 +1,27 @@
+# NorthLab Control Panel — Apache-Konfiguration
+
+<IfModule mod_rewrite.c>
+	RewriteEngine On
+
+	# Vorhandene Dateien und Verzeichnisse direkt ausliefern.
+	RewriteCond %{REQUEST_FILENAME} -f [OR]
+	RewriteCond %{REQUEST_FILENAME} -d
+	RewriteRule ^ - [L]
+
+	# Alles Übrige an den Front Controller.
+	RewriteRule ^ index.php [L]
+
+	# Authorization-Header durchreichen (für Basic-Auth-geschützte Kundenseiten irrelevant,
+	# aber nötig, wenn eigene Integrationen die API mit Token ansprechen).
+	RewriteCond %{HTTP:Authorization} .
+	RewriteRule ^ - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+</IfModule>
+
+<IfModule mod_headers.c>
+	Header always set X-Content-Type-Options "nosniff"
+	Header always set X-Frame-Options "SAMEORIGIN"
+	Header always set Referrer-Policy "same-origin"
+</IfModule>
+
+# Verzeichnisauflistung abschalten.
+Options -Indexes

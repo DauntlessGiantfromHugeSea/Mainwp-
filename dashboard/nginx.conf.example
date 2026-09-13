@@ -1,0 +1,43 @@
+# NorthLab Control Panel — Beispiel für nginx.
+#
+# Wichtig: root zeigt auf das Verzeichnis public/, nicht auf das Anwendungsverzeichnis.
+
+server {
+	listen 443 ssl http2;
+	server_name panel.example.com;
+
+	root /var/www/northlab/dashboard/public;
+	index index.php;
+
+	ssl_certificate     /etc/letsencrypt/live/panel.example.com/fullchain.pem;
+	ssl_certificate_key /etc/letsencrypt/live/panel.example.com/privkey.pem;
+
+	add_header X-Content-Type-Options "nosniff" always;
+	add_header X-Frame-Options "SAMEORIGIN" always;
+	add_header Referrer-Policy "same-origin" always;
+
+	client_max_body_size 32m;
+
+	location / {
+		try_files $uri $uri/ /index.php?$query_string;
+	}
+
+	location ~ \.php$ {
+		include fastcgi_params;
+		fastcgi_pass unix:/run/php/php8.3-fpm.sock;
+		fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+		# Updates auf grossen Installationen dauern; Zeitlimit grosszuegig setzen.
+		fastcgi_read_timeout 600;
+	}
+
+	# Punktdateien ausser .well-known nicht ausliefern.
+	location ~ /\.(?!well-known) {
+		deny all;
+	}
+}
+
+server {
+	listen 80;
+	server_name panel.example.com;
+	return 301 https://$host$request_uri;
+}
