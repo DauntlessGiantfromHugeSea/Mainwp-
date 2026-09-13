@@ -32,6 +32,8 @@ final class EventBus {
 			'update.failed'     => 'Update fehlgeschlagen',
 			'security.changed'  => 'Sicherheitsbewertung verschlechtert',
 			'maintenance.done'  => 'Wartung abgeschlossen',
+			'backup.completed'  => 'Sicherung abgeschlossen',
+			'backup.failed'     => 'Sicherung fehlgeschlagen',
 			'report.generated'  => 'Bericht erstellt',
 			'snapshot.full'     => 'Gesamtstand (Vollsynchronisation)',
 		);
@@ -90,7 +92,7 @@ final class EventBus {
 	}
 
 	private static function defaultLevel( string $event ): string {
-		if ( in_array( $event, array( 'site.offline', 'sync.failed', 'update.failed' ), true ) ) {
+		if ( in_array( $event, array( 'site.offline', 'sync.failed', 'update.failed', 'backup.failed' ), true ) ) {
 			return 'error';
 		}
 		if ( in_array( $event, array( 'security.changed', 'updates.available' ), true ) ) {

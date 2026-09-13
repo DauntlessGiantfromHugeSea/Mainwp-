@@ -12,6 +12,7 @@ require_once dirname( __DIR__ ) . '/src/bootstrap.php';
 use NorthLab\Controller\ActivityController;
 use NorthLab\Controller\ApiController;
 use NorthLab\Controller\AuthController;
+use NorthLab\Controller\BackupController;
 use NorthLab\Controller\ClientController;
 use NorthLab\Controller\DashboardController;
 use NorthLab\Controller\DownloadController;
@@ -88,6 +89,11 @@ $router->post( '/sites/{id:\d+}/token', array( SiteController::class, 'rotateTok
 // Updates
 $router->get( '/updates', array( UpdateController::class, 'index' ) );
 $router->post( '/updates/apply', array( UpdateController::class, 'apply' ) );
+
+// Sicherungen
+$router->get( '/backups', array( BackupController::class, 'index' ) );
+$router->post( '/backups', array( BackupController::class, 'save' ) );
+$router->post( '/backups/{id:\d+}/run', array( BackupController::class, 'run' ) );
 
 // Uptime
 $router->get( '/uptime', array( UptimeController::class, 'index' ) );

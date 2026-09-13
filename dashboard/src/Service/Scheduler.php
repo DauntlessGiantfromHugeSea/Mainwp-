@@ -26,6 +26,7 @@ final class Scheduler {
 		'sync'         => array( 'label' => 'Seiten synchronisieren', 'interval' => 900 ),
 		'auto_updates' => array( 'label' => 'Automatische Updates', 'interval' => 3600 ),
 		'reports'      => array( 'label' => 'Fällige Berichte', 'interval' => 3600 ),
+		'backups'      => array( 'label' => 'Sicherungen', 'interval' => 3600 ),
 		'cleanup'      => array( 'label' => 'Aufräumen', 'interval' => 86400 ),
 	);
 
@@ -106,6 +107,18 @@ final class Scheduler {
 
 			case 'reports':
 				return sprintf( '%d Bericht(e) erstellt', ReportService::runScheduled() );
+
+			case 'backups':
+				if ( ! Setting::getBool( 'backup_enabled', false ) ) {
+					return 'deaktiviert';
+				}
+				// Läuft stündlich an, arbeitet aber nur zur eingestellten Stunde.
+				if ( (int) date( 'G' ) !== Setting::getInt( 'backup_hour', 3 ) ) {
+					return 'ausserhalb des Zeitfensters';
+				}
+
+				$stats = BackupService::runAll();
+				return sprintf( '%d gesichert, %d fehlgeschlagen', $stats['ok'], $stats['failed'] );
 
 			case 'cleanup':
 				$activity = ActivityRepository::prune( Setting::getInt( 'activity_retention', 180 ) );

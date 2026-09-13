@@ -73,6 +73,8 @@ $navKey = static fn( string $prefix ): string => str_starts_with( $nav, $prefix 
 				<?php endif; ?>
 			</a>
 
+			<a href="<?= e( url( '/backups' ) ) ?>" class="<?= e( $navKey( 'backups' ) ) ?>">Sicherungen</a>
+
 			<div class="nav-label">Agentur</div>
 			<a href="<?= e( url( '/clients' ) ) ?>" class="<?= e( $navKey( 'clients' ) ) ?>">Kunden</a>
 			<a href="<?= e( url( '/reports' ) ) ?>" class="<?= e( $navKey( 'reports' ) ) ?>">Berichte</a>

@@ -114,6 +114,23 @@ if ( ! function_exists( 'nl_bytes' ) ) {
 	}
 }
 
+if ( ! function_exists( 'size_format_de' ) ) {
+	/**
+	 * Bytes lesbar machen, mit deutschem Dezimalkomma.
+	 */
+	function size_format_de( int|float $bytes, int $decimals = 1 ): string {
+		$bytes = max( 0, (float) $bytes );
+
+		foreach ( array( 'TB' => 1099511627776, 'GB' => 1073741824, 'MB' => 1048576, 'KB' => 1024 ) as $einheit => $faktor ) {
+			if ( $bytes >= $faktor ) {
+				return nl_number( $bytes / $faktor, $decimals ) . ' ' . $einheit;
+			}
+		}
+
+		return nl_number( $bytes ) . ' B';
+	}
+}
+
 if ( ! function_exists( 'nl_utc' ) ) {
 	/**
 	 * Aktueller Zeitstempel im Datenbankformat (UTC).

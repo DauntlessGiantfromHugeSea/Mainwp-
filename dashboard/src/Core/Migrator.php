@@ -9,7 +9,7 @@ namespace NorthLab\Core;
  */
 final class Migrator {
 
-	public const SCHEMA_VERSION = 3;
+	public const SCHEMA_VERSION = 4;
 
 	/**
 	 * Alle Tabellen anlegen (idempotent).
@@ -32,9 +32,10 @@ final class Migrator {
 	 */
 	private static function upgradeColumns(): void {
 		$columns = array(
-			// Schema 3: Form der REST-Adresse je Seite.
+			// Schema 3 und 4: REST-Adressform und Zeitpunkt der letzten Sicherung.
 			'sites' => array(
-				'rest_style' => "VARCHAR(10) NOT NULL DEFAULT 'pretty'",
+				'rest_style'     => "VARCHAR(10) NOT NULL DEFAULT 'pretty'",
+				'last_backup_at' => 'DATETIME NULL DEFAULT NULL',
 			),
 
 			// Schema 2: Zwei-Faktor-Anmeldung und Seitenzuordnung.
@@ -265,6 +266,23 @@ final class Migrator {
 				`is_running` TINYINT(1) NOT NULL DEFAULT 0,
 				`locked_at` DATETIME NULL DEFAULT NULL,
 				PRIMARY KEY (`name`)
+			) {$charset}",
+
+			"CREATE TABLE IF NOT EXISTS `{$p}backups` (
+				`id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+				`site_id` BIGINT UNSIGNED NOT NULL,
+				`status` VARCHAR(20) NOT NULL DEFAULT 'running',
+				`started_at` DATETIME NOT NULL,
+				`finished_at` DATETIME NULL DEFAULT NULL,
+				`files_total` INT UNSIGNED NOT NULL DEFAULT 0,
+				`files_changed` INT UNSIGNED NOT NULL DEFAULT 0,
+				`bytes` BIGINT UNSIGNED NOT NULL DEFAULT 0,
+				`db_bytes` BIGINT UNSIGNED NOT NULL DEFAULT 0,
+				`snapshot_id` VARCHAR(64) NOT NULL DEFAULT '',
+				`message` TEXT NULL,
+				PRIMARY KEY (`id`),
+				KEY `site_time` (`site_id`, `started_at`),
+				KEY `status` (`status`)
 			) {$charset}",
 
 			"CREATE TABLE IF NOT EXISTS `{$p}user_sites` (

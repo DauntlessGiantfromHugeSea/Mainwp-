@@ -30,6 +30,7 @@ class NLC_Options {
 			'allow_user_mgmt'   => true,
 			'allow_maintenance' => true,
 			'allow_content'     => true,
+			'allow_backup'      => true,
 			'ip_allowlist'      => '',
 			'require_ssl'       => false,
 		);

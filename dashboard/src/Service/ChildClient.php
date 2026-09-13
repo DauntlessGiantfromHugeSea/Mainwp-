@@ -77,6 +77,94 @@ final class ChildClient {
 	}
 
 	/**
+	 * Signierter POST, dessen Antwort direkt in eine Datei geschrieben wird.
+	 *
+	 * @param array<string,mixed> $site
+	 * @param array<string,mixed> $body
+	 * @return array{ok:bool,bytes:int,error:string,ms:int,headers:array<string,string>}
+	 */
+	public static function downloadTo( array $site, string $route, array $body, string $target, int $timeout = 300 ): array {
+		$signed = self::signedHeaders( $site, 'POST', $route, $body );
+
+		if ( isset( $signed['error'] ) ) {
+			return array( 'ok' => false, 'bytes' => 0, 'error' => (string) $signed['error'], 'ms' => 0, 'headers' => array() );
+		}
+
+		$style = (string) ( $site['rest_style'] ?? 'pretty' );
+
+		$response = Http::downloadTo(
+			$target,
+			'POST',
+			self::endpoint( $site, $route, $style ),
+			$signed['body'],
+			$signed['headers'] + array( 'Content-Type' => 'application/json' ),
+			$timeout,
+			self::verifySsl( $site ),
+			self::basicAuth( $site )
+		);
+
+		if ( ! $response['ok'] && '' === $response['error'] ) {
+			$response['error'] = sprintf( 'HTTP %d beim Abholen von %s', $response['status'], $route );
+		}
+
+		return array(
+			'ok'      => $response['ok'],
+			'bytes'   => $response['bytes'],
+			'error'   => $response['error'],
+			'ms'      => $response['ms'],
+			'headers' => $response['headers'],
+		);
+	}
+
+	/**
+	 * Baut Signatur-Header und Rumpf für eine Anfrage.
+	 *
+	 * @param array<string,mixed> $site
+	 * @param array<string,mixed> $body
+	 * @return array{headers:array<string,string>,body:string}|array{error:string}
+	 */
+	private static function signedHeaders( array $site, string $method, string $route, array $body ) {
+		$encrypted = (string) ( $site['private_key'] ?? '' );
+
+		if ( '' === $encrypted ) {
+			return array( 'error' => 'Für diese Seite ist kein privater Schlüssel hinterlegt.' );
+		}
+
+		$privateKey = Crypto::decrypt( $encrypted );
+
+		if ( '' === $privateKey ) {
+			return array( 'error' => 'Der private Schlüssel konnte nicht entschlüsselt werden.' );
+		}
+
+		$json      = (string) json_encode( $body, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE );
+		$timestamp = (string) time();
+		$nonce     = bin2hex( random_bytes( 12 ) );
+
+		$payload = implode(
+			"\n",
+			array(
+				(string) $site['connection_id'],
+				$timestamp,
+				$nonce,
+				strtoupper( $method ),
+				self::NAMESPACE_PATH . $route,
+				hash( 'sha256', $json ),
+			)
+		);
+
+		return array(
+			'headers' => array(
+				'X-NL-Connection' => (string) $site['connection_id'],
+				'X-NL-Timestamp'  => $timestamp,
+				'X-NL-Nonce'      => $nonce,
+				'X-NL-Signature'  => Crypto::sign( $payload, $privateKey ),
+				'Accept'          => 'application/octet-stream',
+			),
+			'body'    => $json,
+		);
+	}
+
+	/**
 	 * @param array<string,mixed>      $site
 	 * @param array<string,mixed>      $query
 	 * @param array<string,mixed>|null $body

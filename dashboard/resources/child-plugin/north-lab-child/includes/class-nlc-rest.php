@@ -51,6 +51,7 @@ class NLC_REST {
 			'/content'     => array( 'POST', 'content' ),
 			'/maintenance' => array( 'POST', 'maintenance' ),
 			'/security'    => array( 'POST', 'security' ),
+			'/backup'      => array( 'POST', 'backup' ),
 			'/disconnect'  => array( 'POST', 'disconnect' ),
 		);
 
@@ -254,6 +255,68 @@ class NLC_REST {
 		}
 
 		return rest_ensure_response( array( 'scan' => NLC_Security::scan() ) );
+	}
+
+	/**
+	 * Sicherung: Dateiliste, Datenbank-Export in Etappen, Auslieferung in Blöcken.
+	 *
+	 * @param WP_REST_Request $request
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function backup( WP_REST_Request $request ) {
+		if ( ! NLC_Options::setting( 'allow_backup' ) ) {
+			return new WP_Error( 'nlc_backup_disabled', 'Sicherungen sind auf dieser Seite deaktiviert.', array( 'status' => 403 ) );
+		}
+
+		self::raise_limits();
+
+		$action = sanitize_key( (string) $request->get_param( 'action' ) );
+
+		switch ( $action ) {
+			case 'estimate':
+				return rest_ensure_response( NLC_Backup::estimate() );
+
+			case 'manifest':
+				return rest_ensure_response(
+					NLC_Backup::manifest(
+						sanitize_key( (string) $request->get_param( 'root' ) ),
+						(int) $request->get_param( 'offset' ),
+						min( 20000, max( 1, (int) $request->get_param( 'limit' ) ?: 5000 ) ),
+						array_map( 'sanitize_text_field', (array) $request->get_param( 'excludes' ) )
+					)
+				);
+
+			case 'db-start':
+				$result = NLC_Backup::start_database();
+				return isset( $result['error'] )
+					? new WP_Error( 'nlc_backup_db', $result['error'], array( 'status' => 500 ) )
+					: rest_ensure_response( $result );
+
+			case 'db-step':
+				$result = NLC_Backup::step_database();
+				return isset( $result['error'] )
+					? new WP_Error( 'nlc_backup_db', $result['error'], array( 'status' => 500 ) )
+					: rest_ensure_response( $result );
+
+			case 'download':
+				$absolute = NLC_Backup::resolve(
+					sanitize_key( (string) $request->get_param( 'root' ) ),
+					(string) $request->get_param( 'path' )
+				);
+
+				if ( null === $absolute ) {
+					return new WP_Error( 'nlc_backup_path', 'Datei nicht gefunden oder ausserhalb des erlaubten Bereichs.', array( 'status' => 404 ) );
+				}
+
+				// Gibt roh aus und beendet den Request.
+				NLC_Backup::stream( $absolute, (int) $request->get_param( 'offset' ), (int) $request->get_param( 'length' ) );
+				exit;
+
+			case 'cleanup':
+				return rest_ensure_response( array( 'removed' => NLC_Backup::cleanup() ) );
+		}
+
+		return new WP_Error( 'nlc_bad_action', 'Unbekannte Aktion.', array( 'status' => 400 ) );
 	}
 
 	/**

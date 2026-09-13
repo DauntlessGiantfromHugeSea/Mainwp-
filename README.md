@@ -54,6 +54,13 @@ Ersteller des Plugins ist **NorthLab**.
 - Versand per E-Mail (fertiges HTML) **und/oder als signierter Webhook mit allen Kennzahlen als JSON**
 - Jederzeit manuell erzeugbar, im Browser ansehbar und als HTML herunterladbar
 
+**Sicherungen**
+- Nächtliche Sicherung aller Seiten auf einen entfernten Speicher (Hetzner Storage Box, S3, jedes restic-Ziel)
+- Läuft **ohne SSH-Zugang zu den Kundenseiten**: das Child-Plugin liefert Dateiliste und Datenbank über die signierte Verbindung, das Panel hält je Seite einen Spiegel und holt nur Geändertes — verglichen über Grösse und Änderungszeit
+- Datenbank-Export läuft auf der Kundenseite in Etappen, damit kein Aufruf ins Zeitlimit gerät
+- restic übernimmt Deduplizierung, Verschlüsselung und Aufbewahrung (täglich/wöchentlich/monatlich einstellbar)
+- Wiederherstellung über die restic-Kommandozeile; bewusst kein Knopf im Panel
+
 **Wartung und Sicherheit**
 - Elf Wartungsaufgaben je Seite oder als Sammelaktion: Revisionen, Auto-Entwürfe, Papierkorb, Spam, abgelaufene Transients, verwaiste Meta-Daten, Tabellen optimieren, Cache leeren, Permalinks neu schreiben
 - Vierzehn Sicherheitsprüfungen mit Punktwert 0–100; einige Punkte lassen sich per Klick beheben
