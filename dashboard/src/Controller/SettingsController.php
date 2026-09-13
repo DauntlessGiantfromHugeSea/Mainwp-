@@ -101,6 +101,15 @@ final class SettingsController extends BaseController {
 				);
 				break;
 
+			case 'api_token':
+				Setting::set( 'api_token', $request->bool( 'disable' ) ? '' : Crypto::secret( 24 ) );
+				$this->respond(
+					$request,
+					true,
+					$request->bool( 'disable' ) ? 'API-Token entfernt.' : 'Neues API-Token erzeugt.',
+					'/settings#monitoring'
+				);
+
 			case 'uptime_token':
 				Setting::set(
 					'uptime_global_token',

@@ -237,6 +237,38 @@ $get = static fn( string $key, string $default = '' ): string => $settings[ $key
 				</form>
 			<?php endif; ?>
 
+			<h3 class="mt">Zugriffstoken fürs Kundenportal</h3>
+			<?php $apiToken = $get( 'api_token' ); ?>
+			<p class="small muted">
+				Erlaubt es einem eigenen System, den Gesamtstand abzurufen — Grundlage für Berichte
+				ausserhalb des Panels. Nur lesend.
+			</p>
+			<?php if ( '' !== $apiToken ) : ?>
+				<div class="copy-row" style="max-width:520px">
+					<input type="text" id="api-token-setting" readonly class="mono" value="<?= e( $apiToken ) ?>">
+					<button class="btn sm" type="button" data-copy="#api-token-setting">Kopieren</button>
+				</div>
+				<div class="btn-row mt">
+					<form method="post" action="<?= e( url( '/settings' ) ) ?>" data-confirm="Neues Token erzeugen? Das alte wird sofort ungültig.">
+						<?= csrf_field() ?>
+						<input type="hidden" name="section" value="api_token">
+						<button class="btn sm">Neu erzeugen</button>
+					</form>
+					<form method="post" action="<?= e( url( '/settings' ) ) ?>" data-confirm="Zugriff wirklich entziehen?">
+						<?= csrf_field() ?>
+						<input type="hidden" name="section" value="api_token">
+						<input type="hidden" name="disable" value="1">
+						<button class="btn sm danger">Entfernen</button>
+					</form>
+				</div>
+			<?php else : ?>
+				<form method="post" action="<?= e( url( '/settings' ) ) ?>">
+					<?= csrf_field() ?>
+					<input type="hidden" name="section" value="api_token">
+					<button class="btn primary">Token erzeugen</button>
+				</form>
+			<?php endif; ?>
+
 			<h3 class="mt">Signaturprüfung</h3>
 			<form method="post" action="<?= e( url( '/settings' ) ) ?>">
 				<?= csrf_field() ?>

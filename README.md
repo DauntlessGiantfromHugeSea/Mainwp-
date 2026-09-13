@@ -37,6 +37,11 @@ Ersteller des Plugins ist **NorthLab**.
 - Verfügbarkeit in Prozent, Ausfallzeit, Störungsliste und Tagesverlauf je Seite
 - Optionale HMAC-Signaturprüfung eingehender Meldungen
 
+**Anbindung ans eigene Kundenportal**
+- **Abruf-API mit Token** (nur lesend): `/api/v1/export?days=30` liefert den kompletten Stand in einem Aufruf — Kunden, Seiten, Verfügbarkeit, Störungen, eingespielte und offene Updates, Sicherheitsbefunde. Genau die Daten, aus denen auch die Panel-Berichte entstehen
+- dazu `/api/v1/sites` und `/api/v1/updates`, filterbar nach Kunde, Seite und Typ
+- Token als `Authorization: Bearer …` oder `?token=…`
+
 **Ausgehende Webhooks**
 - Beliebig viele Endpunkte (Slack, n8n, Make, Zapier, eigene Systeme)
 - Elf abonnierbare Ereignisse — Seite offline/online, Sync fehlgeschlagen, Updates verfügbar, Update eingespielt/fehlgeschlagen, Sicherheitsbewertung gefallen, Wartung fertig, Bericht erstellt, Seite verbunden/entfernt

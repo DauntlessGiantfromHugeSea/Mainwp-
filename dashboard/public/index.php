@@ -57,6 +57,11 @@ Session::start();
 $router->any( '/api/uptime/{token:[a-f0-9]{32,64}}', array( ApiController::class, 'uptime' ) );
 $router->any( '/api/cron/{token:[A-Za-z0-9]{16,80}}', array( ApiController::class, 'cron' ) );
 
+// Abruf fürs eigene Kundenportal — Authentifizierung über Bearer-Token.
+$router->get( '/api/v1/export', array( ApiController::class, 'export' ) );
+$router->get( '/api/v1/sites', array( ApiController::class, 'sites' ) );
+$router->get( '/api/v1/updates', array( ApiController::class, 'updates' ) );
+
 $router->get( '/login', array( AuthController::class, 'showLogin' ) );
 $router->post( '/login', array( AuthController::class, 'login' ) );
 $router->get( '/login/2fa', array( AuthController::class, 'showChallenge' ) );

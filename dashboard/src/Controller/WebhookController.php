@@ -5,7 +5,10 @@ declare( strict_types = 1 );
 namespace NorthLab\Controller;
 
 use NorthLab\Core\Auth;
+use NorthLab\Core\Config;
+use NorthLab\Core\Crypto;
 use NorthLab\Core\Request;
+use NorthLab\Core\Setting;
 use NorthLab\Repository\ClientRepository;
 use NorthLab\Repository\WebhookRepository;
 use NorthLab\Service\EventBus;
@@ -16,15 +19,29 @@ final class WebhookController extends BaseController {
 	public function index( Request $request ): void {
 		Auth::requireLogin();
 
+		// Die Empfangs-URL fürs Monitoring soll einfach da sein, wenn man die
+		// Seite aufruft — ein zusätzlicher Klick vorher bringt niemandem etwas.
+		$token = trim( Setting::get( 'uptime_global_token', '' ) );
+
+		if ( '' === $token && Auth::isAdmin() ) {
+			$token = Crypto::monitorToken();
+			Setting::set( 'uptime_global_token', $token );
+		}
+
 		$this->view(
 			'webhooks/index',
 			array(
 				'webhooks'   => WebhookRepository::all(),
 				'catalog'    => EventBus::catalog(),
 				'clients'    => ClientRepository::options(),
-				'deliveries' => WebhookRepository::deliveries( $request->int( 'webhook_id' ), 60 ),
+				'deliveries' => WebhookRepository::deliveries( $request->int( 'webhook_id' ), 40 ),
 				'queue'      => WebhookRepository::queueStats(),
 				'selected'   => $request->int( 'webhook_id' ),
+				'incomingUrl' => '' !== $token
+					? rtrim( (string) Config::get( 'app.url', '' ), '/' ) . '/api/uptime/' . $token
+					: '',
+				'apiToken'    => Auth::isAdmin() ? Setting::get( 'api_token', '' ) : '',
+				'panelUrl'    => rtrim( (string) Config::get( 'app.url', '' ), '/' ),
 			)
 		);
 	}
@@ -80,13 +97,20 @@ final class WebhookController extends BaseController {
 	 * @return array<string,mixed>
 	 */
 	private function payload( Request $request ): array {
+		$events = $request->arrayOfStrings( 'events' );
+
+		// Wer nichts auswählt, will alles — das ist der Normalfall.
+		if ( ! $events ) {
+			$events = array_keys( EventBus::catalog() );
+		}
+
 		return array(
 			'name'       => $request->string( 'name' ),
 			'target_url' => $request->string( 'target_url' ),
 			'secret'     => $request->string( 'secret' ),
-			'events'     => $request->arrayOfStrings( 'events' ),
+			'events'     => $events,
 			'client_id'  => $request->int( 'client_id' ),
-			'is_active'  => $request->bool( 'is_active' ),
+			'is_active'  => ! $request->bool( 'has_active_field' ) || $request->bool( 'is_active' ),
 		);
 	}
 }
