@@ -134,7 +134,8 @@ class NLC_Branding {
 
 		// "+49 (0)30" heisst: die 0 in Klammern entfaellt beim internationalen
 		// Waehlen. Sie stehen zu lassen ergaebe eine Nummer, die nicht durchgeht.
-		$plus = str_starts_with( $value, '+' );
+		// Kein str_starts_with — das Plugin laeuft laut Kopf ab PHP 7.4.
+		$plus = 0 === strpos( $value, '+' );
 		if ( $plus ) {
 			$value = preg_replace( '/\(\s*0\s*\)/', '', $value );
 		}

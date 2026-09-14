@@ -333,10 +333,19 @@ class NLC_Selfupdate {
 		delete_site_transient( 'update_plugins' );
 		wp_update_plugins();
 
+		// WordPress schaltet ein Plugin vor dem Ersetzen still ab
+		// (Plugin_Upgrader::deactivate_plugin_before_upgrade). Im Backend
+		// aktiviert es die Oberflaeche danach wieder — hier gibt es keine, also
+		// muss das von Hand geschehen. Sonst steht das Plugin nach dem Update
+		// deaktiviert da und ist vom Panel nicht mehr erreichbar.
+		$was_active = is_plugin_active( self::BASENAME );
+
 		$upgrader = new Plugin_Upgrader( new Automatic_Upgrader_Skin() );
 		$result   = $upgrader->upgrade( self::BASENAME );
 
 		delete_transient( self::CACHE );
+
+		$reactivated = self::reactivate( $was_active );
 
 		if ( is_wp_error( $result ) ) {
 			return array( 'ok' => false, 'message' => $result->get_error_message(), 'version' => NLC_VERSION );
@@ -350,6 +359,15 @@ class NLC_Selfupdate {
 			return array( 'ok' => false, 'message' => $error, 'version' => NLC_VERSION );
 		}
 
+		if ( is_string( $reactivated ) ) {
+			return array(
+				'ok'      => false,
+				'message' => 'Das Update lief durch, aber das Plugin liess sich nicht wieder aktivieren: '
+					. $reactivated . ' Bitte im Backend der Seite unter Plugins aktivieren.',
+				'version' => (string) $manifest['version'],
+			);
+		}
+
 		// Das Plugin wurde gerade unter den eigenen Fuessen ausgetauscht. Die
 		// Antwort nennt die Zielversion; sie laeuft ab dem naechsten Aufruf.
 		return array(
@@ -359,6 +377,35 @@ class NLC_Selfupdate {
 			'previous'  => NLC_VERSION,
 			'updated'   => true,
 		);
+	}
+
+	/**
+	 * Nach dem Ersetzen der Dateien wieder einschalten.
+	 *
+	 * @param bool $was_active Zustand vor dem Update.
+	 * @return true|string true bei Erfolg oder wenn nichts zu tun war, sonst der Fehler.
+	 */
+	protected static function reactivate( $was_active ) {
+		if ( ! $was_active ) {
+			return true;
+		}
+
+		// Der Zustand wird aus der Datenbank gelesen, nicht aus dem Speicher —
+		// deactivate_plugins() hat die Option zwischenzeitlich veraendert.
+		wp_cache_delete( 'alloptions', 'options' );
+
+		if ( is_plugin_active( self::BASENAME ) ) {
+			return true;
+		}
+
+		// Still: die Aktivierungshaken des alten Codes sollen hier nicht laufen.
+		$error = activate_plugin( self::BASENAME, '', false, true );
+
+		if ( is_wp_error( $error ) ) {
+			return $error->get_error_message();
+		}
+
+		return is_plugin_active( self::BASENAME ) ? true : 'Unbekannter Grund.';
 	}
 
 	/**
