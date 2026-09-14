@@ -30,7 +30,7 @@ final class SiteService {
 			return array( 0, 'Diese Seite ist bereits im Panel registriert.' );
 		}
 
-		$code = trim( (string) ( $data['connect_code'] ?? '' ) );
+		$code = self::normalizeCode( (string) ( $data['connect_code'] ?? '' ) );
 		if ( '' === $code ) {
 			return array( 0, 'Bitte den Verbindungscode aus dem Child-Plugin eintragen.' );
 		}
@@ -69,9 +69,9 @@ final class SiteService {
 
 		SiteRepository::update( $siteId, array( 'status' => 'connected', 'last_error' => null ) );
 
-		if ( ! empty( $response['data']['child'] ) && is_array( $response['data']['child'] ) ) {
-			SyncService::applyPayload( (array) SiteRepository::find( $siteId ), $response['data']['child'] );
-		}
+		// Die Verbindungsantwort traegt bewusst nur die schlanke Auskunft; den
+		// vollen Stand holt der Sync. Scheitert er, steht die Verbindung trotzdem.
+		SyncService::site( $siteId, true );
 
 		EventBus::dispatch(
 			'site.connected',
@@ -143,6 +143,17 @@ final class SiteService {
 	 *
 	 * @param array<string,mixed> $site
 	 */
+	/**
+	 * Verbindungscode auf eine einheitliche Schreibweise bringen.
+	 *
+	 * Beim Kopieren aus dem WordPress-Backend rutscht leicht ein Leerzeichen
+	 * oder Zeilenumbruch mit. Der Code besteht nur aus Grossbuchstaben und
+	 * Ziffern, also darf beides weg.
+	 */
+	public static function normalizeCode( string $code ): string {
+		return strtoupper( (string) preg_replace( '/\s+/', '', $code ) );
+	}
+
 	public static function checkReachable( array $site ): bool {
 		$response = Http::get(
 			(string) $site['url'],
@@ -189,7 +200,7 @@ final class SiteService {
 			return 'Seite nicht gefunden.';
 		}
 
-		$code = trim( $code );
+		$code = self::normalizeCode( $code );
 		if ( '' === $code ) {
 			return 'Bitte einen Verbindungscode eintragen.';
 		}
@@ -215,9 +226,7 @@ final class SiteService {
 			)
 		);
 
-		if ( ! empty( $response['data']['child'] ) && is_array( $response['data']['child'] ) ) {
-			SyncService::applyPayload( (array) SiteRepository::find( $siteId ), $response['data']['child'] );
-		}
+		SyncService::site( $siteId, true );
 
 		EventBus::dispatch(
 			'site.connected',

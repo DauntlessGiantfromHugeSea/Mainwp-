@@ -8,6 +8,10 @@ class NLC_Options {
 
 	const OPT_CONNECTION   = 'nlc_connection';   // array: connection_id, public_key, dashboard_url, dashboard_name, connected_at
 	const OPT_CONNECT_CODE = 'nlc_connect_code'; // array: hash, expires
+
+	/** Merkt kurz, welche Verbindung zuletzt zustande kam — fuer ehrliche Wiederholungen. */
+	const LAST_CONNECT     = 'nlc_last_connect';
+	const LAST_CONNECT_TTL = 600;
 	const OPT_SETTINGS     = 'nlc_settings';
 	const OPT_LAST_CONTACT = 'nlc_last_contact';
 
@@ -109,25 +113,112 @@ class NLC_Options {
 	}
 
 	/**
+	 * Schreibweise vereinheitlichen.
+	 *
+	 * Beim Kopieren rutscht leicht ein Leerzeichen oder Zeilenumbruch mit; der
+	 * Code besteht ohnehin nur aus Grossbuchstaben und Ziffern.
+	 *
+	 * @param string $code
+	 * @return string
+	 */
+	public static function normalize_code( $code ) {
+		return strtoupper( (string) preg_replace( '/\s+/', '', (string) $code ) );
+	}
+
+	/**
+	 * Warum ein Code nicht angenommen wird — oder null, wenn alles passt.
+	 *
+	 * Getrennt vom Verbrauchen, damit erst alles geprueft werden kann und der
+	 * Code nicht schon weg ist, wenn danach noch etwas schiefgeht.
+	 *
+	 * @param string $code
+	 * @return string|null
+	 */
+	public static function check_connect_code( $code ) {
+		$stored = get_option( self::OPT_CONNECT_CODE, null );
+
+		if ( ! is_array( $stored ) || empty( $stored['hash'] ) ) {
+			return 'Auf dieser Seite liegt kein Verbindungscode bereit. Er wurde entweder nie erzeugt '
+				. 'oder bereits benutzt. Bitte dort unter Einstellungen → NorthLab einen neuen erzeugen.';
+		}
+
+		if ( empty( $stored['expires'] ) || $stored['expires'] < time() ) {
+			delete_option( self::OPT_CONNECT_CODE );
+			return 'Der Verbindungscode ist abgelaufen — er gilt 60 Minuten. Bitte einen neuen erzeugen.';
+		}
+
+		if ( ! wp_check_password( self::normalize_code( $code ), $stored['hash'] ) ) {
+			return 'Der Verbindungscode stimmt nicht mit dem überein, der auf dieser Seite erzeugt wurde.';
+		}
+
+		return null;
+	}
+
+	/**
 	 * Prüft und verbraucht einen Verbindungscode.
 	 *
 	 * @param string $code
 	 * @return bool
 	 */
 	public static function consume_connect_code( $code ) {
-		$stored = get_option( self::OPT_CONNECT_CODE, null );
-		if ( ! is_array( $stored ) || empty( $stored['hash'] ) ) {
+		if ( null !== self::check_connect_code( $code ) ) {
 			return false;
 		}
-		if ( empty( $stored['expires'] ) || $stored['expires'] < time() ) {
-			delete_option( self::OPT_CONNECT_CODE );
-			return false;
-		}
-		if ( ! wp_check_password( (string) $code, $stored['hash'] ) ) {
-			return false;
-		}
+
 		delete_option( self::OPT_CONNECT_CODE );
+
 		return true;
+	}
+
+	/**
+	 * Haelt fest, welche Verbindung gerade zustande kam.
+	 *
+	 * @param string $code
+	 * @param string $connection_id
+	 * @param string $public_key
+	 */
+	public static function remember_connect( $code, $connection_id, $public_key ) {
+		set_transient(
+			self::LAST_CONNECT,
+			array(
+				'code' => hash( 'sha256', self::normalize_code( $code ) ),
+				'id'   => (string) $connection_id,
+				'key'  => hash( 'sha256', (string) $public_key ),
+			),
+			self::LAST_CONNECT_TTL
+		);
+	}
+
+	/**
+	 * War genau diese Anfrage eben schon einmal erfolgreich?
+	 *
+	 * Die Antwort auf die erste Anfrage geht manchmal unterwegs verloren — etwa
+	 * weil das Panel vorher in eine Zeitueberschreitung laeuft. Der Code ist dann
+	 * verbraucht, und ein zweiter Versuch mit demselben Code waere "ungueltig",
+	 * obwohl die Verbindung laengst steht. Stimmen Code, Kennung und Schluessel
+	 * ueberein, ist es dieselbe Anfrage und darf denselben Erfolg melden.
+	 *
+	 * @param string $code
+	 * @param string $connection_id
+	 * @param string $public_key
+	 * @return bool
+	 */
+	public static function was_just_connected( $code, $connection_id, $public_key ) {
+		$last = get_transient( self::LAST_CONNECT );
+
+		if ( ! is_array( $last ) || empty( $last['code'] ) ) {
+			return false;
+		}
+
+		$connection = self::connection();
+
+		if ( ! $connection || ! hash_equals( (string) $connection['connection_id'], (string) $connection_id ) ) {
+			return false;
+		}
+
+		return hash_equals( (string) $last['code'], hash( 'sha256', self::normalize_code( $code ) ) )
+			&& hash_equals( (string) $last['id'], (string) $connection_id )
+			&& hash_equals( (string) $last['key'], hash( 'sha256', (string) $public_key ) );
 	}
 
 	public static function touch_last_contact() {

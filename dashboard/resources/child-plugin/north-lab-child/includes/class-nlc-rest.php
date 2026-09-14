@@ -86,19 +86,42 @@ class NLC_REST {
 			return new WP_Error( 'nlc_no_openssl', 'Auf dieser Seite fehlt die OpenSSL-Erweiterung von PHP.', array( 'status' => 501 ) );
 		}
 
-		$code = (string) $request->get_param( 'code' );
-		if ( ! NLC_Options::consume_connect_code( $code ) ) {
-			return new WP_Error( 'nlc_bad_code', 'Verbindungscode ist ungültig oder abgelaufen.', array( 'status' => 403 ) );
+		$code          = (string) $request->get_param( 'code' );
+		$public_key    = (string) $request->get_param( 'public_key' );
+		$connection_id = sanitize_text_field( (string) $request->get_param( 'connection_id' ) );
+
+		// Genau diese Anfrage lief eben schon durch? Dann war nur die Antwort
+		// unterwegs verloren — denselben Erfolg noch einmal melden.
+		if ( NLC_Options::was_just_connected( $code, $connection_id, $public_key ) ) {
+			return rest_ensure_response(
+				array(
+					'connected' => true,
+					'repeated'  => true,
+					'child'     => NLC_Info::ping(),
+				)
+			);
 		}
 
-		$public_key = (string) $request->get_param( 'public_key' );
+		// Erst alles pruefen, dann den Code verbrauchen. Andersherum waere er
+		// nach einem spaeteren Fehler weg, obwohl er nie zu einer Verbindung fuehrte.
+		$problem = NLC_Options::check_connect_code( $code );
+		if ( null !== $problem ) {
+			return new WP_Error( 'nlc_bad_code', $problem, array( 'status' => 403 ) );
+		}
+
 		if ( false === openssl_pkey_get_public( $public_key ) ) {
 			return new WP_Error( 'nlc_bad_key', 'Übergebener öffentlicher Schlüssel ist ungültig.', array( 'status' => 400 ) );
 		}
 
+		if ( '' === $connection_id ) {
+			return new WP_Error( 'nlc_bad_connection', 'Es wurde keine Verbindungskennung übergeben.', array( 'status' => 400 ) );
+		}
+
+		NLC_Options::consume_connect_code( $code );
+
 		NLC_Options::save_connection(
 			array(
-				'connection_id'  => sanitize_text_field( (string) $request->get_param( 'connection_id' ) ),
+				'connection_id'  => $connection_id,
 				'public_key'     => $public_key,
 				'dashboard_url'  => esc_url_raw( (string) $request->get_param( 'dashboard_url' ) ),
 				'dashboard_name' => sanitize_text_field( (string) $request->get_param( 'dashboard_name' ) ),
@@ -106,10 +129,17 @@ class NLC_REST {
 			)
 		);
 
+		NLC_Options::remember_connect( $code, $connection_id, $public_key );
+
+		// Bewusst die schlanke Auskunft: der vollstaendige Bericht scannt Plugins,
+		// Themes, Datenbank und Uploads und fragt wordpress.org nach Updates. Auf
+		// einer langsamen Seite dauert das laenger als das Panel wartet — die
+		// Verbindung stuende dann, aber das Panel saehe nur eine Zeitueberschreitung.
+		// Den vollen Stand holt es sich gleich danach mit einem eigenen Sync.
 		return rest_ensure_response(
 			array(
 				'connected' => true,
-				'child'     => NLC_Info::collect( true ),
+				'child'     => NLC_Info::ping(),
 			)
 		);
 	}
