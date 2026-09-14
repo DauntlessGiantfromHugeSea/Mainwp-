@@ -46,6 +46,20 @@ final class SiteRepository {
 	/**
 	 * @return array<string,mixed>|null
 	 */
+	/**
+	 * @return array<string,mixed>|null
+	 */
+	public static function findByConnectionId( string $connectionId ): ?array {
+		if ( '' === $connectionId ) {
+			return null;
+		}
+
+		return Database::selectOne(
+			'SELECT * FROM `' . Database::table( 'sites' ) . "` WHERE `connection_id` = :cid AND `connection_id` <> ''",
+			array( 'cid' => $connectionId )
+		);
+	}
+
 	public static function findByUrl( string $url ): ?array {
 		return Database::selectOne(
 			'SELECT * FROM `' . Database::table( 'sites' ) . '` WHERE `url` = :url',

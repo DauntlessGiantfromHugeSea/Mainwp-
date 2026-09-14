@@ -57,6 +57,19 @@ $users    = (array) ( $payload['users'] ?? array() );
 	<div class="notice bad"><strong>Letzter Fehler:</strong> <?= e( (string) $site['last_error'] ) ?></div>
 <?php endif; ?>
 
+<?php if ( $childOutdated ) : ?>
+	<div class="notice warn">
+		<strong>Child-Plugin veraltet:</strong>
+		installiert ist <?= e( (string) $site['child_version'] ) ?>, das Panel liefert <?= e( $childShipped ) ?>.
+		<?php if ( $canWrite ) : ?>
+			<form method="post" action="<?= e( $siteUrl . '/child-update' ) ?>" style="display:inline;margin-left:8px">
+				<?= csrf_field() ?>
+				<button class="btn sm primary" data-busy="Aktualisiere…">Jetzt aktualisieren</button>
+			</form>
+		<?php endif; ?>
+	</div>
+<?php endif; ?>
+
 <?php if ( ! empty( $site['maintenance_mode'] ) ) : ?>
 	<div class="notice warn">
 		<strong>Wartungsmodus aktiv.</strong>
@@ -167,7 +180,19 @@ $users    = (array) ( $payload['users'] ?? array() );
 							<dt>PHP</dt><dd><?= e( (string) ( $env['php_version'] ?? '—' ) ) ?></dd>
 							<dt>MySQL</dt><dd><?= e( (string) ( $env['mysql_version'] ?? '—' ) ) ?></dd>
 							<dt>Server</dt><dd class="small"><?= e( (string) ( $env['server_software'] ?? '—' ) ) ?></dd>
-							<dt>Child-Plugin</dt><dd><?= e( $site['child_version'] ?: '—' ) ?></dd>
+							<dt>Child-Plugin</dt>
+							<dd>
+								<?= e( $site['child_version'] ?: '—' ) ?>
+								<?php if ( $childOutdated ) : ?>
+									<span class="badge warn">→ <?= e( $childShipped ) ?></span>
+									<?php if ( $canWrite ) : ?>
+										<form method="post" action="<?= e( $siteUrl . '/child-update' ) ?>" style="display:inline;margin-left:6px">
+											<?= csrf_field() ?>
+											<button class="btn sm primary" data-busy="Aktualisiere…">Aktualisieren</button>
+										</form>
+									<?php endif; ?>
+								<?php endif; ?>
+							</dd>
 							<dt>Speicherlimit</dt><dd><?= e( (string) ( $env['memory_limit'] ?? '—' ) ) ?></dd>
 							<dt>Datenbank</dt><dd><?= e( nl_bytes( (float) ( $env['db_size_mb'] ?? 0 ) ) ) ?></dd>
 							<dt>Uploads</dt><dd><?= e( nl_bytes( (float) ( $env['uploads_size_mb'] ?? 0 ) ) ) ?></dd>
@@ -627,7 +652,20 @@ $outdatedPlugins = array_values(
 		<div class="card-head">
 			<h2>Wartungsmodus</h2>
 			<div class="spacer"></div>
-			<?php if ( ! empty( $site['maintenance_mode'] ) ) : ?>
+			<?php if ( $childOutdated ) : ?>
+	<div class="notice warn">
+		<strong>Child-Plugin veraltet:</strong>
+		installiert ist <?= e( (string) $site['child_version'] ) ?>, das Panel liefert <?= e( $childShipped ) ?>.
+		<?php if ( $canWrite ) : ?>
+			<form method="post" action="<?= e( $siteUrl . '/child-update' ) ?>" style="display:inline;margin-left:8px">
+				<?= csrf_field() ?>
+				<button class="btn sm primary" data-busy="Aktualisiere…">Jetzt aktualisieren</button>
+			</form>
+		<?php endif; ?>
+	</div>
+<?php endif; ?>
+
+<?php if ( ! empty( $site['maintenance_mode'] ) ) : ?>
 				<span class="badge warn">aktiv</span>
 			<?php endif; ?>
 		</div>
@@ -670,7 +708,20 @@ $outdatedPlugins = array_values(
 					<button class="btn primary" data-busy="Schalte ein…">Wartungsmodus einschalten</button>
 				</form>
 
-				<?php if ( ! empty( $site['maintenance_mode'] ) ) : ?>
+				<?php if ( $childOutdated ) : ?>
+	<div class="notice warn">
+		<strong>Child-Plugin veraltet:</strong>
+		installiert ist <?= e( (string) $site['child_version'] ) ?>, das Panel liefert <?= e( $childShipped ) ?>.
+		<?php if ( $canWrite ) : ?>
+			<form method="post" action="<?= e( $siteUrl . '/child-update' ) ?>" style="display:inline;margin-left:8px">
+				<?= csrf_field() ?>
+				<button class="btn sm primary" data-busy="Aktualisiere…">Jetzt aktualisieren</button>
+			</form>
+		<?php endif; ?>
+	</div>
+<?php endif; ?>
+
+<?php if ( ! empty( $site['maintenance_mode'] ) ) : ?>
 					<form method="post" action="<?= e( $siteUrl . '/maintenance-mode' ) ?>" class="mt">
 						<?= csrf_field() ?>
 						<input type="hidden" name="disable" value="1">

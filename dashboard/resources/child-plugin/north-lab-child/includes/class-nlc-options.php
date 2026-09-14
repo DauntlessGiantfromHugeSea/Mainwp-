@@ -33,6 +33,7 @@ class NLC_Options {
 			'allow_backup'      => true,
 			'allow_autologin'   => true,
 			'allow_mmode'       => true,
+			'allow_self_update' => true,
 			'ip_allowlist'      => '',
 			'require_ssl'       => false,
 		);

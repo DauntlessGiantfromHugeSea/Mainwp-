@@ -14,6 +14,7 @@ use NorthLab\Repository\SiteRepository;
 use NorthLab\Repository\UpdateRepository;
 use NorthLab\Repository\UptimeRepository;
 use NorthLab\Service\ChildPackager;
+use NorthLab\Service\ChildPluginService;
 use NorthLab\Service\MaintenanceModeService;
 use NorthLab\Service\MaintenanceService;
 use NorthLab\Service\SiteService;
@@ -127,6 +128,8 @@ final class SiteController extends BaseController {
 				'activity'    => ActivityRepository::query( array( 'site_id' => $siteId, 'limit' => 25 ) ),
 				'monitorUrl'  => SiteService::monitorUrl( $site ),
 				'tasks'       => MaintenanceService::tasks(),
+				'childShipped' => ChildPluginService::shipped(),
+				'childOutdated' => ChildPluginService::isOutdated( $site ),
 				'mmodeDesign' => MaintenanceModeService::design(),
 				'mmodeTimes'  => MaintenanceModeService::DURATIONS,
 			)
@@ -265,6 +268,20 @@ final class SiteController extends BaseController {
 	}
 
 	/**
+	 * Child-Plugin auf der Kundenseite aktualisieren.
+	 */
+	public function childUpdate( Request $request ): void {
+		Auth::requireWrite();
+
+		$siteId = (int) $request->params['id'];
+		Auth::requireSite( $siteId );
+
+		$result = ChildPluginService::update( $siteId );
+
+		$this->respond( $request, $result['ok'], $result['message'], '/sites/' . $siteId );
+	}
+
+	/**
 	 * Wartungsmodus ein- oder ausschalten.
 	 */
 	public function maintenanceMode( Request $request ): void {
@@ -346,6 +363,11 @@ final class SiteController extends BaseController {
 				case 'maintenance':
 					$outcome   = MaintenanceService::run( $siteId, $request->arrayOfStrings( 'tasks' ) );
 					$results[] = array( 'site' => $site['name'], 'success' => $outcome['ok'], 'message' => $outcome['error'] );
+					break;
+
+				case 'child-update':
+					$outcome   = ChildPluginService::update( $siteId );
+					$results[] = array( 'site' => $site['name'], 'success' => $outcome['ok'], 'message' => $outcome['message'] );
 					break;
 
 				case 'mmode-on':

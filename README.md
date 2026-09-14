@@ -31,6 +31,14 @@ Ersteller des Plugins ist **NorthLab**.
 - Passwort direkt neu setzen (wird genau einmal angezeigt und nirgends gespeichert) oder WordPress eine Zurücksetz-Mail schicken lassen; offene Sitzungen des Kontos werden dabei beendet
 - **Ein-Klick-Anmeldung** ins WP-Backend: die Kundenseite gibt eine Adresse aus, die 90 Sekunden gilt und beim ersten Aufruf verbraucht ist. Auf der Kundenseite abschaltbar
 
+**Updates des Child-Plugins selbst**
+- Das Panel ist die Update-Quelle: die Kundenseite fragt es nach der aktuellen Version und hängt das Ergebnis in denselben Transient, aus dem WordPress seine Update-Liste liest. Das Update erscheint dadurch im Backend der Kundenseite, in der Update-Zentrale des Panels und in den automatischen Updates — ohne zweite Update-Bahn
+- Das Manifest ist mit dem privaten Schlüssel der jeweiligen Verbindung signiert; die Kundenseite prüft es mit dem öffentlichen Schlüssel, den sie beim Verbinden bekommen hat
+- Im signierten Manifest steht die SHA-256-Summe des Pakets. Das heruntergeladene ZIP wird dagegen geprüft, bevor WordPress es auspackt — ein unterwegs ausgetauschtes Paket fällt auf
+- Das Paket muss vom verbundenen Panel kommen, über dasselbe Protokoll wie dessen Adresse; ein signiertes Manifest, das woandershin zeigt, wird verworfen
+- Direkt anstoßbar pro Seite oder als Sammelaktion, wenn es nicht bis zum nächsten Prüflauf warten soll
+- Auf der Kundenseite abschaltbar
+
 **Wartungsmodus**
 - Aus der Ferne ein- und ausschalten, einzeln oder für mehrere Seiten auf einmal
 - Zeitlich befristet (15 Minuten bis 24 Stunden) oder bis auf Widerruf; abgelaufene Fenster beendet die Kundenseite selbst

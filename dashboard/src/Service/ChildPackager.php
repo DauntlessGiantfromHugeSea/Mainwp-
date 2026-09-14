@@ -44,6 +44,16 @@ final class ChildPackager {
 	}
 
 	/**
+	 * Pruefsumme des fertigen Pakets.
+	 *
+	 * Sie wandert signiert ins Manifest; die Kundenseite prueft damit den
+	 * Download, bevor sie ihn auspackt.
+	 */
+	public static function sha256(): string {
+		return (string) hash_file( 'sha256', self::build() );
+	}
+
+	/**
 	 * Erzeugt das Archiv (gecacht) und liefert den Pfad.
 	 */
 	public static function build( bool $force = false ): string {

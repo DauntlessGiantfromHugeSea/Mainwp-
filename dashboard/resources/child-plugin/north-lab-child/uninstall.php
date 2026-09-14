@@ -19,6 +19,7 @@ foreach ( $nlc_options as $nlc_option ) {
 }
 
 delete_transient( 'nlc_uploads_size' );
+delete_transient( 'nlc_update_manifest' );
 
 // Befristungen aufheben, damit kein Cron eines anderen Plugins spaeter Konten loescht.
 delete_metadata( 'user', 0, 'nlc_expires_at', '', true );

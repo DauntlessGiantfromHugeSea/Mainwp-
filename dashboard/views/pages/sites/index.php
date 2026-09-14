@@ -96,6 +96,7 @@ View::set(
 				<select name="bulk_action" style="width:auto">
 					<option value="sync">Synchronisieren</option>
 					<option value="update">Alle Updates einspielen</option>
+					<option value="child-update">Child-Plugin aktualisieren</option>
 					<option value="mmode-on">Wartungsmodus an (1 Stunde)</option>
 					<option value="mmode-off">Wartungsmodus aus</option>
 					<option value="pause">Pausieren</option>
@@ -163,6 +164,9 @@ View::set(
 									<?= nl_status_badge( $site ) ?> <?= nl_uptime_badge( $site ) ?>
 									<?php if ( ! empty( $site['maintenance_mode'] ) ) : ?>
 										<span class="badge warn" title="Besucher sehen die Wartungsseite">Wartung</span>
+									<?php endif; ?>
+									<?php if ( \NorthLab\Service\ChildPluginService::isOutdated( $site ) ) : ?>
+										<span class="badge warn" title="Child-Plugin veraltet — Sammelaktion &quot;Child-Plugin aktualisieren&quot;">Child <?= e( (string) $site['child_version'] ) ?></span>
 									<?php endif; ?>
 								</td>
 								<?php $isManaged = \NorthLab\Repository\SiteRepository::isManaged( $site ); ?>

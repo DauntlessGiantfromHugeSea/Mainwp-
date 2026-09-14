@@ -11,6 +11,7 @@ require_once dirname( __DIR__ ) . '/src/bootstrap.php';
 
 use NorthLab\Controller\ActivityController;
 use NorthLab\Controller\ApiController;
+use NorthLab\Controller\ChildUpdateController;
 use NorthLab\Controller\AuthController;
 use NorthLab\Controller\BackupController;
 use NorthLab\Controller\ClientController;
@@ -64,6 +65,10 @@ $router->get( '/api/v1/export', array( ApiController::class, 'export' ) );
 $router->get( '/api/v1/sites', array( ApiController::class, 'sites' ) );
 $router->get( '/api/v1/updates', array( ApiController::class, 'updates' ) );
 
+// Update-Quelle fuer das Child-Plugin - ohne Anmeldung, die Kundenseite hat keine.
+$router->post( '/api/child/manifest', array( ChildUpdateController::class, 'manifest' ) );
+$router->get( '/api/child/package/{connection:[A-Za-z0-9_-]{8,64}}', array( ChildUpdateController::class, 'package' ) );
+
 $router->get( '/login', array( AuthController::class, 'showLogin' ) );
 $router->post( '/login', array( AuthController::class, 'login' ) );
 $router->get( '/login/2fa', array( AuthController::class, 'showChallenge' ) );
@@ -87,6 +92,7 @@ $router->post( '/sites/{id:\d+}/security', array( SiteController::class, 'securi
 $router->post( '/sites/{id:\d+}/extensions', array( SiteController::class, 'extensions' ) );
 $router->post( '/sites/{id:\d+}/token', array( SiteController::class, 'rotateToken' ) );
 $router->post( '/sites/{id:\d+}/maintenance-mode', array( SiteController::class, 'maintenanceMode' ) );
+$router->post( '/sites/{id:\d+}/child-update', array( SiteController::class, 'childUpdate' ) );
 $router->get( '/sites/{id:\d+}/users', array( SiteUserController::class, 'index' ) );
 $router->post( '/sites/{id:\d+}/users', array( SiteUserController::class, 'store' ) );
 $router->post( '/sites/{id:\d+}/login', array( SiteUserController::class, 'login' ) );

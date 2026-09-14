@@ -35,6 +35,7 @@ final class EventBus {
 			'mmode.on'          => 'Wartungsmodus eingeschaltet',
 			'mmode.off'         => 'Wartungsmodus beendet',
 			'site.autologin'    => 'Ein-Klick-Anmeldung benutzt',
+			'child.updated'     => 'Child-Plugin aktualisiert',
 			'backup.completed'  => 'Sicherung abgeschlossen',
 			'backup.failed'     => 'Sicherung fehlgeschlagen',
 			'report.generated'  => 'Bericht erstellt',

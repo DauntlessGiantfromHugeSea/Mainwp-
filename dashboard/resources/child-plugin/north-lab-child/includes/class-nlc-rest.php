@@ -52,6 +52,7 @@ class NLC_REST {
 			'/maintenance' => array( 'POST', 'maintenance' ),
 			'/mmode'       => array( 'POST', 'mmode' ),
 			'/login-link'  => array( 'POST', 'login_link' ),
+			'/self-update' => array( 'POST', 'self_update' ),
 			'/security'    => array( 'POST', 'security' ),
 			'/backup'      => array( 'POST', 'backup' ),
 			'/disconnect'  => array( 'POST', 'disconnect' ),
@@ -283,6 +284,22 @@ class NLC_REST {
 	 */
 	public function login_link( WP_REST_Request $request ) {
 		return rest_ensure_response( NLC_Login::issue( (array) $request->get_param( 'data' ) ) );
+	}
+
+	/**
+	 * Das Child-Plugin selbst aktualisieren.
+	 *
+	 * @param WP_REST_Request $request
+	 * @return WP_REST_Response
+	 */
+	public function self_update( WP_REST_Request $request ) {
+		self::raise_limits();
+
+		$action = sanitize_key( (string) $request->get_param( 'action' ) );
+
+		return rest_ensure_response(
+			array( 'result' => 'check' === $action ? NLC_Selfupdate::check() : NLC_Selfupdate::run() )
+		);
 	}
 
 	public function security( WP_REST_Request $request ) {
