@@ -155,14 +155,6 @@ class NLC_Maintenance_Mode {
 			? '<img src="' . esc_url( $logo ) . '" alt="' . esc_attr( $name ) . '" class="logo">'
 			: '<div class="wordmark">' . esc_html( $name ) . '</div>';
 
-		$until = '';
-		if ( ! empty( $state['until'] ) && $state['until'] > time() ) {
-			$until = sprintf(
-				'<p class="until">Voraussichtlich bis %s Uhr</p>',
-				esc_html( wp_date( 'H:i', (int) $state['until'] ) )
-			);
-		}
-
 		return '<!doctype html>
 <html lang="' . esc_attr( str_replace( '_', '-', get_locale() ) ) . '">
 <head>
@@ -197,7 +189,6 @@ class NLC_Maintenance_Mode {
 		letter-spacing: -.02em; color: var(--brand);
 	}
 	p { margin: 0; color: #a3a3af; }
-	.until { margin-top: 16px; font-size: 14px; color: #6c6c7a; }
 	.pulse {
 		width: 9px; height: 9px; border-radius: 50%; background: var(--brand);
 		display: inline-block; margin-right: 9px; vertical-align: middle;
@@ -216,7 +207,6 @@ class NLC_Maintenance_Mode {
 		' . $logoTag . '
 		<h1><span class="pulse"></span>' . esc_html( $headline ) . '</h1>
 		' . ( '' !== $message ? '<p>' . nl2br( esc_html( $message ) ) . '</p>' : '' ) . '
-		' . $until . '
 	</main>
 </body>
 </html>';
