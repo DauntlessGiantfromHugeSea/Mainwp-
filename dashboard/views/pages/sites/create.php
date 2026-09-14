@@ -47,7 +47,10 @@ View::set( 'pageTitle', 'Seite hinzufügen' );
 
 					<div class="field full" data-when="wordpress">
 						<label for="connect_code">Verbindungscode</label>
-						<input type="text" id="connect_code" name="connect_code" class="mono" required
+						<!-- data-required statt required: app.js setzt die Pflicht je nach Typ.
+						     Bliebe sie fest im Markup, blockierte ein verstecktes Pflichtfeld
+						     das Absenden, sobald das Skript fehlt oder veraltet im Cache liegt. -->
+						<input type="text" id="connect_code" name="connect_code" class="mono" data-required="1"
 							placeholder="A1B2C3…" autocomplete="off">
 						<div class="hint">
 							Steht auf der Kundenseite unter <strong>Einstellungen → NorthLab</strong>, nachdem dort

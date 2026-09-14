@@ -30,6 +30,22 @@ if ( ! function_exists( 'url' ) ) {
 	}
 }
 
+if ( ! function_exists( 'nl_asset' ) ) {
+	/**
+	 * URL einer statischen Datei mit Versionsstempel.
+	 *
+	 * Ohne den Stempel liefern Browser nach einem Update tagelang die alte
+	 * app.js aus dem Cache aus - nginx setzt kein Cache-Control, also greift
+	 * die heuristische Zwischenspeicherung.
+	 */
+	function nl_asset( string $path ): string {
+		$file    = ( defined( 'NL_ROOT' ) ? NL_ROOT : dirname( __DIR__ ) ) . '/public/' . ltrim( $path, '/' );
+		$version = is_file( $file ) ? (string) filemtime( $file ) : ( defined( 'NL_VERSION' ) ? (string) NL_VERSION : '1' );
+
+		return url( $path ) . '?v=' . $version;
+	}
+}
+
 if ( ! function_exists( 'csrf_field' ) ) {
 	function csrf_field(): string {
 		return '<input type="hidden" name="_token" value="' . e( Csrf::token() ) . '">';

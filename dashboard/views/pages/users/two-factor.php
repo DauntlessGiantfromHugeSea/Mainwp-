@@ -140,6 +140,6 @@ View::set( 'pageTitle', 'Zwei-Faktor-Anmeldung' );
 	</div>
 </div>
 
-<script src="<?= e( url( '/assets/js/vendor/qrcode.js' ) ) ?>"></script>
-<script src="<?= e( url( '/assets/js/vendor/qrcode-utf8.js' ) ) ?>"></script>
-<script src="<?= e( url( '/assets/js/two-factor.js' ) ) ?>" defer></script>
+<script src="<?= e( nl_asset( '/assets/js/vendor/qrcode.js' ) ) ?>"></script>
+<script src="<?= e( nl_asset( '/assets/js/vendor/qrcode-utf8.js' ) ) ?>"></script>
+<script src="<?= e( nl_asset( '/assets/js/two-factor.js' ) ) ?>" defer></script>
