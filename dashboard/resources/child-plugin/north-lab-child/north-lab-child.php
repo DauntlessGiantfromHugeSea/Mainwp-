@@ -3,7 +3,7 @@
  * Plugin Name:       NorthLab Child
  * Plugin URI:        https://north-lab.de/
  * Description:       Verbindet diese WordPress-Seite mit dem NorthLab Control Panel. Erlaubt zentrale Updates, Status-Abfragen, Wartung, Sicherheitschecks und Reports.
- * Version:           1.3.1
+ * Version:           1.3.2
  * Requires at least: 6.0
  * Requires PHP:      7.4
  * Author:            NorthLab
@@ -14,7 +14,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'NLC_VERSION', '1.3.1' );
+define( 'NLC_VERSION', '1.3.2' );
 define( 'NLC_FILE', __FILE__ );
 define( 'NLC_PATH', plugin_dir_path( __FILE__ ) );
 define( 'NLC_URL', plugin_dir_url( __FILE__ ) );

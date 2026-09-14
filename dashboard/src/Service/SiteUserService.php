@@ -212,7 +212,7 @@ final class SiteUserService {
 	 * @return array{ok:bool,url:string,error:string}
 	 */
 	public static function loginLink( int $siteId, int $userId = 0 ): array {
-		$site = self::managed( $siteId );
+		$site = self::managed( $siteId, 'autologin' );
 
 		if ( is_string( $site ) ) {
 			return array( 'ok' => false, 'url' => '', 'error' => $site );
@@ -287,17 +287,14 @@ final class SiteUserService {
 	/**
 	 * @return array<string,mixed>|string Seite oder Fehlermeldung.
 	 */
-	private static function managed( int $siteId ) {
+	private static function managed( int $siteId, string $feature = 'users' ) {
 		$site = SiteRepository::find( $siteId );
 
 		if ( null === $site ) {
 			return 'Seite nicht gefunden.';
 		}
-		if ( ! SiteRepository::isManaged( $site ) ) {
-			return 'Diese Seite wird nur überwacht — Benutzer gibt es dort nicht zu verwalten.';
-		}
 
-		return $site;
+		return ChildFeature::unavailable( $site, $feature ) ?? $site;
 	}
 
 	/**

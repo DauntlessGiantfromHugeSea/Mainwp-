@@ -228,10 +228,7 @@ final class MaintenanceModeService {
 		if ( null === $site ) {
 			return 'Seite nicht gefunden.';
 		}
-		if ( ! SiteRepository::isManaged( $site ) ) {
-			return 'Diese Seite wird nur überwacht — einen Wartungsmodus kann das Panel dort nicht schalten.';
-		}
 
-		return $site;
+		return ChildFeature::unavailable( $site, 'mmode' ) ?? $site;
 	}
 }

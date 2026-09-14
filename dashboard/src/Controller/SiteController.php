@@ -14,6 +14,7 @@ use NorthLab\Repository\SiteRepository;
 use NorthLab\Repository\UpdateRepository;
 use NorthLab\Repository\UptimeRepository;
 use NorthLab\Service\ChildPackager;
+use NorthLab\Service\ChildFeature;
 use NorthLab\Service\ChildPluginService;
 use NorthLab\Service\MaintenanceModeService;
 use NorthLab\Service\MaintenanceService;
@@ -128,6 +129,7 @@ final class SiteController extends BaseController {
 				'activity'    => ActivityRepository::query( array( 'site_id' => $siteId, 'limit' => 25 ) ),
 				'monitorUrl'  => SiteService::monitorUrl( $site ),
 				'tasks'       => MaintenanceService::tasks(),
+				'features'     => ChildFeature::overview( $site ),
 				'childShipped' => ChildPluginService::shipped(),
 				'childOutdated' => ChildPluginService::isOutdated( $site ),
 				'mmodeDesign' => MaintenanceModeService::design(),

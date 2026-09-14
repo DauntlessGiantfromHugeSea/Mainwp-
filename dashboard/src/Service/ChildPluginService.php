@@ -97,21 +97,18 @@ final class ChildPluginService {
 		if ( null === $site ) {
 			return self::failure( 'Seite nicht gefunden.' );
 		}
-		if ( ! SiteRepository::isManaged( $site ) ) {
-			return self::failure( 'Diese Seite wird nur überwacht — dort läuft kein Child-Plugin.' );
+
+		$blocked = ChildFeature::unavailable( $site, 'selfupdate' );
+
+		if ( null !== $blocked ) {
+			return self::failure( $blocked );
 		}
 
 		// Grosszuegig: die Kundenseite laedt das Paket und packt es aus.
 		$response = ChildClient::post( $site, '/self-update', array( 'action' => $action ), 180 );
 
 		if ( ! $response['ok'] ) {
-			// Vor 1.3.0 gab es die Route nicht — das ist kein Fehler des Panels.
-			$hint = str_contains( $response['error'], '404' )
-				? ' Auf dieser Seite läuft noch eine Child-Version ohne Selbst-Update. '
-					. 'Einmal von Hand aktualisieren, danach geht es aus der Ferne.'
-				: '';
-
-			return self::failure( $response['error'] . $hint );
+			return self::failure( $response['error'] );
 		}
 
 		$result = (array) ( $response['data']['result'] ?? array() );

@@ -206,6 +206,31 @@ $users    = (array) ( $payload['users'] ?? array() );
 				</div>
 			</div>
 
+			<?php
+			$blocked = array_values( array_filter( $features, static fn( array $f ): bool => ! $f['ok'] ) );
+			?>
+			<?php if ( $managed && $blocked ) : ?>
+				<div class="card">
+					<div class="card-head">
+						<h2>Nicht verfügbar auf dieser Seite</h2>
+						<div class="spacer"></div>
+						<span class="badge warn"><?= e( (string) count( $blocked ) ) ?></span>
+					</div>
+					<div class="card-body">
+						<p class="small muted">
+							Wenn eine Aktion im Panel scheitert, steht der Grund hier — meist eine zu alte
+							Child-Version oder eine abgeschaltete Freigabe auf der Kundenseite.
+						</p>
+						<dl class="meta">
+							<?php foreach ( $blocked as $feature ) : ?>
+								<dt><?= e( $feature['label'] ) ?></dt>
+								<dd class="small"><?= e( (string) $feature['reason'] ) ?></dd>
+							<?php endforeach; ?>
+						</dl>
+					</div>
+				</div>
+			<?php endif; ?>
+
 			<?php if ( $payload ) : ?>
 				<div class="card">
 					<div class="card-head"><h2>Inhalte und Benutzer</h2></div>

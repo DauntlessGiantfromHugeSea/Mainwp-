@@ -20,6 +20,7 @@ class NLC_Info {
 		return array(
 			'child_version' => NLC_VERSION,
 			'generated_at'  => gmdate( 'c' ),
+			'capabilities'  => self::capabilities(),
 			'site'          => self::site(),
 			'environment'   => self::environment(),
 			'updates'       => NLC_Updates::available(),
@@ -30,6 +31,27 @@ class NLC_Info {
 			'health'        => self::health(),
 			'security'      => NLC_Security::scan(),
 		);
+	}
+
+	/**
+	 * Welche Freigaben auf dieser Seite gesetzt sind.
+	 *
+	 * Damit kann das Panel sagen, warum etwas nicht geht, statt nur dass es
+	 * nicht geht. Die IP-Liste bleibt draussen — die geht das Panel nichts an.
+	 *
+	 * @return array<string,bool>
+	 */
+	public static function capabilities() {
+		$settings = NLC_Options::settings();
+		$out      = array();
+
+		foreach ( NLC_Options::default_settings() as $key => $default ) {
+			if ( is_bool( $default ) ) {
+				$out[ $key ] = ! empty( $settings[ $key ] );
+			}
+		}
+
+		return $out;
 	}
 
 	/**
