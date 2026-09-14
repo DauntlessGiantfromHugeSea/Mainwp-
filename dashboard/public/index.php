@@ -12,6 +12,7 @@ require_once dirname( __DIR__ ) . '/src/bootstrap.php';
 use NorthLab\Controller\ActivityController;
 use NorthLab\Controller\ApiController;
 use NorthLab\Controller\ChildUpdateController;
+use NorthLab\Controller\IconController;
 use NorthLab\Controller\PushController;
 use NorthLab\Controller\PwaController;
 use NorthLab\Controller\AuthController;
@@ -74,6 +75,12 @@ $router->post( '/api/child/manifest', array( ChildUpdateController::class, 'mani
 $router->get( '/manifest.webmanifest', array( PwaController::class, 'manifest' ) );
 $router->get( '/sw.js', array( PwaController::class, 'serviceWorker' ) );
 $router->get( '/offline', array( PwaController::class, 'offline' ) );
+
+// Panel-Symbol aus dem eigenen Logo. Ohne Anmeldung, es steht im Browser-Reiter.
+$router->get( '/branding/icon.svg', array( IconController::class, 'svg' ) );
+$router->get( '/branding/icon/{name:[a-z0-9-]{4,20}}.png', array( IconController::class, 'raster' ) );
+$router->get( '/branding/logo', array( IconController::class, 'source' ) );
+$router->post( '/branding/icons', array( IconController::class, 'store' ) );
 
 // Push-Meldungen: der Browser spricht hier mit JavaScript. Bewusst nicht unter
 // /api/ — dieser Zweig ist von der CSRF-Pruefung ausgenommen, weil dort

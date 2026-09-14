@@ -12,6 +12,7 @@ use NorthLab\Core\Session;
 use NorthLab\Core\Setting;
 use NorthLab\Service\BrandingService;
 use NorthLab\Service\EventBus;
+use NorthLab\Service\IconService;
 use NorthLab\Service\PushService;
 use NorthLab\Service\Scheduler;
 
@@ -29,6 +30,9 @@ final class SettingsController extends BaseController {
 				'pushOn'    => Setting::getArray( 'push_on', array() ),
 				'pushReady' => PushService::ready(),
 				'pushCount' => \NorthLab\Repository\PushRepository::countForUser( Auth::id() ),
+				'iconSource' => IconService::hasSource(),
+				'iconOwn'    => IconService::hasOwnRaster(),
+				'iconStamp'  => IconService::stamp(),
 				'jobs'      => Scheduler::overview(),
 				'cronToken' => Setting::get( 'cron_token', '' ),
 				'cronUrl'   => rtrim( (string) Config::get( 'app.url', '' ), '/' ) . '/api/cron/' . Setting::get( 'cron_token', '' ),
@@ -107,6 +111,37 @@ final class SettingsController extends BaseController {
 						'branding_tint'       => $this->color( $request->string( 'branding_tint' ), '#fdf3f0' ),
 					)
 				);
+				break;
+
+			case 'icon':
+				Setting::setMany(
+					array(
+						'icon_bg'      => $this->color( $request->string( 'icon_bg' ), '#000000' ),
+						'icon_padding' => (string) max( 0, min( 40, $request->int( 'icon_padding', 18 ) ) ),
+					)
+				);
+
+				$error = null;
+
+				if ( ! empty( $_FILES['icon_file']['name'] ) ) {
+					$error = IconService::uploadSource( (array) $_FILES['icon_file'] );
+				} elseif ( '' !== $request->string( 'icon_url' ) ) {
+					$error = IconService::fetchSource( $request->string( 'icon_url' ) );
+				} else {
+					// Nur Farbe oder Rand geaendert: die Fassungen passen nicht mehr.
+					IconService::touch();
+				}
+
+				if ( null !== $error ) {
+					Session::flash( 'error', $error );
+				} elseif ( IconService::hasSource() ) {
+					Session::flash( 'info', 'Logo übernommen. Bitte unten die Vorschau prüfen und die Symbole erzeugen.' );
+				}
+				break;
+
+			case 'icon_reset':
+				IconService::reset();
+				Session::flash( 'success', 'Zurück auf das mitgelieferte Symbol.' );
 				break;
 
 			case 'push':

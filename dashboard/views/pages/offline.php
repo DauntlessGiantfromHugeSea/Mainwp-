@@ -13,7 +13,7 @@ use NorthLab\Core\View;
 View::set( 'pageTitle', 'Keine Verbindung' );
 ?>
 
-<img class="bare-mark" src="<?= e( nl_asset( '/assets/icons/icon-192.png' ) ) ?>" alt="" width="64" height="64">
+<img class="bare-mark" src="<?= e( url( '/branding/icon/icon-192.png' ) ) ?>" alt="" width="64" height="64">
 
 <h1>Keine Verbindung</h1>
 

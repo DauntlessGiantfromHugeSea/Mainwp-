@@ -15,6 +15,7 @@
 	<meta name="robots" content="noindex, nofollow">
 	<meta name="theme-color" content="#08080a">
 	<title><?= e( $pageTitle ?? 'Offline' ) ?> · <?= e( $agencyName ?? 'NorthLab' ) ?></title>
+	<link rel="icon" href="<?= e( url( '/branding/icon.svg' ) ) ?>" type="image/svg+xml">
 	<link rel="stylesheet" href="<?= e( nl_asset( '/assets/css/app.css' ) ) ?>">
 </head>
 <body class="bare">

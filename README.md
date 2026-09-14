@@ -29,6 +29,7 @@ Ersteller des Plugins ist **NorthLab**.
 - Manifest, Symbole und Service Worker: das Panel lässt sich auf Handy und Desktop installieren — eigenes Symbol, Vollbild ohne Browserleiste, eigener Eintrag im App-Umschalter
 - Gecacht wird ausschließlich die Hülle (CSS, Skripte, Symbole, Offline-Seite). Fertige Seiten landen bewusst nie im Cache: sie hängen an der Anmeldung, und auf einem geteilten Gerät wäre das die Übersicht eines fremden Kontos. Ohne Netz erscheint eine Hinweisseite statt eines veralteten Dashboards
 - Sicherheitsabstände moderner Telefone werden im Vollbild berücksichtigt
+- **Eigenes Symbol**: Logo hinterlegen (Adresse oder Datei, PNG/JPEG/WebP/GIF/SVG), Hintergrundfarbe und Rand wählen — daraus entstehen Browser-Reiter, Startbildschirm-Symbol und Apple-Touch-Symbol. Zusammengesetzt wird im Browser, weil die Bildbibliothek GD nicht zu den Voraussetzungen gehört und ohnehin keine SVG-Logos lesen kann; die SVG-Fassung baut das Panel selbst. Hochgeladene SVGs werden von Skripten, Ereignis-Attributen und `javascript:`-Verweisen befreit, bevor sie ausgeliefert werden
 
 **Push-Meldungen aufs Handy**
 - Web Push nach RFC 8291 und RFC 8292, ohne Fremdbibliothek — nur mit dem OpenSSL, das PHP ohnehin mitbringt
@@ -184,6 +185,7 @@ dashboard/
   bin/cron.php                Zeitplaner-Einstiegspunkt
   resources/child-plugin/     Quelle des WordPress-Plugins, wird auf Abruf gezippt
   storage/                    Logs, Cache, erzeugte ZIPs — muss beschreibbar sein
+    branding/                 Hinterlegtes Logo und die daraus erzeugten Symbole
   config.php                  Wird vom Installer erzeugt, nicht im Repository
 ```
 

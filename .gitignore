@@ -5,6 +5,7 @@ dashboard/config.php
 dashboard/storage/logs/*
 dashboard/storage/cache/*
 dashboard/storage/tmp/*
+dashboard/storage/branding/*
 !dashboard/storage/*/.gitkeep
 !dashboard/storage/*/.htaccess
 

@@ -9,6 +9,7 @@ use NorthLab\Core\Request;
 use NorthLab\Core\Response;
 use NorthLab\Core\Setting;
 use NorthLab\Core\View;
+use NorthLab\Service\IconService;
 
 /**
  * Alles, was das Panel zu einer installierbaren Anwendung macht.
@@ -30,8 +31,7 @@ final class PwaController extends BaseController {
 		return array(
 			nl_asset( '/assets/css/app.css' ),
 			nl_asset( '/assets/js/app.js' ),
-			nl_asset( '/assets/icons/icon-192.png' ),
-			nl_asset( '/assets/icons/icon-512.png' ),
+			url( '/branding/icon/icon-192.png' ) . '?v=' . IconService::stamp(),
 			url( self::OFFLINE_PATH ),
 		);
 	}
@@ -55,44 +55,10 @@ final class PwaController extends BaseController {
 			'lang'             => 'de',
 			'dir'              => 'ltr',
 			'categories'       => array( 'productivity', 'utilities' ),
-			'icons'            => array(
-				array(
-					'src'     => url( '/assets/icons/icon-192.png' ),
-					'sizes'   => '192x192',
-					'type'    => 'image/png',
-					'purpose' => 'any',
-				),
-				array(
-					'src'     => url( '/assets/icons/icon-512.png' ),
-					'sizes'   => '512x512',
-					'type'    => 'image/png',
-					'purpose' => 'any',
-				),
-				// Android schneidet Symbole auf eine Form zu; diese haben Luft am Rand.
-				array(
-					'src'     => url( '/assets/icons/icon-maskable-192.png' ),
-					'sizes'   => '192x192',
-					'type'    => 'image/png',
-					'purpose' => 'maskable',
-				),
-				array(
-					'src'     => url( '/assets/icons/icon-maskable-512.png' ),
-					'sizes'   => '512x512',
-					'type'    => 'image/png',
-					'purpose' => 'maskable',
-				),
-			),
+			'icons'            => $this->icons(),
 			'shortcuts'        => array(
-				array(
-					'name'  => 'Seiten',
-					'url'   => url( '/sites' ),
-					'icons' => array( array( 'src' => url( '/assets/icons/icon-192.png' ), 'sizes' => '192x192' ) ),
-				),
-				array(
-					'name'  => 'Updates',
-					'url'   => url( '/updates' ),
-					'icons' => array( array( 'src' => url( '/assets/icons/icon-192.png' ), 'sizes' => '192x192' ) ),
-				),
+				array( 'name' => 'Seiten', 'url' => url( '/sites' ) ),
+				array( 'name' => 'Updates', 'url' => url( '/updates' ) ),
 			),
 		);
 
@@ -106,6 +72,51 @@ final class PwaController extends BaseController {
 
 		echo (string) json_encode( $manifest, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT );
 		exit;
+	}
+
+	/**
+	 * Symbolliste fürs Manifest.
+	 *
+	 * @return array<int,array<string,string>>
+	 */
+	private function icons(): array {
+		$stamp = IconService::stamp();
+		$own   = IconService::hasOwnRaster();
+
+		$entry = static fn( string $name, string $size, string $purpose ): array => array(
+			'src'     => url( '/branding/icon/' . $name . '.png' ) . '?v=' . $stamp,
+			'sizes'   => $size,
+			'type'    => 'image/png',
+			'purpose' => $purpose,
+		);
+
+		$icons = array(
+			$entry( 'icon-192', '192x192', 'any' ),
+			$entry( 'icon-512', '512x512', 'any' ),
+		);
+
+		// Android schneidet Symbole auf eine Form zu. Beim eigenen Logo sorgt
+		// der Rand der Vorlage fuer die noetige Luft; das mitgelieferte Symbol
+		// hat dafuer eigene Fassungen.
+		if ( $own ) {
+			$icons[] = $entry( 'icon-192', '192x192', 'maskable' );
+			$icons[] = $entry( 'icon-512', '512x512', 'maskable' );
+		} else {
+			$icons[] = array(
+				'src'     => nl_asset( '/assets/icons/icon-maskable-192.png' ),
+				'sizes'   => '192x192',
+				'type'    => 'image/png',
+				'purpose' => 'maskable',
+			);
+			$icons[] = array(
+				'src'     => nl_asset( '/assets/icons/icon-maskable-512.png' ),
+				'sizes'   => '512x512',
+				'type'    => 'image/png',
+				'purpose' => 'maskable',
+			);
+		}
+
+		return $icons;
 	}
 
 	/**
@@ -153,7 +164,7 @@ final class PwaController extends BaseController {
 	 */
 	private function version(): string {
 		$root  = NL_ROOT . '/public';
-		$stamp = (string) Config::get( 'app.version', NL_VERSION );
+		$stamp = (string) Config::get( 'app.version', NL_VERSION ) . '-' . IconService::stamp();
 
 		foreach ( array( '/assets/css/app.css', '/assets/js/app.js', '/../resources/pwa/sw.js' ) as $file ) {
 			$path = $root . $file;

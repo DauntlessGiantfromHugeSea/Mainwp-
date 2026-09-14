@@ -22,6 +22,7 @@ $get = static fn( string $key, string $default = '' ): string => $settings[ $key
 	<button data-tab="automation">Automatisierung</button>
 	<button data-tab="mmode">Wartungsseite</button>
 	<button data-tab="branding">Branding</button>
+	<button data-tab="icon">Symbol</button>
 	<button data-tab="push">Meldungen aufs Handy</button>
 	<button data-tab="notifications">Benachrichtigungen</button>
 	<button data-tab="monitoring">Monitoring</button>
@@ -324,6 +325,122 @@ $get = static fn( string $key, string $default = '' ): string => $settings[ $key
 					Ein Kunde kann das Branding auf seiner Seite unter <em>Einstellungen → NorthLab</em>
 					komplett unterbinden. Das Panel meldet dann, dass es dort abgeschaltet ist.
 				</p>
+			</div>
+		</div>
+	</div>
+</div>
+
+<div class="tab-panel" data-tab-panel="icon" id="icon">
+	<div class="grid side">
+		<div class="card">
+			<div class="card-head"><h2>Symbol des Panels</h2></div>
+			<div class="card-body">
+				<p class="small muted">
+					Steht im Browser-Reiter, als Lesezeichen und als Symbol der installierten
+					Anwendung auf Handy und Desktop. Dunkler Grund, dein Logo darauf.
+				</p>
+
+				<form method="post" action="<?= e( url( '/settings' ) ) ?>" enctype="multipart/form-data">
+					<?= csrf_field() ?>
+					<input type="hidden" name="section" value="icon">
+
+					<div class="form-grid">
+						<div class="field full">
+							<label for="icon_url">Logo von einer Adresse holen</label>
+							<input type="url" id="icon_url" name="icon_url" placeholder="https://…/logo.svg">
+							<div class="hint">
+								PNG, JPEG, WebP, GIF oder SVG, bis 2 MB. Das Panel lädt die Datei einmal
+								herunter und verwahrt sie — sie muss danach nicht erreichbar bleiben.
+							</div>
+						</div>
+
+						<div class="field full">
+							<label for="icon_file">…oder eine Datei hochladen</label>
+							<input type="file" id="icon_file" name="icon_file" accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml">
+						</div>
+
+						<div class="field">
+							<label for="icon_bg">Hintergrund</label>
+							<input type="text" id="icon_bg" name="icon_bg" class="mono" placeholder="#000000"
+								value="<?= e( $get( 'icon_bg', '#000000' ) ) ?>">
+							<div class="hint">Hex. Schwarz ist die Vorgabe.</div>
+						</div>
+
+						<div class="field">
+							<label for="icon_padding">Rand um das Logo</label>
+							<input type="number" id="icon_padding" name="icon_padding" min="0" max="40" step="1"
+								value="<?= e( $get( 'icon_padding', '18' ) ) ?>">
+							<div class="hint">
+								In Prozent. Android schneidet Symbole rund zu — unter 15 % kann davon
+								etwas verloren gehen.
+							</div>
+						</div>
+					</div>
+
+					<button class="btn primary" data-busy="Übernehme…">Logo übernehmen</button>
+				</form>
+			</div>
+		</div>
+
+		<div>
+			<div class="card" id="icon-box" data-icon-source="<?= e( url( '/branding/logo' ) ) ?>">
+				<div class="card-head">
+					<h3>Vorschau</h3>
+					<div class="spacer"></div>
+					<?php if ( $iconOwn ) : ?>
+						<span class="badge ok">eigenes Symbol aktiv</span>
+					<?php endif; ?>
+				</div>
+				<div class="card-body" style="text-align:center">
+					<?php if ( ! $iconSource ) : ?>
+						<img src="<?= e( url( '/branding/icon/icon-192.png' ) . '?v=' . $iconStamp ) ?>"
+							alt="" width="128" height="128" style="border-radius:28px">
+						<p class="small muted mt">
+							Noch kein eigenes Logo hinterlegt — gezeigt wird das mitgelieferte Symbol.
+						</p>
+					<?php else : ?>
+						<canvas id="icon-canvas" width="256" height="256"
+							style="width:128px;height:128px;border-radius:28px;background:#111"></canvas>
+
+						<div class="notice mt" data-icon-status>Wird geladen…</div>
+
+						<div class="btn-row" style="justify-content:center">
+							<button class="btn primary" type="button" data-icon-save disabled data-busy="Erzeuge…">
+								Symbole erzeugen
+							</button>
+						</div>
+
+						<p class="small muted mt">
+							Farbe und Rand wirken sofort in der Vorschau. Erst „Symbole erzeugen“
+							schreibt sie fest.
+						</p>
+					<?php endif; ?>
+				</div>
+			</div>
+
+			<div class="card">
+				<div class="card-head"><h3>Wie das gebaut wird</h3></div>
+				<div class="card-body small">
+					<p>
+						Zusammengesetzt wird im Browser, nicht auf dem Server. Zwei Gründe: die
+						Bildbibliothek GD gehört nicht zu den Voraussetzungen dieser Installation und
+						fehlt auf manchen Servern — und sie kann keine SVG-Logos lesen, was viele
+						Logos heute sind.
+					</p>
+					<p>
+						Für den Browser-Reiter entsteht zusätzlich eine SVG-Fassung. Die baut das
+						Panel selbst zusammen; sie braucht keinen Zeichner und bleibt bei jeder
+						Grösse scharf.
+					</p>
+					<?php if ( $iconSource || $iconOwn ) : ?>
+						<form method="post" action="<?= e( url( '/settings' ) ) ?>" class="mt"
+							data-confirm="Eigenes Logo und alle daraus erzeugten Symbole entfernen?">
+							<?= csrf_field() ?>
+							<input type="hidden" name="section" value="icon_reset">
+							<button class="btn danger">Zurück zum mitgelieferten Symbol</button>
+						</form>
+					<?php endif; ?>
+				</div>
 			</div>
 		</div>
 	</div>
@@ -648,3 +765,4 @@ $get = static fn( string $key, string $default = '' ): string => $settings[ $key
 </div>
 
 <script src="<?= e( nl_asset( '/assets/js/push.js' ) ) ?>" defer></script>
+<script src="<?= e( nl_asset( '/assets/js/icon.js' ) ) ?>" defer></script>
