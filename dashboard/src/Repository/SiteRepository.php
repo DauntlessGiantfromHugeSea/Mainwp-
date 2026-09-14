@@ -268,6 +268,19 @@ final class SiteRepository {
 	/**
 	 * @param array<string,mixed> $fields
 	 */
+	/**
+	 * Seiten, deren Wartungsfenster verstrichen ist.
+	 *
+	 * @return array<int,array<string,mixed>>
+	 */
+	public static function withExpiredMaintenance(): array {
+		return Database::select(
+			'SELECT * FROM `' . Database::table( 'sites' ) . '`
+			 WHERE `maintenance_mode` = 1 AND `maintenance_until` IS NOT NULL AND `maintenance_until` <= :now',
+			array( 'now' => nl_utc() )
+		);
+	}
+
 	public static function update( int $id, array $fields ): void {
 		$fields['updated_at'] = nl_utc();
 		Database::update( 'sites', $fields, array( 'id' => $id ) );

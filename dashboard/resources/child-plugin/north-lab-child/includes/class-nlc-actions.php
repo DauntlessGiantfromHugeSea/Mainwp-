@@ -195,6 +195,9 @@ class NLC_Actions {
 
 	/* --------------------------------------------------------------- Benutzer */
 
+	const META_EXPIRES    = 'nlc_expires_at';
+	const META_FROM_PANEL = 'nlc_from_panel';
+
 	/**
 	 * @param array<string,mixed> $args role, search, limit
 	 * @return array<int,array<string,mixed>>
@@ -220,6 +223,8 @@ class NLC_Actions {
 				'roles'        => array_values( $user->roles ),
 				'registered'   => $user->user_registered,
 				'last_login'   => get_user_meta( $user->ID, 'nlc_last_login', true ) ?: null,
+				'expires_at'   => (int) get_user_meta( $user->ID, self::META_EXPIRES, true ) ?: null,
+				'from_panel'   => (bool) get_user_meta( $user->ID, self::META_FROM_PANEL, true ),
 			);
 		}
 
@@ -255,7 +260,24 @@ class NLC_Actions {
 				if ( is_wp_error( $user_id ) ) {
 					return self::outcome( 'user', false, $user_id->get_error_message() );
 				}
-				return array_merge( self::outcome( 'user', true, 'Benutzer angelegt.' ), array( 'user_id' => $user_id ) );
+
+				update_user_meta( $user_id, self::META_FROM_PANEL, 1 );
+
+				$expires = isset( $data['expires_at'] ) ? (int) $data['expires_at'] : 0;
+				if ( $expires > time() ) {
+					update_user_meta( $user_id, self::META_EXPIRES, $expires );
+				}
+
+				return array_merge(
+					self::outcome( 'user', true, $expires > time() ? 'Befristeter Benutzer angelegt.' : 'Benutzer angelegt.' ),
+					array(
+						'user_id'    => $user_id,
+						'login'      => sanitize_user( $data['login'] ),
+						// Nur hier im Klartext; das Panel zeigt es einmal an und speichert es nicht.
+						'password'   => $password,
+						'expires_at' => $expires > time() ? $expires : null,
+					)
+				);
 
 			case 'update':
 				$user_id = isset( $data['id'] ) ? (int) $data['id'] : 0;
@@ -289,6 +311,36 @@ class NLC_Actions {
 				$ok       = wp_delete_user( $user_id, $reassign );
 				return self::outcome( 'user', (bool) $ok, $ok ? 'Benutzer gelöscht.' : 'Löschen fehlgeschlagen.' );
 
+			case 'set-password':
+				$user_id = isset( $data['id'] ) ? (int) $data['id'] : 0;
+				$user    = $user_id ? get_userdata( $user_id ) : null;
+				if ( ! $user ) {
+					return self::outcome( 'user', false, 'Benutzer nicht gefunden.' );
+				}
+				$password = ! empty( $data['password'] ) ? (string) $data['password'] : wp_generate_password( 24, true, true );
+				wp_set_password( $password, $user_id );
+				// Alle offenen Sitzungen beenden, sonst bleibt ein Dieb angemeldet.
+				if ( class_exists( 'WP_Session_Tokens' ) ) {
+					WP_Session_Tokens::get_instance( $user_id )->destroy_all();
+				}
+				return array_merge(
+					self::outcome( 'user', true, 'Neues Passwort gesetzt, alle Sitzungen beendet.' ),
+					array( 'user_id' => $user_id, 'login' => $user->user_login, 'password' => $password )
+				);
+
+			case 'extend':
+				$user_id = isset( $data['id'] ) ? (int) $data['id'] : 0;
+				if ( ! $user_id || ! get_userdata( $user_id ) ) {
+					return self::outcome( 'user', false, 'Benutzer nicht gefunden.' );
+				}
+				$expires = isset( $data['expires_at'] ) ? (int) $data['expires_at'] : 0;
+				if ( $expires > time() ) {
+					update_user_meta( $user_id, self::META_EXPIRES, $expires );
+					return self::outcome( 'user', true, 'Befristung verlängert.' );
+				}
+				delete_user_meta( $user_id, self::META_EXPIRES );
+				return self::outcome( 'user', true, 'Befristung aufgehoben — das Konto bleibt bestehen.' );
+
 			case 'reset-password':
 				$user_id = isset( $data['id'] ) ? (int) $data['id'] : 0;
 				$user    = $user_id ? get_userdata( $user_id ) : null;
@@ -302,6 +354,68 @@ class NLC_Actions {
 		}
 
 		return self::outcome( 'user', false, 'Unbekannte Aktion: ' . $action );
+	}
+
+	/**
+	 * Abgelaufene befristete Konten entfernen.
+	 *
+	 * Laeuft am WP-Cron und zusaetzlich bei jeder signierten Anfrage: auf Seiten
+	 * mit abgeschaltetem WP-Cron waere ein befristetes Konto sonst unbefristet.
+	 *
+	 * @return array<int,string> Entfernte Anmeldenamen.
+	 */
+	public static function purge_expired_users() {
+		$expired = get_users(
+			array(
+				'meta_key'     => self::META_EXPIRES,
+				'meta_value'   => time(),
+				'meta_compare' => '<=',
+				'meta_type'    => 'NUMERIC',
+				'number'       => 50,
+				'fields'       => array( 'ID', 'user_login' ),
+			)
+		);
+
+		if ( ! $expired ) {
+			return array();
+		}
+
+		if ( ! function_exists( 'wp_delete_user' ) ) {
+			require_once ABSPATH . 'wp-admin/includes/user.php';
+		}
+
+		$reassign = self::oldest_administrator();
+		$removed  = array();
+
+		foreach ( $expired as $user ) {
+			// Den Empfaenger der Inhalte niemals selbst loeschen.
+			if ( (int) $user->ID === $reassign ) {
+				delete_user_meta( (int) $user->ID, self::META_EXPIRES );
+				continue;
+			}
+			if ( wp_delete_user( (int) $user->ID, $reassign ) ) {
+				$removed[] = $user->user_login;
+			}
+		}
+
+		return $removed;
+	}
+
+	/**
+	 * @return int|null
+	 */
+	private static function oldest_administrator() {
+		$admins = get_users(
+			array(
+				'role'    => 'administrator',
+				'number'  => 1,
+				'orderby' => 'ID',
+				'order'   => 'ASC',
+				'fields'  => 'ID',
+			)
+		);
+
+		return $admins ? (int) $admins[0] : null;
 	}
 
 	/* --------------------------------------------------------------- Inhalte */

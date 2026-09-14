@@ -68,6 +68,21 @@ final class SettingsController extends BaseController {
 				);
 				break;
 
+			case 'mmode':
+				Setting::setMany(
+					array(
+						'mmode_headline'    => $request->string( 'mmode_headline', 'Wartungsmodus' ) ?: 'Wartungsmodus',
+						'mmode_message'     => $request->string( 'mmode_message' ),
+						'mmode_color'       => $this->color(
+							$request->string( 'mmode_color' ),
+							(string) Setting::get( 'agency_color', '#f9907a' )
+						),
+						'mmode_logo'        => $request->string( 'mmode_logo' ),
+						'mmode_retry_after' => (string) max( 60, min( 86400, $request->int( 'mmode_retry_after', 3600 ) ) ),
+					)
+				);
+				break;
+
 			case 'notifications':
 				Setting::setMany(
 					array(
@@ -149,7 +164,14 @@ final class SettingsController extends BaseController {
 		return in_array( $value, array( 'off', 'security', 'minor', 'all' ), true ) ? $value : 'off';
 	}
 
-	private function color( string $value ): string {
-		return preg_match( '/^#[0-9a-fA-F]{6}$/', $value ) ? $value : '#2f6df6';
+	private function color( string $value, string $fallback = '#2f6df6' ): string {
+		$value = strtolower( trim( $value ) );
+
+		// Kurzform mitnehmen, sonst landet ein getipptes #f9a still im Fallback.
+		if ( preg_match( '/^#[0-9a-f]{3}$/', $value ) ) {
+			$value = '#' . $value[1] . $value[1] . $value[2] . $value[2] . $value[3] . $value[3];
+		}
+
+		return preg_match( '/^#[0-9a-f]{6}$/', $value ) ? $value : $fallback;
 	}
 }

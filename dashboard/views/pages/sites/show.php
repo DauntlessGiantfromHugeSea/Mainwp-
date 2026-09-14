@@ -27,9 +27,22 @@ $siteUrl  = url( '/sites/' . $site['id'] );
 $managed = SiteRepository::isManaged( $site );
 
 $actions = '<a class="btn" target="_blank" rel="noopener" href="' . e( (string) $site['url'] ) . '">Seite öffnen</a>';
+
+if ( $managed ) {
+	$actions .= ' <a class="btn" href="' . e( $siteUrl . '/users' ) . '">Benutzer</a>';
+
+	if ( $canWrite ) {
+		// POST, damit die Anmeldung nicht von einem fremden Link ausgeloest werden kann.
+		$actions .= '<form method="post" action="' . e( $siteUrl . '/login' ) . '" style="display:inline">'
+			. csrf_field()
+			. '<button class="btn primary" data-busy="Öffne…">Ein-Klick-Anmeldung</button></form>';
+	}
+}
+
 if ( ! empty( $site['admin_url'] ) ) {
 	$actions .= ' <a class="btn" target="_blank" rel="noopener" href="' . e( (string) $site['admin_url'] ) . '">WP-Admin</a>';
 }
+
 View::set( 'headerActions', $actions );
 
 $plugins  = (array) ( $payload['plugins'] ?? array() );
@@ -42,6 +55,25 @@ $users    = (array) ( $payload['users'] ?? array() );
 
 <?php if ( ! empty( $site['last_error'] ) ) : ?>
 	<div class="notice bad"><strong>Letzter Fehler:</strong> <?= e( (string) $site['last_error'] ) ?></div>
+<?php endif; ?>
+
+<?php if ( ! empty( $site['maintenance_mode'] ) ) : ?>
+	<div class="notice warn">
+		<strong>Wartungsmodus aktiv.</strong>
+		Besucher sehen die Wartungsseite, angemeldete Redakteure arbeiten normal weiter.
+		<?php if ( ! empty( $site['maintenance_until'] ) ) : ?>
+			Endet automatisch am <?= e( nl_date( (string) $site['maintenance_until'] ) ) ?>.
+		<?php else : ?>
+			Läuft bis auf Widerruf.
+		<?php endif; ?>
+		<?php if ( $canWrite ) : ?>
+			<form method="post" action="<?= e( $siteUrl . '/maintenance-mode' ) ?>" style="display:inline;margin-left:8px">
+				<?= csrf_field() ?>
+				<input type="hidden" name="disable" value="1">
+				<button class="btn sm" data-busy="Beende…">Jetzt beenden</button>
+			</form>
+		<?php endif; ?>
+	</div>
 <?php endif; ?>
 
 <?php if ( ! empty( $site['is_paused'] ) ) : ?>
@@ -531,6 +563,64 @@ $users    = (array) ( $payload['users'] ?? array() );
 <?php if ( $managed ) : ?>
 <!-- -------------------------------------------------------------- Wartung -->
 <div class="tab-panel" data-tab-panel="maintenance">
+	<div class="card">
+		<div class="card-head">
+			<h2>Wartungsmodus</h2>
+			<div class="spacer"></div>
+			<?php if ( ! empty( $site['maintenance_mode'] ) ) : ?>
+				<span class="badge warn">aktiv</span>
+			<?php endif; ?>
+		</div>
+		<div class="card-body">
+			<?php if ( ! $canWrite ) : ?>
+				<div class="empty">Dein Konto hat nur Leserechte.</div>
+			<?php else : ?>
+				<p class="small muted">
+					Besucher bekommen eine gebrandete Seite mit dem Status <code>503</code> und
+					<code>Retry-After</code> — Suchmaschinen werten das als vorübergehend und nehmen die Seite
+					nicht aus dem Index. Angemeldete Redakteure sehen die Seite unverändert.
+					Gestaltung und Logo stehen in den <a href="<?= e( url( '/settings#mmode' ) ) ?>">Einstellungen</a>.
+				</p>
+
+				<form method="post" action="<?= e( $siteUrl . '/maintenance-mode' ) ?>"
+					data-confirm="Wartungsmodus jetzt einschalten? Besucher sehen die Seite dann nicht mehr.">
+					<?= csrf_field() ?>
+					<div class="form-grid">
+						<div class="field">
+							<label for="mm_headline">Überschrift</label>
+							<input type="text" id="mm_headline" name="headline"
+								value="<?= e( (string) $mmodeDesign['headline'] ) ?>" maxlength="80">
+						</div>
+						<div class="field">
+							<label for="mm_minutes">Dauer</label>
+							<select id="mm_minutes" name="minutes">
+								<?php foreach ( $mmodeTimes as $minutes => $label ) : ?>
+									<option value="<?= e( (string) $minutes ) ?>" <?= 60 === $minutes ? 'selected' : '' ?>>
+										<?= e( $label ) ?>
+									</option>
+								<?php endforeach; ?>
+							</select>
+						</div>
+						<div class="field full">
+							<label for="mm_message">Text</label>
+							<input type="text" id="mm_message" name="message"
+								value="<?= e( (string) $mmodeDesign['message'] ) ?>" maxlength="200">
+						</div>
+					</div>
+					<button class="btn primary" data-busy="Schalte ein…">Wartungsmodus einschalten</button>
+				</form>
+
+				<?php if ( ! empty( $site['maintenance_mode'] ) ) : ?>
+					<form method="post" action="<?= e( $siteUrl . '/maintenance-mode' ) ?>" class="mt">
+						<?= csrf_field() ?>
+						<input type="hidden" name="disable" value="1">
+						<button class="btn" data-busy="Beende…">Wartungsmodus beenden</button>
+					</form>
+				<?php endif; ?>
+			<?php endif; ?>
+		</div>
+	</div>
+
 	<div class="card">
 		<div class="card-head"><h2>Wartungsaufgaben</h2></div>
 		<div class="card-body">

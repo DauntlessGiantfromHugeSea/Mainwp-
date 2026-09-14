@@ -50,6 +50,8 @@ class NLC_REST {
 			'/users'       => array( 'POST', 'users' ),
 			'/content'     => array( 'POST', 'content' ),
 			'/maintenance' => array( 'POST', 'maintenance' ),
+			'/mmode'       => array( 'POST', 'mmode' ),
+			'/login-link'  => array( 'POST', 'login_link' ),
 			'/security'    => array( 'POST', 'security' ),
 			'/backup'      => array( 'POST', 'backup' ),
 			'/disconnect'  => array( 'POST', 'disconnect' ),
@@ -240,6 +242,47 @@ class NLC_REST {
 		$tasks = (array) $request->get_param( 'tasks' );
 
 		return rest_ensure_response( array( 'results' => NLC_Maintenance::run( $tasks ) ) );
+	}
+
+	/**
+	 * Wartungsmodus lesen und setzen.
+	 *
+	 * @param WP_REST_Request $request
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function mmode( WP_REST_Request $request ) {
+		if ( ! NLC_Options::setting( 'allow_mmode' ) ) {
+			return new WP_Error( 'nlc_mmode_off', 'Der Wartungsmodus ist auf dieser Seite deaktiviert.', array( 'status' => 403 ) );
+		}
+
+		$action = sanitize_key( (string) $request->get_param( 'action' ) );
+
+		if ( '' === $action || 'get' === $action ) {
+			return rest_ensure_response( array( 'mmode' => NLC_Maintenance_Mode::state() ) );
+		}
+
+		if ( 'preview' === $action ) {
+			return rest_ensure_response(
+				array( 'html' => NLC_Maintenance_Mode::page( (array) $request->get_param( 'settings' ) ) )
+			);
+		}
+
+		if ( 'set' === $action ) {
+			$values = (array) $request->get_param( 'settings' );
+			return rest_ensure_response( array( 'mmode' => NLC_Maintenance_Mode::save( $values ) ) );
+		}
+
+		return new WP_Error( 'nlc_bad_action', 'Unbekannte Aktion.', array( 'status' => 400 ) );
+	}
+
+	/**
+	 * Einmal-Adresse fuer die Ein-Klick-Anmeldung.
+	 *
+	 * @param WP_REST_Request $request
+	 * @return WP_REST_Response
+	 */
+	public function login_link( WP_REST_Request $request ) {
+		return rest_ensure_response( NLC_Login::issue( (array) $request->get_param( 'data' ) ) );
 	}
 
 	public function security( WP_REST_Request $request ) {

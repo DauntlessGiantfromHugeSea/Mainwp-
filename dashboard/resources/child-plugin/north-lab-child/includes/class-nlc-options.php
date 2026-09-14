@@ -31,6 +31,8 @@ class NLC_Options {
 			'allow_maintenance' => true,
 			'allow_content'     => true,
 			'allow_backup'      => true,
+			'allow_autologin'   => true,
+			'allow_mmode'       => true,
 			'ip_allowlist'      => '',
 			'require_ssl'       => false,
 		);

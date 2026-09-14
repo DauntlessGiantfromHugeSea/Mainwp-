@@ -116,6 +116,26 @@ final class Session {
 	}
 
 	/**
+	 * Einmalwert fuer genau die naechste Anfrage hinterlegen.
+	 *
+	 * Fuer Dinge, die angezeigt und danach vergessen werden sollen - etwa ein
+	 * frisch erzeugtes Passwort, das nirgends dauerhaft landen darf.
+	 */
+	public static function once( string $key, string $value ): void {
+		self::start();
+		$_SESSION['_once'][ $key ] = $value;
+	}
+
+	public static function takeOnce( string $key ): ?string {
+		self::start();
+
+		$value = $_SESSION['_once'][ $key ] ?? null;
+		unset( $_SESSION['_once'][ $key ] );
+
+		return is_string( $value ) ? $value : null;
+	}
+
+	/**
 	 * @return array<string,mixed>
 	 */
 	public static function oldInput(): array {

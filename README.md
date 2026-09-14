@@ -25,6 +25,20 @@ Ersteller des Plugins ist **NorthLab**.
 - Seiten pausieren, Notizen hinterlegen, Verbindung erneuern
 - **Seiten ohne Child-Plugin** (Shopify, Wix, Squarespace, Webflow, fremdgehostete Installationen) lassen sich als reine Überwachung aufnehmen: Erreichbarkeitsprüfung, Störungsprotokoll, Kundenzuordnung, Tags, Berichte und Webhooks. Updates, Plugin- und Theme-Listen, Sicherheitsprüfung, Wartung und Backups brauchen das Plugin und entfallen dort
 
+**Benutzer der Kundenseiten**
+- WordPress-Benutzer je Seite anlegen, Rolle setzen, löschen — ohne sich dort anzumelden
+- **Befristete Konten**: Zugang für 1 Stunde bis 30 Tage, danach löscht die Kundenseite ihn selbst und übergibt vorhandene Inhalte an den ältesten Administrator. Der Aufräumlauf hängt am WP-Cron und läuft zusätzlich bei jeder Panel-Anfrage, damit auch Seiten mit abgeschaltetem WP-Cron zuverlässig aufräumen
+- Passwort direkt neu setzen (wird genau einmal angezeigt und nirgends gespeichert) oder WordPress eine Zurücksetz-Mail schicken lassen; offene Sitzungen des Kontos werden dabei beendet
+- **Ein-Klick-Anmeldung** ins WP-Backend: die Kundenseite gibt eine Adresse aus, die 90 Sekunden gilt und beim ersten Aufruf verbraucht ist. Auf der Kundenseite abschaltbar
+
+**Wartungsmodus**
+- Aus der Ferne ein- und ausschalten, einzeln oder für mehrere Seiten auf einmal
+- Zeitlich befristet (15 Minuten bis 24 Stunden) oder bis auf Widerruf; abgelaufene Fenster beendet die Kundenseite selbst
+- Gebrandete Seite mit eigener Farbe, Logo, Überschrift und Text — zentral in den Einstellungen hinterlegt
+- Antwortet mit `503` und `Retry-After`, damit Suchmaschinen die Seite nicht aus dem Index nehmen
+- Angemeldete Redakteure, `wp-admin`, `wp-login.php` und die REST-API bleiben erreichbar
+- Wird das Child-Plugin deaktiviert, schaltet es den Wartungsmodus selbst ab — eine Seite kann nicht versehentlich gesperrt bleiben
+
 **Updates**
 - Update-Zentrale über alle Seiten hinweg, gruppiert nach Erweiterung oder nach Seite
 - Einzeln, gruppenweise („WooCommerce auf allen 14 Seiten"), pro Seite oder alles auf einmal
@@ -45,7 +59,7 @@ Ersteller des Plugins ist **NorthLab**.
 
 **Ausgehende Webhooks**
 - Beliebig viele Endpunkte (Slack, n8n, Make, Zapier, eigene Systeme)
-- Elf abonnierbare Ereignisse — Seite offline/online, Sync fehlgeschlagen, Updates verfügbar, Update eingespielt/fehlgeschlagen, Sicherheitsbewertung gefallen, Wartung fertig, Bericht erstellt, Seite verbunden/entfernt
+- Siebzehn abonnierbare Ereignisse — Seite offline/online, Sync fehlgeschlagen, Updates verfügbar, Update eingespielt/fehlgeschlagen, Sicherheitsbewertung gefallen, Wartung fertig, Wartungsmodus an/aus, Ein-Klick-Anmeldung benutzt, Sicherung fertig/fehlgeschlagen, Bericht erstellt, Seite verbunden/entfernt, täglicher Gesamtstand
 - HMAC-SHA256-signiert, Warteschlange mit fünf Wiederholungen und wachsendem Abstand, vollständiges Zustellungsprotokoll mit manueller Wiedervorlage
 - Endpunkte lassen sich auf einen Kunden einschränken
 

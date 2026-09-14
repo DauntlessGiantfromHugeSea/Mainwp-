@@ -20,6 +20,7 @@ use NorthLab\Controller\InstallController;
 use NorthLab\Controller\ReportController;
 use NorthLab\Controller\SettingsController;
 use NorthLab\Controller\SiteController;
+use NorthLab\Controller\SiteUserController;
 use NorthLab\Controller\UpdateController;
 use NorthLab\Controller\UptimeController;
 use NorthLab\Controller\UserController;
@@ -85,6 +86,10 @@ $router->post( '/sites/{id:\d+}/maintenance', array( SiteController::class, 'mai
 $router->post( '/sites/{id:\d+}/security', array( SiteController::class, 'security' ) );
 $router->post( '/sites/{id:\d+}/extensions', array( SiteController::class, 'extensions' ) );
 $router->post( '/sites/{id:\d+}/token', array( SiteController::class, 'rotateToken' ) );
+$router->post( '/sites/{id:\d+}/maintenance-mode', array( SiteController::class, 'maintenanceMode' ) );
+$router->get( '/sites/{id:\d+}/users', array( SiteUserController::class, 'index' ) );
+$router->post( '/sites/{id:\d+}/users', array( SiteUserController::class, 'store' ) );
+$router->post( '/sites/{id:\d+}/login', array( SiteUserController::class, 'login' ) );
 
 // Updates
 $router->get( '/updates', array( UpdateController::class, 'index' ) );

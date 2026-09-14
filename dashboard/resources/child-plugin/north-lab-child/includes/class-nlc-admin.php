@@ -64,7 +64,7 @@ class NLC_Admin {
 	public function handle_save_settings() {
 		$this->guard( 'nlc_save_settings' );
 
-		$booleans = array( 'allow_updates', 'allow_install', 'allow_user_mgmt', 'allow_maintenance', 'allow_content', 'allow_backup', 'require_ssl' );
+		$booleans = array( 'allow_updates', 'allow_install', 'allow_user_mgmt', 'allow_maintenance', 'allow_content', 'allow_backup', 'allow_autologin', 'allow_mmode', 'require_ssl' );
 		$values   = array();
 		foreach ( $booleans as $key ) {
 			$values[ $key ] = ! empty( $_POST[ $key ] );
@@ -170,6 +170,8 @@ class NLC_Admin {
 						'allow_maintenance' => 'Wartungsaufgaben ausführen (DB-Cleanup etc.)',
 						'allow_content'     => 'Inhalte anlegen',
 						'allow_backup'      => 'Dateien und Datenbank für Sicherungen ausliefern',
+						'allow_autologin'   => 'Ein-Klick-Anmeldung aus dem Panel erlauben',
+						'allow_mmode'       => 'Wartungsmodus aus der Ferne schalten',
 						'require_ssl'       => 'Nur HTTPS-Requests akzeptieren',
 					);
 					foreach ( $labels as $key => $label ) :

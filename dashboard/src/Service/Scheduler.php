@@ -98,6 +98,10 @@ final class Scheduler {
 				return sprintf( '%d erreichbar, %d offline', $stats['up'], $stats['down'] );
 
 			case 'sync':
+				// Abgelaufene Wartungsfenster nachziehen, bevor synchronisiert wird -
+				// die Kundenseite hat sich da laengst selbst freigeschaltet.
+				MaintenanceModeService::reconcile();
+
 				$stats = SyncService::all();
 				return sprintf( '%d erfolgreich, %d fehlgeschlagen', $stats['ok'], $stats['failed'] );
 

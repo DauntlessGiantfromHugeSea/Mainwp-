@@ -14,6 +14,7 @@ use NorthLab\Repository\SiteRepository;
 use NorthLab\Repository\UpdateRepository;
 use NorthLab\Repository\UptimeRepository;
 use NorthLab\Service\ChildPackager;
+use NorthLab\Service\MaintenanceModeService;
 use NorthLab\Service\MaintenanceService;
 use NorthLab\Service\SiteService;
 use NorthLab\Service\SyncService;
@@ -126,6 +127,8 @@ final class SiteController extends BaseController {
 				'activity'    => ActivityRepository::query( array( 'site_id' => $siteId, 'limit' => 25 ) ),
 				'monitorUrl'  => SiteService::monitorUrl( $site ),
 				'tasks'       => MaintenanceService::tasks(),
+				'mmodeDesign' => MaintenanceModeService::design(),
+				'mmodeTimes'  => MaintenanceModeService::DURATIONS,
 			)
 		);
 	}
@@ -261,6 +264,32 @@ final class SiteController extends BaseController {
 		$this->respond( $request, $result['ok'], $message, '/sites/' . $siteId );
 	}
 
+	/**
+	 * Wartungsmodus ein- oder ausschalten.
+	 */
+	public function maintenanceMode( Request $request ): void {
+		Auth::requireWrite();
+
+		$siteId = (int) $request->params['id'];
+		Auth::requireSite( $siteId );
+
+		if ( $request->bool( 'disable' ) ) {
+			$error = MaintenanceModeService::disable( $siteId );
+			$this->respond( $request, null === $error, $error ?? 'Wartungsmodus beendet.', '/sites/' . $siteId );
+		}
+
+		$error = MaintenanceModeService::enable(
+			$siteId,
+			$request->int( 'minutes' ),
+			array(
+				'headline' => $request->string( 'headline', 'Wartungsmodus' ),
+				'message'  => $request->string( 'message' ),
+			)
+		);
+
+		$this->respond( $request, null === $error, $error ?? 'Wartungsmodus eingeschaltet.', '/sites/' . $siteId );
+	}
+
 	public function rotateToken( Request $request ): void {
 		Auth::requireWrite();
 
@@ -317,6 +346,14 @@ final class SiteController extends BaseController {
 				case 'maintenance':
 					$outcome   = MaintenanceService::run( $siteId, $request->arrayOfStrings( 'tasks' ) );
 					$results[] = array( 'site' => $site['name'], 'success' => $outcome['ok'], 'message' => $outcome['error'] );
+					break;
+
+				case 'mmode-on':
+				case 'mmode-off':
+					$error     = 'mmode-on' === $action
+						? MaintenanceModeService::enable( $siteId, $request->int( 'minutes' ) )
+						: MaintenanceModeService::disable( $siteId );
+					$results[] = array( 'site' => $site['name'], 'success' => null === $error, 'message' => $error ?? 'OK' );
 					break;
 
 				case 'delete':

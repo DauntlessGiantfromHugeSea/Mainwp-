@@ -96,10 +96,13 @@ View::set(
 				<select name="bulk_action" style="width:auto">
 					<option value="sync">Synchronisieren</option>
 					<option value="update">Alle Updates einspielen</option>
+					<option value="mmode-on">Wartungsmodus an (1 Stunde)</option>
+					<option value="mmode-off">Wartungsmodus aus</option>
 					<option value="pause">Pausieren</option>
 					<option value="resume">Fortsetzen</option>
 					<option value="delete">Entfernen</option>
 				</select>
+				<input type="hidden" name="minutes" value="60">
 				<button class="btn" type="submit" data-selection-disable disabled data-busy="läuft…">Ausführen</button>
 			<?php endif; ?>
 		</div>
@@ -156,7 +159,12 @@ View::set(
 										<span class="muted">—</span>
 									<?php endif; ?>
 								</td>
-								<td class="nowrap"><?= nl_status_badge( $site ) ?> <?= nl_uptime_badge( $site ) ?></td>
+								<td class="nowrap">
+									<?= nl_status_badge( $site ) ?> <?= nl_uptime_badge( $site ) ?>
+									<?php if ( ! empty( $site['maintenance_mode'] ) ) : ?>
+										<span class="badge warn" title="Besucher sehen die Wartungsseite">Wartung</span>
+									<?php endif; ?>
+								</td>
 								<?php $isManaged = \NorthLab\Repository\SiteRepository::isManaged( $site ); ?>
 								<td class="num">
 									<?php if ( ! $isManaged ) : ?>

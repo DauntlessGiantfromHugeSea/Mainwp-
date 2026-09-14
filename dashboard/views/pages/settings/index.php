@@ -20,6 +20,7 @@ $get = static fn( string $key, string $default = '' ): string => $settings[ $key
 <div class="tabs">
 	<button data-tab="general" class="active">Allgemein</button>
 	<button data-tab="automation">Automatisierung</button>
+	<button data-tab="mmode">Wartungsseite</button>
 	<button data-tab="notifications">Benachrichtigungen</button>
 	<button data-tab="monitoring">Monitoring</button>
 	<button data-tab="reports">Berichte</button>
@@ -151,6 +152,77 @@ $get = static fn( string $key, string $default = '' ): string => $settings[ $key
 				</div>
 				<button class="btn primary">Speichern</button>
 			</form>
+		</div>
+	</div>
+</div>
+
+<div class="tab-panel" data-tab-panel="mmode" id="mmode">
+	<div class="grid side">
+		<div class="card">
+			<div class="card-head"><h2>Aussehen der Wartungsseite</h2></div>
+			<div class="card-body">
+				<p class="small muted">
+					Diese Gestaltung gilt für alle Seiten, die du in den Wartungsmodus schaltest.
+					Überschrift und Text lassen sich beim Einschalten pro Seite noch ändern.
+				</p>
+				<form method="post" action="<?= e( url( '/settings' ) ) ?>">
+					<?= csrf_field() ?>
+					<input type="hidden" name="section" value="mmode">
+					<div class="form-grid">
+						<div class="field">
+							<label for="mmode_headline">Überschrift</label>
+							<input type="text" id="mmode_headline" name="mmode_headline" maxlength="80"
+								value="<?= e( $get( 'mmode_headline', 'Wartungsmodus' ) ) ?>">
+						</div>
+						<div class="field">
+							<label for="mmode_color">Akzentfarbe</label>
+							<input type="text" id="mmode_color" name="mmode_color" class="mono" placeholder="#f9907a"
+								value="<?= e( $get( 'mmode_color', $get( 'agency_color', '#f9907a' ) ) ) ?>">
+							<div class="hint">Überschrift und Schimmer im Hintergrund. Hex, z.&nbsp;B. <code>#f9907a</code>.</div>
+						</div>
+						<div class="field full">
+							<label for="mmode_message">Text unter der Überschrift</label>
+							<input type="text" id="mmode_message" name="mmode_message" maxlength="200"
+								value="<?= e( $get( 'mmode_message', 'Wir sind gleich wieder da.' ) ) ?>">
+						</div>
+						<div class="field full">
+							<label for="mmode_logo">Logo (URL)</label>
+							<input type="url" id="mmode_logo" name="mmode_logo" placeholder="https://…"
+								value="<?= e( $get( 'mmode_logo', $get( 'agency_logo_url', '' ) ) ) ?>">
+							<div class="hint">
+								Leer lassen, um stattdessen den Namen der Kundenseite zu zeigen. Die Adresse muss
+								öffentlich erreichbar sein — Besucher laden das Bild direkt von dort.
+							</div>
+						</div>
+						<div class="field">
+							<label for="mmode_retry_after">Retry-After (Sekunden)</label>
+							<input type="number" id="mmode_retry_after" name="mmode_retry_after" min="60" max="86400" step="60"
+								value="<?= e( $get( 'mmode_retry_after', '3600' ) ) ?>">
+							<div class="hint">Sagt Suchmaschinen, wann sie es wieder versuchen sollen.</div>
+						</div>
+					</div>
+					<button class="btn primary">Speichern</button>
+				</form>
+			</div>
+		</div>
+
+		<div class="card">
+			<div class="card-head"><h3>So sieht es aus</h3></div>
+			<div class="card-body small">
+				<p>
+					Besucher bekommen die Seite mit dem Status <code>503 Service Unavailable</code> und einem
+					<code>Retry-After</code>-Kopf. Suchmaschinen werten das als vorübergehend und nehmen die
+					Seite nicht aus dem Index — anders als bei einer Weiterleitung oder einem 404.
+				</p>
+				<p>
+					Angemeldete Benutzer mit Schreibrechten sehen die Seite ganz normal und können weiterarbeiten.
+					Auch <code>wp-admin</code>, <code>wp-login.php</code> und die REST-Schnittstelle bleiben offen.
+				</p>
+				<p class="muted">
+					Wird das Child-Plugin deaktiviert, während der Wartungsmodus läuft, schaltet es ihn selbst
+					ab — eine Seite kann so nicht versehentlich gesperrt bleiben.
+				</p>
+			</div>
 		</div>
 	</div>
 </div>
