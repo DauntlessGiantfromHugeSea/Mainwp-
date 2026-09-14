@@ -23,6 +23,7 @@ Ersteller des Plugins ist **NorthLab**.
 - Vollständiger Statusbericht je Seite: WordPress-, PHP- und MySQL-Version, Speicher, Datenbank- und Upload-Größe, freier Plattenplatz, Cron- und Cache-Zustand
 - Inhalts- und Benutzerzahlen, installierte Plugins und Themes mit Aktiv-Status
 - Seiten pausieren, Notizen hinterlegen, Verbindung erneuern
+- **Seiten ohne Child-Plugin** (Shopify, Wix, Squarespace, Webflow, fremdgehostete Installationen) lassen sich als reine Überwachung aufnehmen: Erreichbarkeitsprüfung, Störungsprotokoll, Kundenzuordnung, Tags, Berichte und Webhooks. Updates, Plugin- und Theme-Listen, Sicherheitsprüfung, Wartung und Backups brauchen das Plugin und entfallen dort
 
 **Updates**
 - Update-Zentrale über alle Seiten hinweg, gruppiert nach Erweiterung oder nach Seite

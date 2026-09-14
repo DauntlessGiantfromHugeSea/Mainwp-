@@ -53,6 +53,9 @@ final class BackupService {
 		if ( ! empty( $site['is_paused'] ) ) {
 			return self::fail( $siteId, 'Die Seite ist pausiert.' );
 		}
+		if ( ! SiteRepository::isManaged( $site ) ) {
+			return self::fail( $siteId, 'Diese Seite wird nur überwacht — ohne Child-Plugin gibt es nichts zu sichern.' );
+		}
 		if ( ! Restic::configured() ) {
 			return self::fail( $siteId, 'Es ist kein Sicherungsziel eingerichtet (Einstellungen → Sicherung).' );
 		}

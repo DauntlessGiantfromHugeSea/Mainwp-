@@ -26,6 +26,17 @@ final class SyncService {
 			return array( 'ok' => false, 'error' => 'Seite nicht gefunden.', 'payload' => array() );
 		}
 
+		// Seiten ohne Plugin können nur auf Erreichbarkeit geprüft werden.
+		if ( ! SiteRepository::isManaged( $site ) ) {
+			$up = SiteService::checkReachable( $site );
+
+			return array(
+				'ok'      => $up,
+				'error'   => $up ? '' : (string) ( SiteRepository::find( (int) $site['id'] )['last_error'] ?? 'nicht erreichbar' ),
+				'payload' => array(),
+			);
+		}
+
 		$response = ChildClient::get( $site, '/status', array( 'refresh' => $refresh ? '1' : '0' ) );
 
 		if ( ! $response['ok'] ) {
@@ -143,6 +154,10 @@ final class SyncService {
 	 * @param array<string,mixed> $site
 	 */
 	public static function heartbeat( array $site ): bool {
+		if ( ! SiteRepository::isManaged( $site ) ) {
+			return SiteService::checkReachable( $site );
+		}
+
 		$response = ChildClient::get( $site, '/ping', array(), 20 );
 
 		if ( ! $response['ok'] ) {
@@ -170,7 +185,7 @@ final class SyncService {
 		$up   = 0;
 		$down = 0;
 
-		foreach ( SiteRepository::active() as $site ) {
+		foreach ( SiteRepository::monitored() as $site ) {
 			if ( self::heartbeat( $site ) ) {
 				$up++;
 			} else {

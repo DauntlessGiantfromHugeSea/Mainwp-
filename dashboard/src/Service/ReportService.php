@@ -142,6 +142,8 @@ final class ReportService {
 				'name'            => (string) $site['name'],
 				'url'             => (string) $site['url'],
 				'status'          => (string) $site['status'],
+				'type'            => (string) ( $site['site_type'] ?? 'wordpress' ),
+				'managed'         => SiteRepository::isManaged( $site ),
 				'uptime_status'   => (string) $site['uptime_status'],
 				'wp_version'      => (string) $site['wp_version'],
 				'php_version'     => (string) $site['php_version'],

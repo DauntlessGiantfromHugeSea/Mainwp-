@@ -44,6 +44,17 @@ View::set(
 				</select>
 			</div>
 			<div class="field">
+				<label for="type">Art</label>
+				<select id="type" name="type" data-auto-submit>
+					<option value="">Alle</option>
+					<?php foreach ( \NorthLab\Repository\SiteRepository::TYPES as $typeKey => $typeLabel ) : ?>
+						<option value="<?= e( $typeKey ) ?>" <?= $typeKey === $filters['site_type'] ? 'selected' : '' ?>>
+							<?= e( $typeLabel ) ?>
+						</option>
+					<?php endforeach; ?>
+				</select>
+			</div>
+			<div class="field">
 				<label for="uptime">Erreichbarkeit</label>
 				<select id="uptime" name="uptime" data-auto-submit>
 					<option value="">Alle</option>
@@ -128,7 +139,12 @@ View::set(
 								<?php endif; ?>
 								<td>
 									<a href="<?= e( url( '/sites/' . $site['id'] ) ) ?>"><strong><?= e( $site['name'] ) ?></strong></a>
-									<div class="muted small"><?= e( nl_host( (string) $site['url'] ) ) ?></div>
+									<div class="muted small">
+										<?= e( nl_host( (string) $site['url'] ) ) ?>
+										<?php if ( ! \NorthLab\Repository\SiteRepository::isManaged( $site ) ) : ?>
+											· <span class="badge">nur Überwachung</span>
+										<?php endif; ?>
+									</div>
 									<?php foreach ( \NorthLab\Repository\SiteRepository::tags( $site ) as $tag ) : ?>
 										<span class="tag"><?= e( $tag ) ?></span>
 									<?php endforeach; ?>
@@ -141,15 +157,18 @@ View::set(
 									<?php endif; ?>
 								</td>
 								<td class="nowrap"><?= nl_status_badge( $site ) ?> <?= nl_uptime_badge( $site ) ?></td>
+								<?php $isManaged = \NorthLab\Repository\SiteRepository::isManaged( $site ); ?>
 								<td class="num">
-									<?php if ( (int) $site['pending_updates'] > 0 ) : ?>
+									<?php if ( ! $isManaged ) : ?>
+										<span class="muted">—</span>
+									<?php elseif ( (int) $site['pending_updates'] > 0 ) : ?>
 										<a class="badge warn" href="<?= e( url( '/updates?q=' ) ) ?>"><?= e( (string) $site['pending_updates'] ) ?></a>
 									<?php else : ?>
 										<span class="muted">0</span>
 									<?php endif; ?>
 								</td>
 								<td class="num">
-									<?php if ( (int) $site['security_score'] > 0 ) : ?>
+									<?php if ( $isManaged && (int) $site['security_score'] > 0 ) : ?>
 										<span class="badge <?= e( nl_score_class( (int) $site['security_score'] ) ) ?>"><?= e( (string) $site['security_score'] ) ?></span>
 									<?php else : ?>
 										<span class="muted">—</span>

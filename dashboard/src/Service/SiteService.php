@@ -83,6 +83,104 @@ final class SiteService {
 	}
 
 	/**
+	 * Legt eine Seite an, die nur überwacht wird — Shopify, Typo3, statische
+	 * Seiten, alles ohne Child-Plugin.
+	 *
+	 * @param array<string,mixed> $data
+	 * @return array{0:int,1:string|null}
+	 */
+	public static function createMonitorOnly( array $data ): array {
+		$url = SiteRepository::normalizeUrl( (string) ( $data['url'] ?? '' ) );
+
+		if ( '' === $url || ! Http::isValidUrl( $url ) ) {
+			return array( 0, 'Bitte eine gültige, öffentlich erreichbare URL angeben.' );
+		}
+		if ( null !== SiteRepository::findByUrl( $url ) ) {
+			return array( 0, 'Diese Seite ist bereits im Panel registriert.' );
+		}
+
+		$name = trim( (string) ( $data['name'] ?? '' ) );
+
+		if ( '' === $name ) {
+			$name = (string) ( parse_url( $url, PHP_URL_HOST ) ?: $url );
+		}
+
+		$siteId = SiteRepository::insert(
+			array(
+				'client_id'     => $data['client_id'] ?? null,
+				'name'          => $name,
+				'url'           => $url,
+				'site_type'     => 'monitor',
+				// Ohne Plugin gibt es keine Signatur und damit auch kein Schlüsselpaar.
+				'connection_id' => '',
+				'private_key'   => '',
+				'public_key'    => '',
+				'tags'          => (string) ( $data['tags'] ?? '' ),
+				'notes'         => (string) ( $data['notes'] ?? '' ),
+				'verify_ssl'    => ! isset( $data['verify_ssl'] ) || $data['verify_ssl'],
+			)
+		);
+
+		// Es gibt nichts zu verbinden — die Seite ist sofort einsatzbereit.
+		SiteRepository::update( $siteId, array( 'status' => 'connected' ) );
+
+		self::checkReachable( (array) SiteRepository::find( $siteId ) );
+
+		EventBus::dispatch(
+			'site.connected',
+			array( 'url' => $url, 'type' => 'monitor' ),
+			array(
+				'site_id' => $siteId,
+				'message' => sprintf( 'Seite "%s" zur Überwachung aufgenommen.', $name ),
+			)
+		);
+
+		return array( $siteId, null );
+	}
+
+	/**
+	 * Einfacher Erreichbarkeitstest per HTTP — für Seiten ohne Child-Plugin.
+	 *
+	 * @param array<string,mixed> $site
+	 */
+	public static function checkReachable( array $site ): bool {
+		$response = Http::get(
+			(string) $site['url'],
+			array( 'Accept' => 'text/html,*/*' ),
+			25,
+			! empty( $site['verify_ssl'] )
+		);
+
+		// Alles unter 400 gilt als erreichbar; 401 und 403 ebenfalls, denn eine
+		// passwortgeschützte Seite ist online, nur nicht öffentlich.
+		$up = '' === $response['error']
+			&& ( ( $response['status'] > 0 && $response['status'] < 400 ) || in_array( $response['status'], array( 401, 403 ), true ) );
+
+		UptimeService::record(
+			(int) $site['id'],
+			$up ? 'up' : 'down',
+			array(
+				'source'      => 'check',
+				'http_code'   => $response['status'],
+				'response_ms' => $response['ms'],
+				'message'     => $up ? '' : ( $response['error'] ?: sprintf( 'HTTP %d', $response['status'] ) ),
+			)
+		);
+
+		SiteRepository::update(
+			(int) $site['id'],
+			array(
+				'last_seen_at' => $up ? nl_utc() : ( $site['last_seen_at'] ?? null ),
+				'last_sync_at' => nl_utc(),
+				'status'       => $up ? 'connected' : 'error',
+				'last_error'   => $up ? null : ( $response['error'] ?: sprintf( 'HTTP %d', $response['status'] ) ),
+			)
+		);
+
+		return $up;
+	}
+
+	/**
 	 * Verbindung mit neuem Code und frischem Schlüsselpaar erneuern.
 	 */
 	public static function reconnect( int $siteId, string $code ): ?string {

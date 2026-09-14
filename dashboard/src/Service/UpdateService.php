@@ -31,6 +31,9 @@ final class UpdateService {
 		if ( ! empty( $site['is_paused'] ) ) {
 			return self::failure( 'Die Seite ist pausiert.' );
 		}
+		if ( ! SiteRepository::isManaged( $site ) ) {
+			return self::failure( 'Diese Seite wird nur überwacht — Updates laufen dort nicht über das Panel.' );
+		}
 
 		$body = $items ? array( 'items' => array_values( $items ) ) : array( 'all' => true );
 

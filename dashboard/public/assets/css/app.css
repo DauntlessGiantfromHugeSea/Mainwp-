@@ -460,6 +460,32 @@ dl.meta dd { margin: 0; color: var(--ink); }
 .mb0 { margin-bottom: 0; }
 .truncate { max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+/* ------------------------------------------------------------- Seitentyp */
+
+.type-choice {
+	display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 10px; margin-bottom: 18px;
+}
+.type-option {
+	display: flex; align-items: flex-start; gap: 10px;
+	padding: 13px 15px; border-radius: var(--radius-sm);
+	border: 1px solid var(--line-strong); background: rgba(255, 255, 255, .02);
+	cursor: pointer; transition: border-color .15s, background .15s;
+}
+.type-option:hover { border-color: rgba(255, 255, 255, .22); }
+.type-option input { margin-top: 3px; flex: none; accent-color: var(--brand); }
+.type-option > span { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.type-option strong { color: var(--ink); font-size: 14px; }
+/* Die Klasse setzt app.js, :has() faengt den Fall ohne JavaScript ab. */
+.type-option.selected,
+.type-option:has(input:checked) {
+	border-color: var(--brand-line); background: var(--brand-soft);
+}
+
+@media (max-width: 560px) {
+	.type-choice { grid-template-columns: minmax(0, 1fr); }
+}
+
 /* ------------------------------------------------------------ Responsives */
 
 @media (max-width: 1100px) {

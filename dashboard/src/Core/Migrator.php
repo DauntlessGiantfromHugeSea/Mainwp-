@@ -9,7 +9,7 @@ namespace NorthLab\Core;
  */
 final class Migrator {
 
-	public const SCHEMA_VERSION = 4;
+	public const SCHEMA_VERSION = 5;
 
 	/**
 	 * Alle Tabellen anlegen (idempotent).
@@ -36,6 +36,8 @@ final class Migrator {
 			'sites' => array(
 				'rest_style'     => "VARCHAR(10) NOT NULL DEFAULT 'pretty'",
 				'last_backup_at' => 'DATETIME NULL DEFAULT NULL',
+				// Schema 5: nicht jede betreute Seite laeuft auf WordPress.
+				'site_type'      => "VARCHAR(20) NOT NULL DEFAULT 'wordpress'",
 			),
 
 			// Schema 2: Zwei-Faktor-Anmeldung und Seitenzuordnung.

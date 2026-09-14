@@ -15,11 +15,16 @@
 
 use NorthLab\Core\Auth;
 use NorthLab\Core\View;
+use NorthLab\Repository\SiteRepository;
 
 View::set( 'pageTitle', (string) $site['name'] );
 
 $canWrite = Auth::canWrite();
 $siteUrl  = url( '/sites/' . $site['id'] );
+
+// Ohne Child-Plugin gibt es keine Updates, keine Plugin-Liste und keine
+// Wartung - die entsprechenden Bereiche werden gar nicht erst gezeigt.
+$managed = SiteRepository::isManaged( $site );
 
 $actions = '<a class="btn" target="_blank" rel="noopener" href="' . e( (string) $site['url'] ) . '">Seite öffnen</a>';
 if ( ! empty( $site['admin_url'] ) ) {
@@ -43,37 +48,51 @@ $users    = (array) ( $payload['users'] ?? array() );
 	<div class="notice warn">Diese Seite ist pausiert. Automatische Syncs, Updates und Prüfungen laufen nicht.</div>
 <?php endif; ?>
 
-<div class="grid cols-4" style="margin-bottom:18px">
+<div class="grid <?= $managed ? 'cols-4' : 'cols-3' ?>" style="margin-bottom:18px">
 	<div class="stat">
-		<div class="label">Verbindung</div>
+		<div class="label"><?= $managed ? 'Verbindung' : 'Erreichbarkeit' ?></div>
 		<div class="value" style="font-size:18px;margin-top:6px"><?= nl_status_badge( $site ) ?></div>
-		<div class="sub">Sync <?= e( nl_ago( $site['last_sync_at'] ) ) ?></div>
+		<div class="sub"><?= $managed ? 'Sync' : 'Geprüft' ?> <?= e( nl_ago( $site['last_sync_at'] ) ) ?></div>
 	</div>
-	<div class="stat <?= (int) $site['pending_updates'] > 0 ? 'warn' : 'ok' ?>">
-		<div class="label">Offene Updates</div>
-		<div class="value"><?= e( (string) $site['pending_updates'] ) ?></div>
-		<div class="sub">WordPress <?= e( $site['wp_version'] ?: '?' ) ?> · PHP <?= e( $site['php_version'] ?: '?' ) ?></div>
-	</div>
+	<?php if ( $managed ) : ?>
+		<div class="stat <?= (int) $site['pending_updates'] > 0 ? 'warn' : 'ok' ?>">
+			<div class="label">Offene Updates</div>
+			<div class="value"><?= e( (string) $site['pending_updates'] ) ?></div>
+			<div class="sub">WordPress <?= e( $site['wp_version'] ?: '?' ) ?> · PHP <?= e( $site['php_version'] ?: '?' ) ?></div>
+		</div>
+	<?php endif; ?>
 	<div class="stat <?= e( nl_percent_class( (float) $uptime['percent'] ) ) ?>">
 		<div class="label">Verfügbarkeit (30 Tage)</div>
 		<div class="value"><?= e( nl_number( (float) $uptime['percent'], 2 ) ) ?> %</div>
 		<div class="sub"><?= e( (string) $uptime['incidents'] ) ?> Störung(en) · <?= e( nl_duration( (int) $uptime['downtime_seconds'] ) ) ?> Ausfall</div>
 	</div>
-	<div class="stat <?= e( nl_score_class( (int) $site['security_score'] ) ) ?>">
-		<div class="label">Sicherheitswert</div>
-		<div class="value"><?= e( (string) $site['security_score'] ) ?></div>
-		<div class="sub"><?= e( (string) ( $security['passed'] ?? 0 ) ) ?> von <?= e( (string) ( $security['total'] ?? 0 ) ) ?> Prüfungen bestanden</div>
-	</div>
+	<?php if ( $managed ) : ?>
+		<div class="stat <?= e( nl_score_class( (int) $site['security_score'] ) ) ?>">
+			<div class="label">Sicherheitswert</div>
+			<div class="value"><?= e( (string) $site['security_score'] ) ?></div>
+			<div class="sub"><?= e( (string) ( $security['passed'] ?? 0 ) ) ?> von <?= e( (string) ( $security['total'] ?? 0 ) ) ?> Prüfungen bestanden</div>
+		</div>
+	<?php else : ?>
+		<div class="stat">
+			<div class="label">Betreuungsart</div>
+			<div class="value" style="font-size:18px;margin-top:6px"><span class="badge">Nur Überwachung</span></div>
+			<div class="sub">Ohne Child-Plugin — keine Updates, keine Backups</div>
+		</div>
+	<?php endif; ?>
 </div>
 
 <div class="tabs">
 	<button data-tab="overview" class="active">Überblick</button>
-	<button data-tab="updates">Updates <?= (int) $site['pending_updates'] > 0 ? '(' . e( (string) $site['pending_updates'] ) . ')' : '' ?></button>
-	<button data-tab="plugins">Plugins</button>
-	<button data-tab="themes">Themes</button>
-	<button data-tab="security">Sicherheit</button>
+	<?php if ( $managed ) : ?>
+		<button data-tab="updates">Updates <?= (int) $site['pending_updates'] > 0 ? '(' . e( (string) $site['pending_updates'] ) . ')' : '' ?></button>
+		<button data-tab="plugins">Plugins</button>
+		<button data-tab="themes">Themes</button>
+		<button data-tab="security">Sicherheit</button>
+	<?php endif; ?>
 	<button data-tab="uptime">Uptime</button>
-	<button data-tab="maintenance">Wartung</button>
+	<?php if ( $managed ) : ?>
+		<button data-tab="maintenance">Wartung</button>
+	<?php endif; ?>
 	<button data-tab="settings">Einstellungen</button>
 	<button data-tab="activity">Protokoll</button>
 </div>
@@ -84,17 +103,31 @@ $users    = (array) ( $payload['users'] ?? array() );
 		<div>
 			<div class="card">
 				<div class="card-head">
-					<h2>Umgebung</h2>
+					<h2><?= $managed ? 'Umgebung' : 'Überwachung' ?></h2>
 					<div class="spacer"></div>
 					<?php if ( $canWrite ) : ?>
 						<form method="post" action="<?= e( $siteUrl . '/sync' ) ?>">
 							<?= csrf_field() ?>
-							<button class="btn sm primary" data-busy="Sync läuft…">Jetzt synchronisieren</button>
+							<button class="btn sm primary" data-busy="<?= $managed ? 'Sync läuft…' : 'Prüfe…' ?>">
+								<?= $managed ? 'Jetzt synchronisieren' : 'Jetzt prüfen' ?>
+							</button>
 						</form>
 					<?php endif; ?>
 				</div>
 				<div class="card-body">
-					<?php if ( null === $payload ) : ?>
+					<?php if ( ! $managed ) : ?>
+						<dl class="meta">
+							<dt>Betreuungsart</dt><dd><?= e( SiteRepository::typeLabel( $site ) ) ?></dd>
+							<dt>Letzte Prüfung</dt><dd><?= e( nl_ago( $site['last_sync_at'] ) ) ?></dd>
+							<dt>Zuletzt online</dt><dd><?= e( nl_ago( $site['last_seen_at'] ) ) ?></dd>
+						</dl>
+						<p class="small muted mt">
+							Diese Seite läuft nicht auf WordPress oder hat kein Child-Plugin. Das Panel prüft
+							regelmäßig, ob sie antwortet, und nimmt Statusmeldungen aus dem externen Monitoring
+							entgegen. Uptime, Kundenzuordnung, Berichte und Webhooks funktionieren wie gewohnt;
+							Updates, Plugin- und Theme-Listen, Sicherheitsprüfung, Wartung und Backups nicht.
+						</p>
+					<?php elseif ( null === $payload ) : ?>
 						<div class="empty">Noch keine Daten. Bitte synchronisieren.</div>
 					<?php else : ?>
 						<dl class="meta">
@@ -189,6 +222,7 @@ $users    = (array) ( $payload['users'] ?? array() );
 	</div>
 </div>
 
+<?php if ( $managed ) : ?>
 <!-- -------------------------------------------------------------- Updates -->
 <div class="tab-panel" data-tab-panel="updates">
 	<div class="card">
@@ -449,6 +483,7 @@ $users    = (array) ( $payload['users'] ?? array() );
 		</div>
 	</div>
 </div>
+<?php endif; ?>
 
 <!-- --------------------------------------------------------------- Uptime -->
 <div class="tab-panel" data-tab-panel="uptime">
@@ -493,6 +528,7 @@ $users    = (array) ( $payload['users'] ?? array() );
 	</div>
 </div>
 
+<?php if ( $managed ) : ?>
 <!-- -------------------------------------------------------------- Wartung -->
 <div class="tab-panel" data-tab-panel="maintenance">
 	<div class="card">
@@ -519,6 +555,7 @@ $users    = (array) ( $payload['users'] ?? array() );
 		</div>
 	</div>
 </div>
+<?php endif; ?>
 
 <!-- --------------------------------------------------------- Einstellungen -->
 <div class="tab-panel" data-tab-panel="settings">
@@ -548,6 +585,7 @@ $users    = (array) ( $payload['users'] ?? array() );
 							<label for="s_tags">Tags</label>
 							<input type="text" id="s_tags" name="tags" value="<?= e( (string) $site['tags'] ) ?>">
 						</div>
+						<?php if ( $managed ) : ?>
 						<div class="field">
 							<label for="s_policy">Automatische Updates</label>
 							<select id="s_policy" name="auto_update_policy">
@@ -566,6 +604,7 @@ $users    = (array) ( $payload['users'] ?? array() );
 								<?php endforeach; ?>
 							</select>
 						</div>
+						<?php endif; ?>
 						<div class="field full">
 							<label for="s_notes">Notizen</label>
 							<textarea id="s_notes" name="notes"><?= e( (string) $site['notes'] ) ?></textarea>
@@ -593,6 +632,7 @@ $users    = (array) ( $payload['users'] ?? array() );
 		</div>
 
 		<div>
+			<?php if ( $managed ) : ?>
 			<div class="card">
 				<div class="card-head"><h3>Verbindung erneuern</h3></div>
 				<div class="card-body">
@@ -609,13 +649,19 @@ $users    = (array) ( $payload['users'] ?? array() );
 					</form>
 				</div>
 			</div>
+			<?php endif; ?>
 
 			<div class="card">
 				<div class="card-head"><h3>Seite entfernen</h3></div>
 				<div class="card-body">
 					<p class="small muted">
-						Entfernt die Seite samt Verlauf aus dem Panel und meldet das Child-Plugin ab.
-						Die WordPress-Installation selbst bleibt unberührt.
+						<?php if ( $managed ) : ?>
+							Entfernt die Seite samt Verlauf aus dem Panel und meldet das Child-Plugin ab.
+							Die WordPress-Installation selbst bleibt unberührt.
+						<?php else : ?>
+							Entfernt die Seite samt Uptime-Verlauf aus dem Panel. An der Seite selbst
+							ändert sich nichts.
+						<?php endif; ?>
 					</p>
 					<form method="post" action="<?= e( $siteUrl . '/delete' ) ?>"
 						data-confirm="Seite &quot;<?= e( (string) $site['name'] ) ?>&quot; wirklich entfernen? Alle Verlaufsdaten gehen verloren.">

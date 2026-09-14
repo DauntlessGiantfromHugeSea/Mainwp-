@@ -12,6 +12,30 @@ use NorthLab\Core\Database;
  */
 final class SiteRepository {
 
+	/** Seitenarten und was das Panel für sie leisten kann. */
+	public const TYPES = array(
+		'wordpress' => 'WordPress (mit Child-Plugin)',
+		'monitor'   => 'Nur Überwachung (ohne Plugin)',
+	);
+
+	/**
+	 * Kann diese Seite über das Child-Plugin gesteuert werden?
+	 *
+	 * @param array<string,mixed> $site
+	 */
+	public static function isManaged( array $site ): bool {
+		return 'wordpress' === ( $site['site_type'] ?? 'wordpress' );
+	}
+
+	/**
+	 * @param array<string,mixed> $site
+	 */
+	public static function typeLabel( array $site ): string {
+		$type = (string) ( $site['site_type'] ?? 'wordpress' );
+
+		return self::TYPES[ $type ] ?? $type;
+	}
+
 	/**
 	 * @return array<string,mixed>|null
 	 */
@@ -117,6 +141,10 @@ final class SiteRepository {
 		if ( ! empty( $args['has_updates'] ) ) {
 			$where[] = 's.pending_updates > 0';
 		}
+		if ( ! empty( $args['site_type'] ) ) {
+			$where[]             = 's.site_type = :site_type';
+			$params['site_type'] = (string) $args['site_type'];
+		}
 		if ( isset( $args['include_paused'] ) && ! $args['include_paused'] ) {
 			$where[] = 's.is_paused = 0';
 		}
@@ -151,7 +179,22 @@ final class SiteRepository {
 	 */
 	public static function active(): array {
 		return Database::select(
-			'SELECT * FROM `' . Database::table( 'sites' ) . "` WHERE `status` IN ('connected','error') AND `is_paused` = 0 ORDER BY `name` ASC"
+			'SELECT * FROM `' . Database::table( 'sites' ) . "`
+			 WHERE `status` IN ('connected','error') AND `is_paused` = 0 AND `site_type` = 'wordpress'
+			 ORDER BY `name` ASC"
+		);
+	}
+
+	/**
+	 * Alle Seiten, deren Erreichbarkeit geprüft wird — auch die ohne Plugin.
+	 *
+	 * @return array<int,array<string,mixed>>
+	 */
+	public static function monitored(): array {
+		return Database::select(
+			'SELECT * FROM `' . Database::table( 'sites' ) . "`
+			 WHERE `is_paused` = 0 AND `status` <> 'pending'
+			 ORDER BY `name` ASC"
 		);
 	}
 
@@ -209,6 +252,7 @@ final class SiteRepository {
 				'public_key'         => (string) $data['public_key'],
 				'status'             => 'pending',
 				'monitor_token'      => Crypto::monitorToken(),
+				'site_type'          => (string) ( $data['site_type'] ?? 'wordpress' ),
 				'auto_update_policy' => (string) ( $data['auto_update_policy'] ?? 'inherit' ),
 				'tags'               => (string) ( $data['tags'] ?? '' ),
 				'notes'              => (string) ( $data['notes'] ?? '' ),

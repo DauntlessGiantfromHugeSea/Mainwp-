@@ -212,6 +212,8 @@ final class ApiController {
 				'client'          => $site['client_name'] ?? null,
 				'client_id'       => $site['client_id'] ? (int) $site['client_id'] : null,
 				'status'          => (string) $site['status'],
+				'type'            => (string) ( $site['site_type'] ?? 'wordpress' ),
+				'managed'         => SiteRepository::isManaged( $site ),
 				'uptime_status'   => (string) $site['uptime_status'],
 				'wp_version'      => (string) $site['wp_version'],
 				'php_version'     => (string) $site['php_version'],

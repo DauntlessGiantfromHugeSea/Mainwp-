@@ -45,6 +45,9 @@ final class MaintenanceService {
 		if ( null === $site ) {
 			return array( 'ok' => false, 'error' => 'Seite nicht gefunden.', 'results' => array() );
 		}
+		if ( ! SiteRepository::isManaged( $site ) ) {
+			return array( 'ok' => false, 'error' => 'Diese Seite wird nur überwacht — Wartung ist dort nicht möglich.', 'results' => array() );
+		}
 
 		$allowed = array_keys( self::tasks() );
 		$tasks   = array_values( array_intersect( $tasks, $allowed ) );

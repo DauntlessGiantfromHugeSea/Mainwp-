@@ -28,6 +28,7 @@ final class SiteController extends BaseController {
 			'client_id'      => $request->int( 'client_id' ),
 			'status'         => $request->string( 'status' ),
 			'uptime_status'  => $request->string( 'uptime' ),
+			'site_type'      => $request->string( 'type' ),
 			'search'         => $request->string( 'q' ),
 			'tag'            => $request->string( 'tag' ),
 			'has_updates'    => $request->bool( 'updates' ),
@@ -75,14 +76,25 @@ final class SiteController extends BaseController {
 			'http_pass'          => (string) $request->post( 'http_pass', '' ),
 		);
 
-		[ $siteId, $error ] = SiteService::createAndConnect( $data );
+		// Seiten ohne Child-Plugin (Shopify, Wix, Baukasten, fremdgehostet) werden
+		// nur ueberwacht - dafuer reicht die URL, es gibt keinen Verbindungscode.
+		$monitorOnly = 'monitor' === $request->string( 'site_type', 'wordpress' );
+
+		[ $siteId, $error ] = $monitorOnly
+			? SiteService::createMonitorOnly( $data )
+			: SiteService::createAndConnect( $data );
 
 		if ( 0 === $siteId ) {
 			Session::flashInput( $request->all() );
 			$this->respond( $request, false, (string) $error, '/sites/new' );
 		}
 
-		$this->respond( $request, true, 'Seite verbunden und synchronisiert.', '/sites/' . $siteId );
+		$this->respond(
+			$request,
+			true,
+			$monitorOnly ? 'Seite zur Überwachung aufgenommen.' : 'Seite verbunden und synchronisiert.',
+			'/sites/' . $siteId
+		);
 	}
 
 	public function show( Request $request ): void {

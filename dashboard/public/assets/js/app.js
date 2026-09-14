@@ -174,4 +174,55 @@
 			panel.hidden = !panel.hidden;
 		}
 	});
+
+	/**
+	 * Formular „Seite hinzufügen“: WordPress-Felder gegen die reine Überwachung
+	 * tauschen. Ein verstecktes Pflichtfeld blockiert den Absenden-Versuch, also
+	 * wird required mitgeschaltet statt nur die Sichtbarkeit.
+	 */
+	function applySiteType() {
+		var checked = document.querySelector('[data-site-type]:checked');
+		if (!checked) {
+			return;
+		}
+
+		var type = checked.value;
+
+		document.querySelectorAll('[data-when]').forEach(function (element) {
+			var matches = element.getAttribute('data-when') === type;
+			element.hidden = !matches;
+
+			element.querySelectorAll('[required], [data-required]').forEach(function (input) {
+				if (matches) {
+					if (input.hasAttribute('data-required')) {
+						input.setAttribute('required', 'required');
+						input.removeAttribute('data-required');
+					}
+				} else if (input.hasAttribute('required')) {
+					input.removeAttribute('required');
+					input.setAttribute('data-required', '1');
+				}
+			});
+		});
+
+		document.querySelectorAll('[data-site-type]').forEach(function (radio) {
+			var option = radio.closest('.type-option');
+			if (option) {
+				option.classList.toggle('selected', radio.checked);
+			}
+		});
+
+		var submit = document.querySelector('[data-site-form] [data-label-' + type + ']');
+		if (submit) {
+			submit.textContent = submit.getAttribute('data-label-' + type);
+		}
+	}
+
+	document.addEventListener('change', function (event) {
+		if (event.target.matches('[data-site-type]')) {
+			applySiteType();
+		}
+	});
+
+	applySiteType();
 })();

@@ -123,8 +123,12 @@ $uptimeColor = static function ( float $percent ): string {
 					<td style="<?= e( $td ) ?>;text-align:right;color:<?= e( $uptimeColor( $percent ) ) ?>;font-weight:600">
 						<?= e( nl_number( $percent, 2 ) ) ?> %
 					</td>
-					<td style="<?= e( $td ) ?>;text-align:right"><?= e( (string) count( $site['updates_applied'] ) ) ?> eingespielt</td>
-					<td style="<?= e( $td ) ?>;text-align:right"><?= e( (string) $site['security_score'] ) ?>/100</td>
+					<td style="<?= e( $td ) ?>;text-align:right">
+						<?= empty( $site['managed'] ) ? '—' : e( (string) count( $site['updates_applied'] ) ) . ' eingespielt' ?>
+					</td>
+					<td style="<?= e( $td ) ?>;text-align:right">
+						<?= empty( $site['managed'] ) ? '—' : e( (string) $site['security_score'] ) . '/100' ?>
+					</td>
 				</tr>
 			<?php endforeach; ?>
 		</table>
@@ -135,6 +139,12 @@ $uptimeColor = static function ( float $percent ): string {
 			<h2 style="margin:0 0 2px;font-size:16px"><?= e( (string) $site['name'] ) ?></h2>
 			<div style="<?= e( $muted ) ?>;font-size:12px;margin-bottom:14px"><?= e( (string) $site['url'] ) ?></div>
 
+			<?php if ( empty( $site['managed'] ) ) : ?>
+				<p style="<?= e( $muted ) ?>;font-size:13px;margin:0 0 16px">
+					Diese Seite läuft nicht auf WordPress und wird von uns überwacht, nicht gewartet.
+					Der Bericht zeigt daher nur die Erreichbarkeit.
+				</p>
+			<?php else : ?>
 			<h3 style="margin:0 0 8px;font-size:13px">Eingespielte Updates</h3>
 			<?php if ( ! $site['updates_applied'] ) : ?>
 				<p style="<?= e( $muted ) ?>;font-size:13px;margin:0 0 16px">In diesem Zeitraum waren keine Updates nötig.</p>
@@ -161,6 +171,7 @@ $uptimeColor = static function ( float $percent ): string {
 						</tr>
 					<?php endforeach; ?>
 				</table>
+			<?php endif; ?>
 			<?php endif; ?>
 
 			<h3 style="margin:0 0 8px;font-size:13px">Verfügbarkeit</h3>
@@ -191,6 +202,7 @@ $uptimeColor = static function ( float $percent ): string {
 				</table>
 			<?php endif; ?>
 
+			<?php if ( ! empty( $site['managed'] ) ) : ?>
 			<?php if ( $site['maintenance'] ) : ?>
 				<h3 style="margin:0 0 8px;font-size:13px">Durchgeführte Wartung</h3>
 				<ul style="margin:0 0 16px;padding-left:18px;font-size:13px">
@@ -227,6 +239,7 @@ $uptimeColor = static function ( float $percent ): string {
 					</span>
 					<span style="<?= e( $muted ) ?>"> — werden im nächsten Wartungslauf eingespielt.</span>
 				</p>
+			<?php endif; ?>
 			<?php endif; ?>
 		</div>
 	<?php endforeach; ?>

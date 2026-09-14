@@ -77,6 +77,7 @@ final class EventBus {
 					'id'        => (int) $site['id'],
 					'name'      => (string) $site['name'],
 					'url'       => (string) $site['url'],
+					'type'      => (string) ( $site['site_type'] ?? 'wordpress' ),
 					'client_id' => $clientId ?: null,
 				);
 			}
