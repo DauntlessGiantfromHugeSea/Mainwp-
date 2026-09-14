@@ -331,10 +331,31 @@ $users    = (array) ( $payload['users'] ?? array() );
 </div>
 
 <!-- -------------------------------------------------------------- Plugins -->
+<?php
+$outdatedPlugins = array_values(
+	array_filter( $plugins, static fn( array $plugin ): bool => ! empty( $plugin['new_version'] ) )
+);
+?>
 <div class="tab-panel" data-tab-panel="plugins">
 	<div class="card">
 		<div class="card-head">
 			<h2><?= e( (string) count( $plugins ) ) ?> Plugin(s)</h2>
+			<?php if ( $outdatedPlugins ) : ?>
+				<span class="badge warn"><?= e( (string) count( $outdatedPlugins ) ) ?> mit Update</span>
+			<?php endif; ?>
+			<div class="spacer"></div>
+			<?php if ( $canWrite && $outdatedPlugins ) : ?>
+				<form method="post" action="<?= e( url( '/updates/apply' ) ) ?>"
+					data-confirm="Alle <?= e( (string) count( $outdatedPlugins ) ) ?> Plugin-Updates dieser Seite jetzt einspielen?">
+					<?= csrf_field() ?>
+					<input type="hidden" name="mode" value="selected">
+					<?php foreach ( $outdatedPlugins as $outdated ) : ?>
+						<input type="hidden" name="items[]"
+							value="<?= e( $site['id'] . '|plugin|' . ( $outdated['file'] ?? '' ) ) ?>">
+					<?php endforeach; ?>
+					<button class="btn sm primary" data-busy="Aktualisiere…">Alle Plugin-Updates einspielen</button>
+				</form>
+			<?php endif; ?>
 		</div>
 		<div class="card-body tight">
 			<?php if ( ! $plugins ) : ?>
@@ -362,22 +383,42 @@ $users    = (array) ( $payload['users'] ?? array() );
 										: '<span class="badge">Inaktiv</span>' ?>
 								</td>
 								<td class="small muted"><?= ! empty( $plugin['auto_update'] ) ? 'an' : 'aus' ?></td>
-								<td class="shrink">
+								<td class="shrink nowrap">
 									<?php if ( $canWrite ) : ?>
-										<form method="post" action="<?= e( $siteUrl . '/extensions' ) ?>"
-											data-confirm="Aktion wirklich ausführen?">
-											<?= csrf_field() ?>
-											<input type="hidden" name="kind" value="plugin">
-											<input type="hidden" name="target" value="<?= e( (string) ( $plugin['file'] ?? '' ) ) ?>">
-											<div class="btn-row">
+										<div class="btn-row">
+											<?php if ( ! empty( $plugin['new_version'] ) ) : ?>
+												<?php /* Eigenes Formular: die Update-Zentrale nimmt ein anderes Format. */ ?>
+												<form method="post" action="<?= e( url( '/updates/apply' ) ) ?>" style="display:inline">
+													<?= csrf_field() ?>
+													<input type="hidden" name="mode" value="selected">
+													<input type="hidden" name="items[]"
+														value="<?= e( $site['id'] . '|plugin|' . ( $plugin['file'] ?? '' ) ) ?>">
+													<button class="btn sm primary" data-busy="Aktualisiere…">Aktualisieren</button>
+												</form>
+											<?php endif; ?>
+
+											<form method="post" action="<?= e( $siteUrl . '/extensions' ) ?>" style="display:inline"
+												data-confirm="Aktion wirklich ausführen?">
+												<?= csrf_field() ?>
+												<input type="hidden" name="kind" value="plugin">
+												<input type="hidden" name="target" value="<?= e( (string) ( $plugin['file'] ?? '' ) ) ?>">
 												<?php if ( ! empty( $plugin['active'] ) ) : ?>
 													<button class="btn sm" name="extension_action" value="deactivate">Deaktivieren</button>
 												<?php else : ?>
 													<button class="btn sm" name="extension_action" value="activate">Aktivieren</button>
-													<button class="btn sm danger" name="extension_action" value="delete">Löschen</button>
 												<?php endif; ?>
-											</div>
-										</form>
+											</form>
+
+											<?php if ( empty( $plugin['active'] ) ) : ?>
+												<form method="post" action="<?= e( $siteUrl . '/extensions' ) ?>" style="display:inline"
+													data-confirm="Plugin &quot;<?= e( (string) ( $plugin['name'] ?? '' ) ) ?>&quot; wirklich löschen? Das lässt sich nicht rückgängig machen.">
+													<?= csrf_field() ?>
+													<input type="hidden" name="kind" value="plugin">
+													<input type="hidden" name="target" value="<?= e( (string) ( $plugin['file'] ?? '' ) ) ?>">
+													<button class="btn sm danger" name="extension_action" value="delete">Löschen</button>
+												</form>
+											<?php endif; ?>
+										</div>
 									<?php endif; ?>
 								</td>
 							</tr>
@@ -431,17 +472,36 @@ $users    = (array) ( $payload['users'] ?? array() );
 										? '<span class="badge ok"><span class="dot"></span>Aktiv</span>'
 										: '<span class="badge">Inaktiv</span>' ?>
 								</td>
-								<td class="shrink">
-									<?php if ( $canWrite && empty( $theme['active'] ) ) : ?>
-										<form method="post" action="<?= e( $siteUrl . '/extensions' ) ?>" data-confirm="Aktion wirklich ausführen?">
-											<?= csrf_field() ?>
-											<input type="hidden" name="kind" value="theme">
-											<input type="hidden" name="target" value="<?= e( (string) ( $theme['stylesheet'] ?? '' ) ) ?>">
-											<div class="btn-row">
-												<button class="btn sm" name="extension_action" value="activate">Aktivieren</button>
-												<button class="btn sm danger" name="extension_action" value="delete">Löschen</button>
-											</div>
-										</form>
+								<td class="shrink nowrap">
+									<?php if ( $canWrite ) : ?>
+										<div class="btn-row">
+											<?php if ( ! empty( $theme['new_version'] ) ) : ?>
+												<form method="post" action="<?= e( url( '/updates/apply' ) ) ?>" style="display:inline">
+													<?= csrf_field() ?>
+													<input type="hidden" name="mode" value="selected">
+													<input type="hidden" name="items[]"
+														value="<?= e( $site['id'] . '|theme|' . ( $theme['stylesheet'] ?? '' ) ) ?>">
+													<button class="btn sm primary" data-busy="Aktualisiere…">Aktualisieren</button>
+												</form>
+											<?php endif; ?>
+
+											<?php if ( empty( $theme['active'] ) ) : ?>
+												<form method="post" action="<?= e( $siteUrl . '/extensions' ) ?>" style="display:inline"
+													data-confirm="Aktion wirklich ausführen?">
+													<?= csrf_field() ?>
+													<input type="hidden" name="kind" value="theme">
+													<input type="hidden" name="target" value="<?= e( (string) ( $theme['stylesheet'] ?? '' ) ) ?>">
+													<button class="btn sm" name="extension_action" value="activate">Aktivieren</button>
+												</form>
+												<form method="post" action="<?= e( $siteUrl . '/extensions' ) ?>" style="display:inline"
+													data-confirm="Theme &quot;<?= e( (string) ( $theme['name'] ?? '' ) ) ?>&quot; wirklich löschen? Das lässt sich nicht rückgängig machen.">
+													<?= csrf_field() ?>
+													<input type="hidden" name="kind" value="theme">
+													<input type="hidden" name="target" value="<?= e( (string) ( $theme['stylesheet'] ?? '' ) ) ?>">
+													<button class="btn sm danger" name="extension_action" value="delete">Löschen</button>
+												</form>
+											<?php endif; ?>
+										</div>
 									<?php endif; ?>
 								</td>
 							</tr>
