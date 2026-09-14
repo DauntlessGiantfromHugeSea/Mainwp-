@@ -10,7 +10,15 @@
 <html lang="de">
 <head>
 	<meta charset="utf-8">
-	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+	<meta name="theme-color" content="#08080a">
+	<link rel="manifest" href="<?= e( url( '/manifest.webmanifest' ) ) ?>">
+	<link rel="icon" href="<?= e( nl_asset( '/assets/icons/icon-192.png' ) ) ?>" sizes="192x192" type="image/png">
+	<link rel="icon" href="<?= e( nl_asset( '/assets/icons/mark.svg' ) ) ?>" type="image/svg+xml">
+	<link rel="apple-touch-icon" href="<?= e( nl_asset( '/assets/icons/apple-touch-icon.png' ) ) ?>">
+	<meta name="apple-mobile-web-app-capable" content="yes">
+	<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+	<meta name="apple-mobile-web-app-title" content="<?= e( $agencyName ?? 'NorthLab' ) ?>">
 	<meta name="robots" content="noindex, nofollow">
 	<title><?= e( $pageTitle ?? 'Anmelden' ) ?> · <?= e( $agencyName ?? 'NorthLab' ) ?></title>
 	<link rel="stylesheet" href="<?= e( nl_asset( '/assets/css/app.css' ) ) ?>">

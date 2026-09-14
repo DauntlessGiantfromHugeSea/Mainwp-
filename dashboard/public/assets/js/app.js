@@ -225,4 +225,21 @@
 	});
 
 	applySiteType();
+
+	/**
+	 * Service Worker anmelden — nur über HTTPS oder auf localhost, sonst lehnt
+	 * der Browser ab und wirft eine Ausnahme in die Konsole.
+	 */
+	if ('serviceWorker' in navigator && (window.isSecureContext || location.hostname === 'localhost')) {
+		window.addEventListener('load', function () {
+			navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(function () {
+				// Ohne Service Worker läuft das Panel ganz normal weiter.
+			});
+		});
+	}
+
+	/** Im installierten Fenster einen Zurück-Weg anbieten, den der Browser sonst stellt. */
+	if (window.matchMedia('(display-mode: standalone)').matches) {
+		document.documentElement.classList.add('standalone');
+	}
 })();

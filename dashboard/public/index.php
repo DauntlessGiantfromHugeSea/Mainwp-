@@ -12,6 +12,7 @@ require_once dirname( __DIR__ ) . '/src/bootstrap.php';
 use NorthLab\Controller\ActivityController;
 use NorthLab\Controller\ApiController;
 use NorthLab\Controller\ChildUpdateController;
+use NorthLab\Controller\PwaController;
 use NorthLab\Controller\AuthController;
 use NorthLab\Controller\BackupController;
 use NorthLab\Controller\ClientController;
@@ -67,6 +68,11 @@ $router->get( '/api/v1/updates', array( ApiController::class, 'updates' ) );
 
 // Update-Quelle fuer das Child-Plugin - ohne Anmeldung, die Kundenseite hat keine.
 $router->post( '/api/child/manifest', array( ChildUpdateController::class, 'manifest' ) );
+
+// Installierbare Anwendung: Manifest und Service Worker liegen an der Wurzel.
+$router->get( '/manifest.webmanifest', array( PwaController::class, 'manifest' ) );
+$router->get( '/sw.js', array( PwaController::class, 'serviceWorker' ) );
+$router->get( '/offline', array( PwaController::class, 'offline' ) );
 $router->get( '/api/child/package/{connection:[A-Za-z0-9_-]{8,64}}', array( ChildUpdateController::class, 'package' ) );
 
 $router->get( '/login', array( AuthController::class, 'showLogin' ) );
