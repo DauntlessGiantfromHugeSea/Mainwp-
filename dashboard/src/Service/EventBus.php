@@ -6,6 +6,7 @@ namespace NorthLab\Service;
 
 use NorthLab\Core\Config;
 use NorthLab\Core\Mailer;
+use NorthLab\Core\Logger;
 use NorthLab\Core\Setting;
 use NorthLab\Repository\ActivityRepository;
 use NorthLab\Repository\SiteRepository;
@@ -90,6 +91,7 @@ final class EventBus {
 		WebhookService::enqueueForEvent( $event, $envelope, $clientId );
 
 		self::maybeNotify( $event, $envelope );
+		self::maybePush( $event, $envelope );
 	}
 
 	public static function describe( string $event ): string {
@@ -107,8 +109,22 @@ final class EventBus {
 	}
 
 	/**
+	 * Push an die Geraete der Benutzer.
+	 *
+	 * Getrennt von der E-Mail: ein Ereignis kann aufs Handy gehoeren, ohne
+	 * gleich eine Mail wert zu sein. Ein Fehler beim Versand darf das
+	 * ausloesende Ereignis nicht zum Absturz bringen.
+	 *
 	 * @param array<string,mixed> $envelope
 	 */
+	private static function maybePush( string $event, array $envelope ): void {
+		try {
+			PushService::forEvent( $event, $envelope );
+		} catch ( \Throwable $e ) {
+			Logger::warning( 'Push-Versand fehlgeschlagen: ' . $e->getMessage() );
+		}
+	}
+
 	private static function maybeNotify( string $event, array $envelope ): void {
 		$watched = Setting::getArray( 'notify_on', array() );
 		if ( ! in_array( $event, $watched, true ) ) {

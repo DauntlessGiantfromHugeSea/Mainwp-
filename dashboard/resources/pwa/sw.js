@@ -108,3 +108,50 @@ function offlineFallback() {
 		{ status: 503, headers: { 'Content-Type': 'text/html; charset=utf-8' } }
 	);
 }
+
+/* ------------------------------------------------------------- Meldungen */
+
+self.addEventListener('push', (event) => {
+	let data = {};
+
+	try {
+		data = event.data ? event.data.json() : {};
+	} catch (e) {
+		data = { body: event.data ? event.data.text() : '' };
+	}
+
+	const title = data.title || 'NorthLab';
+	const options = {
+		body: data.body || '',
+		icon: '/assets/icons/icon-192.png',
+		badge: '/assets/icons/icon-192.png',
+		// Gleiches Ereignis zur gleichen Seite ersetzt die vorige Meldung,
+		// statt den Sperrbildschirm zuzupflastern.
+		tag: data.tag || 'northlab',
+		renotify: true,
+		timestamp: Date.now(),
+		data: { url: data.url || '/' },
+	};
+
+	event.waitUntil(self.registration.showNotification(title, options));
+});
+
+self.addEventListener('notificationclick', (event) => {
+	event.notification.close();
+
+	const target = new URL((event.notification.data && event.notification.data.url) || '/', self.location.origin).href;
+
+	event.waitUntil(
+		self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windows) => {
+			// Ein offenes Panel-Fenster wiederverwenden, statt ein zweites zu oeffnen.
+			for (const client of windows) {
+				if (new URL(client.url).origin === self.location.origin && 'focus' in client) {
+					client.navigate(target);
+					return client.focus();
+				}
+			}
+
+			return self.clients.openWindow(target);
+		})
+	);
+});

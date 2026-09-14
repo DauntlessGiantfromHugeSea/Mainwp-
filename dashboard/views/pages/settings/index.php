@@ -22,6 +22,7 @@ $get = static fn( string $key, string $default = '' ): string => $settings[ $key
 	<button data-tab="automation">Automatisierung</button>
 	<button data-tab="mmode">Wartungsseite</button>
 	<button data-tab="branding">Branding</button>
+	<button data-tab="push">Meldungen aufs Handy</button>
 	<button data-tab="notifications">Benachrichtigungen</button>
 	<button data-tab="monitoring">Monitoring</button>
 	<button data-tab="reports">Berichte</button>
@@ -328,6 +329,119 @@ $get = static fn( string $key, string $default = '' ): string => $settings[ $key
 	</div>
 </div>
 
+<div class="tab-panel" data-tab-panel="push" id="push">
+	<div class="grid side">
+		<div>
+			<div class="card" id="push-box">
+				<div class="card-head">
+					<h2>Dieses Gerät</h2>
+					<div class="spacer"></div>
+					<?php if ( $pushCount > 0 ) : ?>
+						<span class="badge ok"><?= e( (string) $pushCount ) ?> Gerät(e) angemeldet</span>
+					<?php endif; ?>
+				</div>
+				<div class="card-body">
+					<?php if ( ! $pushReady ) : ?>
+						<div class="notice warn">
+							Für Push fehlt noch ein Schlüsselpaar. Es gehört dem Panel und weist es
+							gegenüber den Push-Diensten von Chrome, Firefox und Safari aus.
+						</div>
+						<form method="post" action="<?= e( url( '/settings' ) ) ?>">
+							<?= csrf_field() ?>
+							<input type="hidden" name="section" value="push_keys">
+							<button class="btn primary">Schlüsselpaar erzeugen</button>
+						</form>
+					<?php else : ?>
+						<div class="notice" data-push-status>Wird geprüft…</div>
+
+						<div class="btn-row">
+							<button class="btn primary" type="button" data-push-enable hidden>Meldungen einschalten</button>
+							<button class="btn" type="button" data-push-disable hidden>Auf diesem Gerät abschalten</button>
+						</div>
+
+						<form method="post" action="<?= e( url( '/push/test' ) ) ?>" id="push-test" class="mt" hidden>
+							<?= csrf_field() ?>
+							<button class="btn" data-busy="Verschicke…">Probemeldung an meine Geräte</button>
+						</form>
+					<?php endif; ?>
+
+					<p class="small muted mt">
+						Die Einstellung gilt pro Gerät und Browser. Auf dem iPhone funktioniert Push erst,
+						wenn das Panel über <em>Teilen → Zum Home-Bildschirm</em> installiert wurde — das ist
+						eine Vorgabe von Apple, keine Einschränkung des Panels.
+					</p>
+				</div>
+			</div>
+
+			<div class="card">
+				<div class="card-head"><h2>Wobei soll das Handy klingeln?</h2></div>
+				<div class="card-body">
+					<p class="small muted">
+						Getrennt von den E-Mail-Hinweisen: nicht jedes Ereignis, das eine Mail wert ist,
+						muss auch sofort auf dem Sperrbildschirm stehen.
+					</p>
+					<form method="post" action="<?= e( url( '/settings' ) ) ?>">
+						<?= csrf_field() ?>
+						<input type="hidden" name="section" value="push">
+						<div class="grid cols-2">
+							<?php foreach ( $catalog as $key => $label ) : ?>
+								<label class="field inline full" style="display:flex;gap:6px;align-items:flex-start">
+									<input type="checkbox" name="push_on[]" value="<?= e( $key ) ?>"
+										<?= in_array( $key, $pushOn, true ) ? 'checked' : '' ?>>
+									<span><?= e( $label ) ?><br>
+										<span class="muted mono" style="font-size:11px"><?= e( $key ) ?></span></span>
+								</label>
+							<?php endforeach; ?>
+						</div>
+						<button class="btn primary">Speichern</button>
+					</form>
+				</div>
+			</div>
+		</div>
+
+		<div>
+			<div class="card">
+				<div class="card-head"><h3>Wer bekommt was</h3></div>
+				<div class="card-body small">
+					<p>
+						Eine Meldung geht nur an Konten, die die betroffene Seite auch im Panel sehen
+						dürfen. Wer nur einzelne Kundenseiten zugewiesen bekommen hat, erfährt nichts
+						über die übrigen.
+					</p>
+					<p>
+						Der Inhalt der Meldung ist für genau ein Gerät verschlüsselt. Der Push-Dienst
+						von Google, Mozilla oder Apple leitet nur weiter und kann nicht mitlesen.
+					</p>
+					<p class="muted">
+						Antwortet ein Gerät mehrfach nicht mehr, trägt sich das Panel selbst aus —
+						etwa nachdem jemand die Anwendung deinstalliert hat.
+					</p>
+				</div>
+			</div>
+
+			<?php if ( $pushReady ) : ?>
+				<div class="card">
+					<div class="card-head"><h3>Schlüsselpaar</h3></div>
+					<div class="card-body small">
+						<p class="muted">
+							Ein neues Paar macht alle angemeldeten Geräte wertlos — sie haben den alten
+							öffentlichen Schlüssel gespeichert und müssen sich erneut anmelden. Nur nötig,
+							wenn der private Schlüssel in falsche Hände geraten sein könnte.
+						</p>
+						<form method="post" action="<?= e( url( '/settings' ) ) ?>"
+							data-confirm="Neues Schlüsselpaar erzeugen? Alle angemeldeten Geräte bekommen danach keine Meldungen mehr, bis sie sich neu anmelden.">
+							<?= csrf_field() ?>
+							<input type="hidden" name="section" value="push_keys">
+							<input type="hidden" name="rotate" value="1">
+							<button class="btn danger">Schlüsselpaar erneuern</button>
+						</form>
+					</div>
+				</div>
+			<?php endif; ?>
+		</div>
+	</div>
+</div>
+
 <div class="tab-panel" data-tab-panel="notifications">
 	<div class="card">
 		<div class="card-head"><h2>E-Mail-Benachrichtigungen</h2></div>
@@ -532,3 +646,5 @@ $get = static fn( string $key, string $default = '' ): string => $settings[ $key
 		</div>
 	</div>
 </div>
+
+<script src="<?= e( nl_asset( '/assets/js/push.js' ) ) ?>" defer></script>

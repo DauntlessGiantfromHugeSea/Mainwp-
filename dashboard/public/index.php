@@ -12,6 +12,7 @@ require_once dirname( __DIR__ ) . '/src/bootstrap.php';
 use NorthLab\Controller\ActivityController;
 use NorthLab\Controller\ApiController;
 use NorthLab\Controller\ChildUpdateController;
+use NorthLab\Controller\PushController;
 use NorthLab\Controller\PwaController;
 use NorthLab\Controller\AuthController;
 use NorthLab\Controller\BackupController;
@@ -73,6 +74,14 @@ $router->post( '/api/child/manifest', array( ChildUpdateController::class, 'mani
 $router->get( '/manifest.webmanifest', array( PwaController::class, 'manifest' ) );
 $router->get( '/sw.js', array( PwaController::class, 'serviceWorker' ) );
 $router->get( '/offline', array( PwaController::class, 'offline' ) );
+
+// Push-Meldungen: der Browser spricht hier mit JavaScript. Bewusst nicht unter
+// /api/ — dieser Zweig ist von der CSRF-Pruefung ausgenommen, weil dort
+// Token-Endpunkte ohne Sitzung liegen. Push haengt an der Anmeldung.
+$router->get( '/push/key', array( PushController::class, 'key' ) );
+$router->post( '/push/subscribe', array( PushController::class, 'subscribe' ) );
+$router->post( '/push/unsubscribe', array( PushController::class, 'unsubscribe' ) );
+$router->post( '/push/test', array( PushController::class, 'test' ) );
 $router->get( '/api/child/package/{connection:[A-Za-z0-9_-]{8,64}}', array( ChildUpdateController::class, 'package' ) );
 
 $router->get( '/login', array( AuthController::class, 'showLogin' ) );

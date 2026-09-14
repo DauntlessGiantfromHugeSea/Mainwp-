@@ -8,9 +8,11 @@ use NorthLab\Core\Auth;
 use NorthLab\Core\Config;
 use NorthLab\Core\Crypto;
 use NorthLab\Core\Request;
+use NorthLab\Core\Session;
 use NorthLab\Core\Setting;
 use NorthLab\Service\BrandingService;
 use NorthLab\Service\EventBus;
+use NorthLab\Service\PushService;
 use NorthLab\Service\Scheduler;
 
 final class SettingsController extends BaseController {
@@ -24,6 +26,9 @@ final class SettingsController extends BaseController {
 				'settings'  => Setting::all(),
 				'catalog'   => EventBus::catalog(),
 				'notifyOn'  => Setting::getArray( 'notify_on', array() ),
+				'pushOn'    => Setting::getArray( 'push_on', array() ),
+				'pushReady' => PushService::ready(),
+				'pushCount' => \NorthLab\Repository\PushRepository::countForUser( Auth::id() ),
 				'jobs'      => Scheduler::overview(),
 				'cronToken' => Setting::get( 'cron_token', '' ),
 				'cronUrl'   => rtrim( (string) Config::get( 'app.url', '' ), '/' ) . '/api/cron/' . Setting::get( 'cron_token', '' ),
@@ -102,6 +107,27 @@ final class SettingsController extends BaseController {
 						'branding_tint'       => $this->color( $request->string( 'branding_tint' ), '#fdf3f0' ),
 					)
 				);
+				break;
+
+			case 'push':
+				Setting::setMany(
+					array(
+						'push_on' => array_values(
+							array_intersect( $request->arrayOfStrings( 'push_on' ), array_keys( EventBus::catalog() ) )
+						),
+					)
+				);
+				break;
+
+			case 'push_keys':
+				// Ein neues Paar macht alle bestehenden Geraete wertlos, deshalb
+				// nur erzeugen, wenn noch keins da ist — oder ausdruecklich erneuern.
+				if ( $request->bool( 'rotate' ) ) {
+					PushService::rotateKeys();
+					Session::flash( 'warning', 'Neues Push-Schlüsselpaar erzeugt. Alle Geräte müssen sich neu anmelden.' );
+				} else {
+					PushService::ensureKeys();
+				}
 				break;
 
 			case 'notifications':

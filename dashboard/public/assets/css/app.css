@@ -36,6 +36,10 @@
 
 * { box-sizing: border-box; }
 
+/* Eigene display-Regeln — etwa die von .btn — stechen die des Browsers fuer
+   [hidden] aus. Ohne diese Zeile blieben versteckte Elemente sichtbar. */
+[hidden] { display: none !important; }
+
 html, body { margin: 0; padding: 0; }
 
 body {

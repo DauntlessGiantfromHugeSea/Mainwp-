@@ -9,7 +9,7 @@ namespace NorthLab\Core;
  */
 final class Migrator {
 
-	public const SCHEMA_VERSION = 7;
+	public const SCHEMA_VERSION = 8;
 
 	/**
 	 * Alle Tabellen anlegen (idempotent).
@@ -298,6 +298,23 @@ final class Migrator {
 				`site_id` BIGINT UNSIGNED NOT NULL,
 				PRIMARY KEY (`user_id`, `site_id`),
 				KEY `site_id` (`site_id`)
+			) {$charset}",
+
+			// Schema 8: Geraete, die Push-Meldungen bekommen sollen.
+			"CREATE TABLE IF NOT EXISTS `{$p}push_subscriptions` (
+				`id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+				`user_id` BIGINT UNSIGNED NOT NULL,
+				`endpoint` VARCHAR(500) NOT NULL,
+				`endpoint_hash` CHAR(64) NOT NULL,
+				`p256dh` VARCHAR(255) NOT NULL,
+				`auth` VARCHAR(64) NOT NULL,
+				`label` VARCHAR(191) NOT NULL DEFAULT '',
+				`failures` SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+				`created_at` DATETIME NOT NULL,
+				`last_sent_at` DATETIME NULL DEFAULT NULL,
+				PRIMARY KEY (`id`),
+				UNIQUE KEY `endpoint_hash` (`endpoint_hash`),
+				KEY `user_id` (`user_id`)
 			) {$charset}",
 
 			"CREATE TABLE IF NOT EXISTS `{$p}sessions` (

@@ -25,6 +25,19 @@ Ersteller des Plugins ist **NorthLab**.
 - Seiten pausieren, Notizen hinterlegen, Verbindung erneuern
 - **Seiten ohne Child-Plugin** (Shopify, Wix, Squarespace, Webflow, fremdgehostete Installationen) lassen sich als reine Überwachung aufnehmen: Erreichbarkeitsprüfung, Störungsprotokoll, Kundenzuordnung, Tags, Berichte und Webhooks. Updates, Plugin- und Theme-Listen, Sicherheitsprüfung, Wartung und Backups brauchen das Plugin und entfallen dort
 
+**Als Anwendung installierbar**
+- Manifest, Symbole und Service Worker: das Panel lässt sich auf Handy und Desktop installieren — eigenes Symbol, Vollbild ohne Browserleiste, eigener Eintrag im App-Umschalter
+- Gecacht wird ausschließlich die Hülle (CSS, Skripte, Symbole, Offline-Seite). Fertige Seiten landen bewusst nie im Cache: sie hängen an der Anmeldung, und auf einem geteilten Gerät wäre das die Übersicht eines fremden Kontos. Ohne Netz erscheint eine Hinweisseite statt eines veralteten Dashboards
+- Sicherheitsabstände moderner Telefone werden im Vollbild berücksichtigt
+
+**Push-Meldungen aufs Handy**
+- Web Push nach RFC 8291 und RFC 8292, ohne Fremdbibliothek — nur mit dem OpenSSL, das PHP ohnehin mitbringt
+- Der Inhalt ist für genau ein Gerät verschlüsselt; der Push-Dienst von Google, Mozilla oder Apple leitet nur weiter und kann nicht mitlesen
+- Frei wählbar, welche Ereignisse klingeln — getrennt von den E-Mail-Hinweisen
+- Eine Meldung geht nur an Konten, die die betroffene Seite auch im Panel sehen dürfen
+- Geräte, die dauerhaft nicht mehr antworten, trägt das Panel selbst aus
+- Auf dem iPhone erst nach Installation über „Zum Home-Bildschirm" — eine Vorgabe von Apple
+
 **Benutzer der Kundenseiten**
 - WordPress-Benutzer je Seite anlegen, Rolle setzen, löschen — ohne sich dort anzumelden
 - **Befristete Konten**: Zugang für 1 Stunde bis 30 Tage, danach löscht die Kundenseite ihn selbst und übergibt vorhandene Inhalte an den ältesten Administrator. Der Aufräumlauf hängt am WP-Cron und läuft zusätzlich bei jeder Panel-Anfrage, damit auch Seiten mit abgeschaltetem WP-Cron zuverlässig aufräumen
