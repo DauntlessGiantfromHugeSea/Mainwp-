@@ -96,6 +96,8 @@ View::set(
 				<select name="bulk_action" style="width:auto">
 					<option value="sync">Synchronisieren</option>
 					<option value="update">Alle Updates einspielen</option>
+					<option value="branding-on">Branding einschalten</option>
+					<option value="branding-off">Branding ausschalten</option>
 					<option value="child-update">Child-Plugin aktualisieren</option>
 					<option value="mmode-on">Wartungsmodus an (1 Stunde)</option>
 					<option value="mmode-off">Wartungsmodus aus</option>
@@ -164,6 +166,9 @@ View::set(
 									<?= nl_status_badge( $site ) ?> <?= nl_uptime_badge( $site ) ?>
 									<?php if ( ! empty( $site['maintenance_mode'] ) ) : ?>
 										<span class="badge warn" title="Besucher sehen die Wartungsseite">Wartung</span>
+									<?php endif; ?>
+									<?php if ( ! empty( $site['branding_bar'] ) || ! empty( $site['branding_login'] ) ) : ?>
+										<span class="badge ok" title="Agentur-Branding ist auf dieser Seite aktiv">Branding</span>
 									<?php endif; ?>
 									<?php if ( \NorthLab\Service\ChildPluginService::isOutdated( $site ) ) : ?>
 										<span class="badge warn" title="Child-Plugin veraltet — Sammelaktion &quot;Child-Plugin aktualisieren&quot;">Child <?= e( (string) $site['child_version'] ) ?></span>

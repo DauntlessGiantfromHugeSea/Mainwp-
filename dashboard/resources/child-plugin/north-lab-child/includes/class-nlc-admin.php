@@ -64,7 +64,7 @@ class NLC_Admin {
 	public function handle_save_settings() {
 		$this->guard( 'nlc_save_settings' );
 
-		$booleans = array( 'allow_updates', 'allow_install', 'allow_user_mgmt', 'allow_maintenance', 'allow_content', 'allow_backup', 'allow_autologin', 'allow_mmode', 'allow_self_update', 'require_ssl' );
+		$booleans = array( 'allow_updates', 'allow_install', 'allow_user_mgmt', 'allow_maintenance', 'allow_content', 'allow_backup', 'allow_autologin', 'allow_mmode', 'allow_self_update', 'allow_branding', 'require_ssl' );
 		$values   = array();
 		foreach ( $booleans as $key ) {
 			$values[ $key ] = ! empty( $_POST[ $key ] );
@@ -173,6 +173,7 @@ class NLC_Admin {
 						'allow_autologin'   => 'Ein-Klick-Anmeldung aus dem Panel erlauben',
 						'allow_mmode'       => 'Wartungsmodus aus der Ferne schalten',
 						'allow_self_update' => 'Updates dieses Plugins vom Panel beziehen',
+						'allow_branding'    => 'Support-Leiste und Login-Branding der Agentur zeigen',
 						'require_ssl'       => 'Nur HTTPS-Requests akzeptieren',
 					);
 					foreach ( $labels as $key => $label ) :

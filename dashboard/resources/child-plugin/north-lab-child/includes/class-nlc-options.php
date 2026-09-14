@@ -34,6 +34,7 @@ class NLC_Options {
 			'allow_autologin'   => true,
 			'allow_mmode'       => true,
 			'allow_self_update' => true,
+			'allow_branding'    => true,
 			'ip_allowlist'      => '',
 			'require_ssl'       => false,
 		);

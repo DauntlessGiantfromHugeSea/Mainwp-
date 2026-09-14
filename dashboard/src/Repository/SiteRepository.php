@@ -46,9 +46,6 @@ final class SiteRepository {
 	/**
 	 * @return array<string,mixed>|null
 	 */
-	/**
-	 * @return array<string,mixed>|null
-	 */
 	public static function findByConnectionId( string $connectionId ): ?array {
 		if ( '' === $connectionId ) {
 			return null;
@@ -342,6 +339,26 @@ final class SiteRepository {
 				'now'     => nl_utc(),
 			)
 		);
+	}
+
+	/**
+	 * Einen Abschnitt des gespeicherten Berichts ersetzen.
+	 *
+	 * Nach einer Fernaktion stimmt der Bericht sonst bis zum naechsten Sync nicht
+	 * mehr — und das Formular zeigte wieder den alten Stand an.
+	 *
+	 * @param array<string,mixed> $value
+	 */
+	public static function patchPayload( int $siteId, string $key, array $value ): void {
+		$payload = self::payload( $siteId );
+
+		if ( null === $payload ) {
+			return;
+		}
+
+		$payload[ $key ] = $value;
+
+		self::storePayload( $siteId, $payload );
 	}
 
 	/* ----------------------------------------------------------- Werkzeuge */

@@ -53,6 +53,7 @@ class NLC_REST {
 			'/mmode'       => array( 'POST', 'mmode' ),
 			'/login-link'  => array( 'POST', 'login_link' ),
 			'/self-update' => array( 'POST', 'self_update' ),
+			'/branding'    => array( 'POST', 'branding' ),
 			'/security'    => array( 'POST', 'security' ),
 			'/backup'      => array( 'POST', 'backup' ),
 			'/disconnect'  => array( 'POST', 'disconnect' ),
@@ -300,6 +301,32 @@ class NLC_REST {
 		return rest_ensure_response(
 			array( 'result' => 'check' === $action ? NLC_Selfupdate::check() : NLC_Selfupdate::run() )
 		);
+	}
+
+	/**
+	 * Support-Leiste und Login-Branding lesen und setzen.
+	 *
+	 * @param WP_REST_Request $request
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function branding( WP_REST_Request $request ) {
+		if ( ! NLC_Options::setting( 'allow_branding' ) ) {
+			return new WP_Error( 'nlc_branding_off', 'Das Branding ist auf dieser Seite deaktiviert.', array( 'status' => 403 ) );
+		}
+
+		$action = sanitize_key( (string) $request->get_param( 'action' ) );
+
+		if ( '' === $action || 'get' === $action ) {
+			return rest_ensure_response( array( 'branding' => NLC_Branding::state() ) );
+		}
+
+		if ( 'set' === $action ) {
+			return rest_ensure_response(
+				array( 'branding' => NLC_Branding::save( (array) $request->get_param( 'settings' ) ) )
+			);
+		}
+
+		return new WP_Error( 'nlc_bad_action', 'Unbekannte Aktion.', array( 'status' => 400 ) );
 	}
 
 	public function security( WP_REST_Request $request ) {

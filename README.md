@@ -39,6 +39,14 @@ Ersteller des Plugins ist **NorthLab**.
 - Direkt anstoßbar pro Seite oder als Sammelaktion, wenn es nicht bis zum nächsten Prüflauf warten soll
 - Auf der Kundenseite abschaltbar
 
+**Agentur-Branding auf den Kundenseiten**
+- **Support-Leiste im Backend**: Logo, Ansprache und die drei Kontaktwege (Website, E-Mail, Telefon) oben im Adminbereich, vor allen WordPress-Hinweisen. Sichtbar für alle angemeldeten Benutzer, ab Redakteur oder nur für Administratoren
+- **Leiste über der Anmeldeseite**: schmaler Streifen mit Logo und „Betreut von …"
+- **Kundenlogo auf der Anmeldeseite** statt des WordPress-Logos, mit Höhe und Ziel-Link — steht pro Seite, weil jeder Kunde ein eigenes hat
+- Logo, Kontaktwege, Text und Farben stehen zentral in den Einstellungen; ein- und ausgeschaltet wird pro Seite oder als Sammelaktion
+- Telefonnummern werden für die Anzeige und für den Wähl-Link getrennt aufbereitet: `+49 (0)30 …` wird zu `tel:+4930…`, denn die 0 in Klammern entfällt beim internationalen Wählen
+- Der Kunde kann das Branding auf seiner Seite abschalten; das Panel meldet dann, dass es dort gesperrt ist
+
 **Wartungsmodus**
 - Aus der Ferne ein- und ausschalten, einzeln oder für mehrere Seiten auf einmal
 - Zeitlich befristet (15 Minuten bis 24 Stunden) oder bis auf Widerruf; abgelaufene Fenster beendet die Kundenseite selbst

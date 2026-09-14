@@ -79,9 +79,10 @@ class NLC_Maintenance_Mode {
 
 	/**
 	 * @param string $value
+	 * @param string $fallback Was gilt, wenn nichts Brauchbares kommt.
 	 * @return string
 	 */
-	public static function sanitize_color( $value ) {
+	public static function sanitize_color( $value, $fallback = '#f9907a' ) {
 		$value = trim( (string) $value );
 
 		if ( preg_match( '/^#[0-9a-fA-F]{6}$/', $value ) ) {
@@ -92,7 +93,7 @@ class NLC_Maintenance_Mode {
 			return '#' . $value[1] . $value[1] . $value[2] . $value[2] . $value[3] . $value[3];
 		}
 
-		return '#f9907a';
+		return $fallback;
 	}
 
 	public function hooks() {

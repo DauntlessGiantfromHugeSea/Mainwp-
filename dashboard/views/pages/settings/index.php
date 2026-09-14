@@ -21,6 +21,7 @@ $get = static fn( string $key, string $default = '' ): string => $settings[ $key
 	<button data-tab="general" class="active">Allgemein</button>
 	<button data-tab="automation">Automatisierung</button>
 	<button data-tab="mmode">Wartungsseite</button>
+	<button data-tab="branding">Branding</button>
 	<button data-tab="notifications">Benachrichtigungen</button>
 	<button data-tab="monitoring">Monitoring</button>
 	<button data-tab="reports">Berichte</button>
@@ -221,6 +222,106 @@ $get = static fn( string $key, string $default = '' ): string => $settings[ $key
 				<p class="muted">
 					Wird das Child-Plugin deaktiviert, während der Wartungsmodus läuft, schaltet es ihn selbst
 					ab — eine Seite kann so nicht versehentlich gesperrt bleiben.
+				</p>
+			</div>
+		</div>
+	</div>
+</div>
+
+<div class="tab-panel" data-tab-panel="branding" id="branding">
+	<div class="grid side">
+		<div class="card">
+			<div class="card-head"><h2>Support-Leiste und Login-Branding</h2></div>
+			<div class="card-body">
+				<p class="small muted">
+					Diese Angaben gelten für alle Seiten. Ein- und ausgeschaltet wird pro Seite —
+					auf der jeweiligen Seitenübersicht oder als Sammelaktion in der Seitenliste.
+				</p>
+				<form method="post" action="<?= e( url( '/settings' ) ) ?>">
+					<?= csrf_field() ?>
+					<input type="hidden" name="section" value="branding">
+					<div class="form-grid">
+						<div class="field full">
+							<label for="branding_logo">Logo der Agentur (URL)</label>
+							<input type="url" id="branding_logo" name="branding_logo" placeholder="https://…"
+								value="<?= e( $get( 'branding_logo', $get( 'agency_logo_url', '' ) ) ) ?>">
+							<div class="hint">
+								Steht links in der Support-Leiste und in der Leiste über dem Login.
+								Muss öffentlich erreichbar sein — die Kundenseite lädt es direkt von dort.
+							</div>
+						</div>
+						<div class="field">
+							<label for="branding_site">Website</label>
+							<input type="url" id="branding_site" name="branding_site" placeholder="https://north-lab.de"
+								value="<?= e( $get( 'branding_site' ) ) ?>">
+						</div>
+						<div class="field">
+							<label for="branding_email">E-Mail</label>
+							<input type="email" id="branding_email" name="branding_email" placeholder="hallo@north-lab.de"
+								value="<?= e( $get( 'branding_email', $get( 'agency_email', '' ) ) ) ?>">
+						</div>
+						<div class="field">
+							<label for="branding_phone">Telefon</label>
+							<input type="text" id="branding_phone" name="branding_phone" placeholder="+49 1590 5535295"
+								value="<?= e( $get( 'branding_phone' ) ) ?>">
+							<div class="hint">Wird angezeigt und zugleich als Wählnummer verlinkt.</div>
+						</div>
+						<div class="field">
+							<label for="branding_capability">Wer sieht die Support-Leiste?</label>
+							<select id="branding_capability" name="branding_capability">
+								<?php foreach ( \NorthLab\Service\BrandingService::AUDIENCES as $value => $label ) : ?>
+									<option value="<?= e( $value ) ?>" <?= $value === $get( 'branding_capability', 'read' ) ? 'selected' : '' ?>>
+										<?= e( $label ) ?>
+									</option>
+								<?php endforeach; ?>
+							</select>
+						</div>
+						<div class="field full">
+							<label for="branding_text">Text in der Support-Leiste</label>
+							<input type="text" id="branding_text" name="branding_text" maxlength="120"
+								value="<?= e( $get( 'branding_text', 'Kontakt bei Fragen oder Problemen:' ) ) ?>">
+						</div>
+						<div class="field">
+							<label for="branding_login_text">Text in der Login-Leiste</label>
+							<input type="text" id="branding_login_text" name="branding_login_text" maxlength="60"
+								value="<?= e( $get( 'branding_login_text', 'Betreut von' ) ) ?>">
+						</div>
+						<div class="field">
+							<label for="branding_accent">Akzentfarbe</label>
+							<input type="text" id="branding_accent" name="branding_accent" class="mono" placeholder="#e8917a"
+								value="<?= e( $get( 'branding_accent', '#e8917a' ) ) ?>">
+							<div class="hint">Strich links, Rahmen und Symbole.</div>
+						</div>
+						<div class="field">
+							<label for="branding_tint">Hintergrund</label>
+							<input type="text" id="branding_tint" name="branding_tint" class="mono" placeholder="#fdf3f0"
+								value="<?= e( $get( 'branding_tint', '#fdf3f0' ) ) ?>">
+						</div>
+					</div>
+					<button class="btn primary">Speichern</button>
+				</form>
+			</div>
+		</div>
+
+		<div class="card">
+			<div class="card-head"><h3>Was wo erscheint</h3></div>
+			<div class="card-body small">
+				<p>
+					<strong>Support-Leiste:</strong> oben im WordPress-Backend, vor allen Hinweisen.
+					Logo, Ansprache und die drei Kontaktwege.
+				</p>
+				<p>
+					<strong>Login-Leiste:</strong> schmaler Streifen ganz oben auf der Anmeldeseite,
+					mit Logo, „<?= e( $get( 'branding_login_text', 'Betreut von' ) ) ?>" und deiner Adresse.
+				</p>
+				<p>
+					<strong>Kundenlogo auf der Anmeldeseite:</strong> ersetzt das WordPress-Logo über dem
+					Anmeldeformular. Das steht <em>pro Seite</em>, weil jeder Kunde ein eigenes hat —
+					einzutragen auf der jeweiligen Seitenübersicht.
+				</p>
+				<p class="muted">
+					Ein Kunde kann das Branding auf seiner Seite unter <em>Einstellungen → NorthLab</em>
+					komplett unterbinden. Das Panel meldet dann, dass es dort abgeschaltet ist.
 				</p>
 			</div>
 		</div>

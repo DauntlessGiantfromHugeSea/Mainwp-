@@ -14,6 +14,7 @@ use NorthLab\Repository\SiteRepository;
 use NorthLab\Repository\UpdateRepository;
 use NorthLab\Repository\UptimeRepository;
 use NorthLab\Service\ChildPackager;
+use NorthLab\Service\BrandingService;
 use NorthLab\Service\ChildFeature;
 use NorthLab\Service\ChildPluginService;
 use NorthLab\Service\MaintenanceModeService;
@@ -130,6 +131,8 @@ final class SiteController extends BaseController {
 				'monitorUrl'  => SiteService::monitorUrl( $site ),
 				'tasks'       => MaintenanceService::tasks(),
 				'features'     => ChildFeature::overview( $site ),
+				'branding'      => BrandingService::design(),
+				'brandingState' => BrandingService::stored( $siteId ),
 				'childShipped' => ChildPluginService::shipped(),
 				'childOutdated' => ChildPluginService::isOutdated( $site ),
 				'mmodeDesign' => MaintenanceModeService::design(),
@@ -270,6 +273,29 @@ final class SiteController extends BaseController {
 	}
 
 	/**
+	 * Agentur-Branding auf der Kundenseite schalten.
+	 */
+	public function branding( Request $request ): void {
+		Auth::requireWrite();
+
+		$siteId = (int) $request->params['id'];
+		Auth::requireSite( $siteId );
+
+		$error = BrandingService::apply(
+			$siteId,
+			array(
+				'bar'               => $request->bool( 'bar' ),
+				'login_bar'         => $request->bool( 'login_bar' ),
+				'login_logo'        => $request->string( 'login_logo' ),
+				'login_logo_height' => $request->int( 'login_logo_height' ) ?: 72,
+				'login_logo_link'   => $request->string( 'login_logo_link' ),
+			)
+		);
+
+		$this->respond( $request, null === $error, $error ?? 'Branding übernommen.', '/sites/' . $siteId );
+	}
+
+	/**
 	 * Child-Plugin auf der Kundenseite aktualisieren.
 	 */
 	public function childUpdate( Request $request ): void {
@@ -365,6 +391,13 @@ final class SiteController extends BaseController {
 				case 'maintenance':
 					$outcome   = MaintenanceService::run( $siteId, $request->arrayOfStrings( 'tasks' ) );
 					$results[] = array( 'site' => $site['name'], 'success' => $outcome['ok'], 'message' => $outcome['error'] );
+					break;
+
+				case 'branding-on':
+				case 'branding-off':
+					$on        = 'branding-on' === $action;
+					$error     = BrandingService::toggle( $siteId, $on, $on );
+					$results[] = array( 'site' => $site['name'], 'success' => null === $error, 'message' => $error ?? 'OK' );
 					break;
 
 				case 'child-update':

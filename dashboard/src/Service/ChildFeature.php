@@ -30,6 +30,7 @@ final class ChildFeature {
 		'updates'    => array( 'min' => '1.0.0', 'flag' => 'allow_updates', 'label' => 'Das Einspielen von Updates' ),
 		'install'    => array( 'min' => '1.0.0', 'flag' => 'allow_install', 'label' => 'Das Installieren von Erweiterungen' ),
 		'cleanup'    => array( 'min' => '1.0.0', 'flag' => 'allow_maintenance', 'label' => 'Die Wartungsaufgaben' ),
+		'branding'   => array( 'min' => '1.4.0', 'flag' => 'allow_branding', 'label' => 'Das Agentur-Branding' ),
 	);
 
 	/** @var array<int,array<string,bool>> Einmal je Seite, nicht einmal je Funktion. */

@@ -21,6 +21,7 @@ class NLC_Info {
 			'child_version' => NLC_VERSION,
 			'generated_at'  => gmdate( 'c' ),
 			'capabilities'  => self::capabilities(),
+			'branding'      => NLC_Branding::state(),
 			'site'          => self::site(),
 			'environment'   => self::environment(),
 			'updates'       => NLC_Updates::available(),

@@ -9,7 +9,7 @@ namespace NorthLab\Core;
  */
 final class Migrator {
 
-	public const SCHEMA_VERSION = 6;
+	public const SCHEMA_VERSION = 7;
 
 	/**
 	 * Alle Tabellen anlegen (idempotent).
@@ -41,6 +41,9 @@ final class Migrator {
 				// Schema 6: Wartungsmodus, aus der Ferne geschaltet.
 				'maintenance_mode'  => 'TINYINT(1) NOT NULL DEFAULT 0',
 				'maintenance_until' => 'DATETIME NULL DEFAULT NULL',
+				// Schema 7: Agentur-Branding auf der Kundenseite.
+				'branding_bar'      => 'TINYINT(1) NOT NULL DEFAULT 0',
+				'branding_login'    => 'TINYINT(1) NOT NULL DEFAULT 0',
 			),
 
 			// Schema 2: Zwei-Faktor-Anmeldung und Seitenzuordnung.

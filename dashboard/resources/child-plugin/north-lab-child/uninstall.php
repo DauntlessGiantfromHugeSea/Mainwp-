@@ -12,6 +12,7 @@ $nlc_options = array(
 	'nlc_hide_generator',
 	'nlc_disable_xmlrpc',
 	'nlc_maintenance_mode',
+	'nlc_branding',
 );
 
 foreach ( $nlc_options as $nlc_option ) {

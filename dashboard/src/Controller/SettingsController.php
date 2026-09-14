@@ -9,6 +9,7 @@ use NorthLab\Core\Config;
 use NorthLab\Core\Crypto;
 use NorthLab\Core\Request;
 use NorthLab\Core\Setting;
+use NorthLab\Service\BrandingService;
 use NorthLab\Service\EventBus;
 use NorthLab\Service\Scheduler;
 
@@ -79,6 +80,26 @@ final class SettingsController extends BaseController {
 						),
 						'mmode_logo'        => $request->string( 'mmode_logo' ),
 						'mmode_retry_after' => (string) max( 60, min( 86400, $request->int( 'mmode_retry_after', 3600 ) ) ),
+					)
+				);
+				break;
+
+			case 'branding':
+				$audiences = array_keys( BrandingService::AUDIENCES );
+
+				Setting::setMany(
+					array(
+						'branding_logo'       => $request->string( 'branding_logo' ),
+						'branding_site'       => $request->string( 'branding_site' ),
+						'branding_email'      => $request->string( 'branding_email' ),
+						'branding_phone'      => $request->string( 'branding_phone' ),
+						'branding_text'       => $request->string( 'branding_text', 'Kontakt bei Fragen oder Problemen:' ),
+						'branding_login_text' => $request->string( 'branding_login_text', 'Betreut von' ),
+						'branding_capability' => in_array( $request->string( 'branding_capability' ), $audiences, true )
+							? $request->string( 'branding_capability' )
+							: 'read',
+						'branding_accent'     => $this->color( $request->string( 'branding_accent' ), '#e8917a' ),
+						'branding_tint'       => $this->color( $request->string( 'branding_tint' ), '#fdf3f0' ),
 					)
 				);
 				break;

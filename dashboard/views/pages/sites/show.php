@@ -860,6 +860,59 @@ $outdatedPlugins = array_values(
 		<div>
 			<?php if ( $managed ) : ?>
 			<div class="card">
+				<div class="card-head">
+					<h3>Agentur-Branding</h3>
+					<div class="spacer"></div>
+					<?php if ( ! empty( $site['branding_bar'] ) || ! empty( $site['branding_login'] ) ) : ?>
+						<span class="badge ok">aktiv</span>
+					<?php endif; ?>
+				</div>
+				<div class="card-body">
+					<p class="small muted">
+						Logo, Kontaktwege und Farben stehen zentral in den
+						<a href="<?= e( url( '/settings#branding' ) ) ?>">Einstellungen</a>.
+						Hier wird nur entschieden, was auf dieser Seite erscheint.
+					</p>
+					<form method="post" action="<?= e( $siteUrl . '/branding' ) ?>">
+						<?= csrf_field() ?>
+						<div class="field inline">
+							<input type="checkbox" id="b_bar" name="bar" value="1" <?= ! empty( $site['branding_bar'] ) ? 'checked' : '' ?>>
+							<label for="b_bar">Support-Leiste im Backend</label>
+						</div>
+						<div class="field inline">
+							<input type="checkbox" id="b_login" name="login_bar" value="1" <?= ! empty( $site['branding_login'] ) ? 'checked' : '' ?>>
+							<label for="b_login">Leiste über der Anmeldeseite</label>
+						</div>
+
+						<div class="form-grid mt">
+							<div class="field full">
+								<label for="b_logo">Logo des Kunden auf der Anmeldeseite</label>
+								<input type="url" id="b_logo" name="login_logo" placeholder="https://kundenseite.de/…/logo.png"
+									value="<?= e( (string) ( $brandingState['login_logo'] ?? '' ) ) ?>">
+								<div class="hint">
+									Ersetzt das WordPress-Logo über dem Anmeldeformular. Leer lassen, um es
+									so zu belassen, wie WordPress es zeigt.
+								</div>
+							</div>
+							<div class="field">
+								<label for="b_height">Höhe des Kundenlogos</label>
+								<input type="number" id="b_height" name="login_logo_height" min="24" max="240" step="2"
+									value="<?= e( (string) ( $brandingState['login_logo_height'] ?? 72 ) ) ?>">
+								<div class="hint">Pixel.</div>
+							</div>
+							<div class="field">
+								<label for="b_link">Logo verlinkt auf</label>
+								<input type="url" id="b_link" name="login_logo_link" placeholder="leer = Startseite der Kundenseite"
+									value="<?= e( (string) ( $brandingState['login_logo_link'] ?? '' ) ) ?>">
+							</div>
+						</div>
+
+						<button class="btn primary" <?= $canWrite ? '' : 'disabled' ?> data-busy="Übertrage…">Branding übernehmen</button>
+					</form>
+				</div>
+			</div>
+
+			<div class="card">
 				<div class="card-head"><h3>Verbindung erneuern</h3></div>
 				<div class="card-body">
 					<p class="small muted">
