@@ -17,11 +17,14 @@ use NorthLab\Repository\SiteRepository;
  */
 final class ChildPluginService {
 
+	/** Einmal je Anfrage gelesen — die Seitenliste fragt sonst je Zeile die Datei. */
+	private static ?string $shipped = null;
+
 	/**
 	 * Version, die das Panel ausliefert.
 	 */
 	public static function shipped(): string {
-		return ChildPackager::version();
+		return self::$shipped ??= ChildPackager::version();
 	}
 
 	/**
@@ -116,9 +119,12 @@ final class ChildPluginService {
 		$installed = (string) ( $result['version'] ?? ( $site['child_version'] ?? '' ) );
 		$available = isset( $result['available'] ) ? (string) $result['available'] : null;
 
-		if ( ! empty( $result['updated'] ) ) {
-			SiteRepository::update( $siteId, array( 'child_version' => $installed ) );
+		// Die Seite hat gerade gesagt, welche Version dort laeuft. Das gilt, ob
+		// dabei ein Update stattfand oder nicht — sonst behauptet das Panel
+		// weiter "veraltet", obwohl es die Wahrheit soeben erfahren hat.
+		self::remember( $siteId, $site, $installed );
 
+		if ( ! empty( $result['updated'] ) ) {
 			ActivityRepository::log(
 				'plugin.child_updated',
 				sprintf(
@@ -145,6 +151,40 @@ final class ChildPluginService {
 			'installed' => $installed,
 			'available' => $available,
 		);
+	}
+
+	/**
+	 * Gemeldete Version uebernehmen, wenn sie plausibel ist und sich geaendert hat.
+	 *
+	 * @param array<string,mixed> $site
+	 */
+	private static function remember( int $siteId, array $site, string $reported ): void {
+		$store = self::versionToStore( $reported, (string) ( $site['child_version'] ?? '' ) );
+
+		if ( null === $store ) {
+			return;
+		}
+
+		SiteRepository::update( $siteId, array( 'child_version' => $store ) );
+	}
+
+	/**
+	 * Was von einer gemeldeten Version zu übernehmen ist.
+	 *
+	 * @param string $reported Was die Kundenseite gesagt hat.
+	 * @param string $current  Was das Panel bisher gespeichert hat.
+	 * @return string|null Zu speichernder Wert, oder null wenn nichts zu tun ist.
+	 */
+	public static function versionToStore( string $reported, string $current ): ?string {
+		$reported = trim( $reported );
+
+		// Nur etwas übernehmen, das wie eine Versionsnummer aussieht — sonst
+		// landet eine Fehlermeldung in der Spalte und alle Vergleiche kippen.
+		if ( '' === $reported || ! preg_match( '/^\d+(\.\d+){0,3}(-[0-9A-Za-z.]+)?$/', $reported ) ) {
+			return null;
+		}
+
+		return $reported === trim( $current ) ? null : $reported;
 	}
 
 	/**
