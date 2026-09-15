@@ -163,13 +163,17 @@ darf, und die IP dieses Servers in die Allowlist eintragen.
 
 ## 7b. Sicherungen einrichten (optional)
 
-Die Sicherung braucht zwei Pakete auf dem Panel-Server:
+Ein Befehl auf dem Panel-Server erledigt alles, was Root-Rechte braucht — Pakete
+nachinstallieren und das Arbeitsverzeichnis mit den richtigen Rechten anlegen:
 
 ```bash
-sudo apt install restic openssh-client
+sudo sh /var/www/northlab/bin/setup-backup.sh
 ```
 
-Danach im Panel unter **Sicherungen**:
+Das Skript findet die Panel-Wurzel selbst, erkennt den Betriebsbenutzer am Besitzer von
+`storage/` und meldet am Ende, wie viel Platz frei ist.
+
+Danach im Panel unter **Sicherungen** — mehr als diese drei Angaben braucht es nicht:
 
 1. **Speicherart** wählen. Für eine **Hetzner Storage Box** genügt der Benutzername
    (`uXXXXXX`) und ein Unterordner — Wirt und Port 23 ergeben sich daraus. Für
@@ -178,22 +182,19 @@ Danach im Panel unter **Sicherungen**:
 2. **Repository-Passwort** setzen. Damit sind die Sicherungen verschlüsselt — geht es
    verloren, ist keine davon mehr lesbar. Gehört in den Passwortmanager, nicht nur auf
    diesen Server.
-3. Bei SFTP-Zielen: **Schlüsselpaar erzeugen**, dann den angezeigten `ssh-copy-id`-Befehl
-   auf dem Panel-Server ausführen (er fragt einmalig nach dem Passwort der Storage Box):
+3. Unter **Einrichten** das Passwort der Storage Box eintippen und auf *Jetzt einrichten*
+   klicken. Das Panel erzeugt den Schlüssel, holt den Wirtsschlüssel, legt seinen
+   Schlüssel auf dem Speicher ab und legt das Repository an. Jeder Schritt meldet für
+   sich, ob er geklappt hat. Das Passwort wird nur dafür benutzt und nirgends gespeichert.
+4. **Zeitplan** aktivieren und die Uhrzeit setzen.
 
-   ```bash
-   sudo -u www-data ssh-copy-id -s -p 23 \
-     -i /var/www/northlab/storage/restic/.ssh/id_ed25519.pub \
-     uXXXXXX@uXXXXXX.your-storagebox.de
-   ```
+Den Fingerabdruck des Wirtsschlüssels zeigt das Panel im Ergebnis an — bei Gelegenheit mit
+dem vergleichen, den Hetzner für die Storage Box nennt. Meldet der Speicher später einen
+anderen, bricht das Panel ab, statt ihn stillschweigend zu übernehmen.
 
-   Wichtig ist `sudo -u www-data`: unter diesem Benutzer laufen Webserver und Zeitplaner,
-   und nur dessen Schlüssel liegt im Arbeitsverzeichnis der Sicherung.
-4. **Wirtsschlüssel abrufen**, den Fingerabdruck mit dem vergleichen, den Hetzner für die
-   Storage Box anzeigt, und erst dann übernehmen.
-5. **Verbindung prüfen und Repository anlegen.** Die Bereitschaftsanzeige listet auf, was
-   noch fehlt.
-6. **Zeitplan** aktivieren und die Uhrzeit setzen.
+Wer es lieber von Hand macht: **Schlüsselpaar erzeugen**, den angezeigten
+`ssh-copy-id`-Befehl ausführen, **Wirtsschlüssel abrufen** und nach dem Vergleich
+übernehmen, dann **Verbindung prüfen und Repository anlegen**.
 
 Der erste Lauf überträgt alles und kann bei grossen Mediatheken Stunden dauern; danach geht
 nur noch das Delta über die Leitung. Das Panel braucht dafür lokalen Plattenplatz in der

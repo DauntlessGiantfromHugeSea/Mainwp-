@@ -20,6 +20,8 @@
  * @var string                         $panelAt
  * @var string                         $panelState
  * @var string                         $panelNote
+ * @var array<int,mixed>               $setupSteps
+ * @var string                         $setupAt
  */
 
 use NorthLab\Core\Auth;
@@ -175,6 +177,76 @@ $needsSsh = in_array( $targetType, array( 'storagebox', 'sftp' ), true );
 		</div>
 	<?php endif; ?>
 </div>
+
+<?php if ( $isAdmin && $needsSsh ) : ?>
+	<div class="card">
+		<div class="card-head">
+			<h2>Einrichten</h2>
+			<div class="spacer"></div>
+			<?php if ( 0 === $openChecks ) : ?>
+				<span class="badge ok"><span class="dot"></span>fertig</span>
+			<?php endif; ?>
+		</div>
+		<div class="card-body">
+			<p class="small muted">
+				Das Panel erledigt die Einrichtung selbst: Schlüssel erzeugen, Wirtsschlüssel holen,
+				den Schlüssel auf dem Speicher ablegen und das Repository anlegen. Dafür braucht es
+				<strong>einmal</strong> das Passwort deiner Storage Box — das ist das einzige, was es
+				nicht selbst wissen kann.
+			</p>
+
+			<form method="post" action="<?= e( url( '/backups' ) ) ?>">
+				<?= csrf_field() ?>
+				<input type="hidden" name="section" value="autosetup">
+
+				<div class="form-grid">
+					<div class="field">
+						<label for="boxpw">Passwort des Speichers</label>
+						<input type="password" id="boxpw" name="box_password" autocomplete="off"
+							placeholder="Passwort der Storage Box">
+						<div class="hint">
+							Wird einmal benutzt und nirgends gespeichert — weder in der Datenbank noch
+							auf der Platte. Danach meldet sich das Panel nur noch mit dem Schlüssel an.
+						</div>
+					</div>
+					<div class="field">
+						<label>&nbsp;</label>
+						<button class="btn primary" data-busy="Richte ein…">Jetzt einrichten</button>
+					</div>
+				</div>
+			</form>
+
+			<?php if ( $setupSteps ) : ?>
+				<h3 class="mt">Letzter Versuch<?= '' !== $setupAt ? ' — ' . e( nl_ago( $setupAt ) ) : '' ?></h3>
+				<table class="data">
+					<tbody>
+					<?php foreach ( $setupSteps as $step ) : ?>
+						<?php if ( ! is_array( $step ) ) { continue; } ?>
+						<tr>
+							<td class="shrink">
+								<?php if ( ! empty( $step['ok'] ) ) : ?>
+									<span class="badge ok"><span class="dot"></span></span>
+								<?php else : ?>
+									<span class="badge bad"><span class="dot"></span></span>
+								<?php endif; ?>
+							</td>
+							<td>
+								<strong class="small"><?= e( (string) ( $step['label'] ?? '' ) ) ?></strong>
+								<div class="muted small"><?= e( (string) ( $step['detail'] ?? '' ) ) ?></div>
+							</td>
+						</tr>
+					<?php endforeach; ?>
+					</tbody>
+				</table>
+				<p class="small muted mb0">
+					Der Fingerabdruck des Wirtsschlüssels steht oben. Vergleiche ihn bei Gelegenheit mit dem,
+					den Hetzner für die Storage Box anzeigt — ändert er sich später von allein, bricht das
+					Panel ab, statt stillschweigend weiterzumachen.
+				</p>
+			<?php endif; ?>
+		</div>
+	</div>
+<?php endif; ?>
 
 <?php if ( $isAdmin ) : ?>
 	<div class="grid side">
@@ -549,21 +621,29 @@ $needsSsh = in_array( $targetType, array( 'storagebox', 'sftp' ), true );
 			Eine Wiederherstellung direkt aus dem Panel gibt es bewusst noch nicht — dabei Dateien über eine
 			laufende Seite zu bügeln, ist zu riskant, um es hinter einen Knopf zu legen. Auf dem Panel-Server:
 		</p>
-		<pre class="code-block">export HOME='<?= e( \NorthLab\Service\Restic::workDir() ) ?>'
-export RESTIC_REPOSITORY='<?= e( $repository ?: 'sftp:…' ) ?>'
+<?php
+		$verbindung = null !== $sftp
+			? ' \\\n  -o "sftp.command=' . \NorthLab\Service\Restic::sftpCommand( $sftp ) . '"'
+			: '';
+		?>
+		<pre class="code-block">export RESTIC_REPOSITORY='<?= e( $repository ?: 'sftp:…' ) ?>'
 export RESTIC_PASSWORD='…'
 <?php if ( 's3' === $targetType ) : ?>
 export AWS_ACCESS_KEY_ID='…'
 export AWS_SECRET_ACCESS_KEY='…'
 <?php endif; ?>
 
-restic snapshots                       # welche Sicherungspunkte gibt es
-restic restore &lt;ID&gt; --target /tmp/wiederherstellung
-restic dump &lt;ID&gt; /_datenbank/datenbank.sql.gz &gt; db.sql.gz</pre>
+restic<?= e( $verbindung ) ?> snapshots
+restic<?= e( $verbindung ) ?> restore &lt;ID&gt; --target /tmp/wiederherstellung
+restic<?= e( $verbindung ) ?> dump &lt;ID&gt; /_datenbank/datenbank.sql.gz &gt; db.sql.gz</pre>
+<?php if ( null !== $sftp ) : ?>
 		<p class="small muted">
-			Das <code>HOME</code> ist wichtig: dort liegen der SSH-Schlüssel und die known_hosts, mit denen
-			sich das Panel am Speicher anmeldet. Ohne das fragt restic nach einem Passwort, das es nicht gibt.
+			Der <code>sftp.command</code> muss mit: ohne ihn nähme restic ein nacktes <code>ssh</code> —
+			ohne Port, ohne Schlüssel, ohne die hinterlegten known_hosts. Ein <code>HOME</code> zu setzen
+			hilft dabei nicht, denn ssh nimmt sein Heimatverzeichnis aus der Passwortdatenbank des
+			Systems, nicht aus der Umgebung.
 		</p>
+<?php endif; ?>
 		<p class="small muted mb0">
 			Danach Dateien per FTP zurückspielen und den Dump einspielen:
 			<code>gunzip &lt; db.sql.gz | mysql -u … -p datenbank</code>

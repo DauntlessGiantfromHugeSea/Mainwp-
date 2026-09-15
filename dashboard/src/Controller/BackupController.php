@@ -57,6 +57,8 @@ final class BackupController extends BaseController {
 				'publicKey'   => Restic::publicKey(),
 				'sftp'        => Restic::parseSftp( Restic::repository() ),
 				'pendingKeys' => Setting::getArray( 'restic_hostkey_pending', array() ),
+				'setupSteps'  => Setting::getArray( 'restic_setup_steps', array() ),
+				'setupAt'     => Setting::get( 'restic_setup_at', '' ),
 				'hostKnown'   => Restic::hostKnown(),
 				'panelOn'     => Setting::getBool( 'backup_panel', true ),
 				'panelAt'     => Setting::get( 'panel_backup_at', '' ),
@@ -137,6 +139,26 @@ final class BackupController extends BaseController {
 					)
 				);
 				$this->respond( $request, true, 'Zeitplan gespeichert.', '/backups' );
+
+			case 'autosetup':
+				$steps = Restic::autoSetup( (string) $request->post( 'box_password', '' ) );
+				$last  = end( $steps );
+
+				Setting::setMany(
+					array(
+						'restic_setup_steps' => $steps,
+						'restic_setup_at'    => nl_utc(),
+					)
+				);
+
+				$this->respond(
+					$request,
+					is_array( $last ) && ! empty( $last['ok'] ),
+					is_array( $last ) && ! empty( $last['ok'] )
+						? 'Eingerichtet. Ab jetzt läuft die Sicherung ohne weiteres Zutun.'
+						: 'Stehengeblieben bei: ' . ( is_array( $last ) ? $last['label'] . ' — ' . $last['detail'] : 'unbekannt' ),
+					'/backups'
+				);
 
 			case 'sshkey':
 				$result = Restic::generateKey();

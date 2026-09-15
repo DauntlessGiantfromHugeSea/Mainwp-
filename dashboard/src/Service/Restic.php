@@ -227,6 +227,28 @@ final class Restic {
 		return self::sshDir() . '/known_hosts';
 	}
 
+	public static function sshConfigPath(): string {
+		return self::sshDir() . '/config';
+	}
+
+	/**
+	 * Der Befehl, mit dem restic die sftp-Verbindung aufbaut.
+	 *
+	 * Ohne das nähme restic ein nacktes `ssh <wirt> -s sftp` — ohne Port, ohne
+	 * Schlüssel, ohne unsere known_hosts.
+	 *
+	 * @param array{user:string,host:string,port:int} $sftp
+	 */
+	public static function sftpCommand( array $sftp ): string {
+		// Einfache Anfuehrungszeichen: restic zerlegt den Wert wie eine Shell,
+		// und der Pfad kann Leerzeichen enthalten.
+		return sprintf(
+			"ssh -F '%s' %s -s sftp",
+			self::sshConfigPath(),
+			$sftp['host']
+		);
+	}
+
 	public static function hasKey(): bool {
 		return is_file( self::keyPath() ) && is_readable( self::keyPath() );
 	}
@@ -274,11 +296,13 @@ final class Restic {
 	}
 
 	/**
-	 * Schreibt die ssh-Konfiguration, die restic beim Verbinden liest.
+	 * Schreibt die ssh-Konfiguration für die Verbindung zum Speicher.
 	 *
-	 * restic ruft intern `ssh <wirt> -s sftp` auf. Port, Benutzer, Schlüssel
-	 * und known_hosts kommen deshalb am zuverlässigsten aus einer eigenen
-	 * ssh-Konfiguration — das ist auch der Weg, den restic selbst empfiehlt.
+	 * Wichtig: ssh nimmt sein Heimatverzeichnis aus der Passwortdatenbank, nicht
+	 * aus der Umgebungsvariable HOME. Eine Konfiguration, die nur dort liegt,
+	 * würde stillschweigend nie gelesen. Sie wird deshalb mit `ssh -F` ausdrücklich
+	 * übergeben — siehe sftpCommand().
+	 *
 	 * Geschrieben wird sie vor jedem Lauf, damit sie nie von den Einstellungen
 	 * abweicht.
 	 */
@@ -295,28 +319,30 @@ final class Restic {
 			return $error;
 		}
 
+		// "Host *" ist hier richtig: die Datei gilt nur fuer diese eine Verbindung,
+		// weil sie ssh gezielt mit -F untergeschoben wird.
 		$lines = array(
 			'# Von NorthLab erzeugt. Aenderungen werden ueberschrieben.',
-			'Host ' . $sftp['host'],
-			'    HostName ' . $sftp['host'],
+			'Host *',
 			'    User ' . $sftp['user'],
 			'    Port ' . $sftp['port'],
 			'    BatchMode yes',
 			// Der Wirt muss bekannt sein. Sonst koennte sich jemand
 			// dazwischensetzen und die Sicherung mitlesen.
 			'    StrictHostKeyChecking yes',
-			'    UserKnownHostsFile ' . self::knownHostsPath(),
+			// In Anfuehrungszeichen, sonst zerlegt ssh einen Pfad mit Leerzeichen.
+			'    UserKnownHostsFile "' . self::knownHostsPath() . '"',
 			'    ServerAliveInterval 30',
 		);
 
 		if ( self::hasKey() ) {
-			$lines[] = '    IdentityFile ' . self::keyPath();
+			$lines[] = '    IdentityFile "' . self::keyPath() . '"';
 			// Sonst probiert ssh zuerst alle Schluessel des Benutzers durch und
 			// die Storage Box trennt nach zu vielen Fehlversuchen.
 			$lines[] = '    IdentitiesOnly yes';
 		}
 
-		$path = self::sshDir() . '/config';
+		$path = self::sshConfigPath();
 
 		if ( false === file_put_contents( $path, implode( "\n", $lines ) . "\n", LOCK_EX ) ) {
 			return 'ssh-Konfiguration nicht schreibbar: ' . $path;
@@ -586,6 +612,312 @@ final class Restic {
 		return array( 'ok' => true, 'error' => '', 'public' => self::publicKey() );
 	}
 
+	/**
+	 * Legt den öffentlichen Schlüssel auf dem Speicher ab.
+	 *
+	 * Dafür braucht es einmal das Passwort des Speichers. OpenSSH fragt es
+	 * normalerweise am Terminal ab — hier gibt es keins, also bekommt ssh ein
+	 * Hilfsprogramm untergeschoben, das die Antwort liefert. Das Passwort steht
+	 * nur in der Umgebung dieses einen Prozesses: nicht in der Befehlszeile, wo
+	 * es jeder in der Prozessliste sähe, nicht auf der Platte, nicht in der
+	 * Datenbank.
+	 *
+	 * @return array{ok:bool,error:string,output:string}
+	 */
+	public static function installKey( string $password ): array {
+		$sftp = self::parseSftp( self::repository() );
+
+		if ( null === $sftp ) {
+			return array( 'ok' => false, 'error' => 'Das Ziel ist keine sftp-Adresse.', 'output' => '' );
+		}
+		if ( ! self::hasKey() ) {
+			return array( 'ok' => false, 'error' => 'Es gibt noch keinen Schlüssel.', 'output' => '' );
+		}
+		if ( ! self::hostKnown() ) {
+			return array( 'ok' => false, 'error' => 'Der Wirtsschlüssel ist noch nicht übernommen.', 'output' => '' );
+		}
+
+		$binary = trim( (string) shell_exec( 'command -v ssh-copy-id 2>/dev/null' ) );
+
+		if ( '' === $binary ) {
+			return array( 'ok' => false, 'error' => 'ssh-copy-id fehlt (Paket openssh-client).', 'output' => '' );
+		}
+
+		$helper = self::writeAskpass();
+
+		if ( null === $helper ) {
+			return array( 'ok' => false, 'error' => 'Das Hilfsprogramm für die Passwortabfrage liess sich nicht anlegen.', 'output' => '' );
+		}
+
+		$command = escapeshellcmd( $binary );
+
+		// -s schreibt über SFTP statt über eine Shell. Eine Storage Box gibt
+		// keine gewöhnliche Shell her, dort geht nur dieser Weg.
+		$args = array(
+			'-s',
+			'-p', (string) $sftp['port'],
+			'-i', self::keyPath() . '.pub',
+			'-o', 'BatchMode=no',
+			// ssh trennt den Wert an Leerzeichen — die Anfuehrungszeichen muessen
+			// bis zu ihm durchkommen.
+			'-o', 'UserKnownHostsFile="' . self::knownHostsPath() . '"',
+			'-o', 'StrictHostKeyChecking=yes',
+			'-o', 'NumberOfPasswordPrompts=1',
+			$sftp['user'] . '@' . $sftp['host'],
+		);
+
+		foreach ( $args as $arg ) {
+			$command .= ' ' . escapeshellarg( $arg );
+		}
+
+		// setsid trennt den Prozess von einem etwaigen Terminal — erst dann
+		// greift SSH_ASKPASS zuverlässig.
+		$prefix = '' !== trim( (string) shell_exec( 'command -v setsid 2>/dev/null' ) ) ? 'setsid -w ' : '';
+
+		$descriptors = array( 1 => array( 'pipe', 'w' ), 2 => array( 'pipe', 'w' ) );
+
+		$process = proc_open(
+			$prefix . 'timeout 90 ' . $command . ' 2>&1',
+			$descriptors,
+			$pipes,
+			null,
+			array(
+				'HOME'                => self::workDir(),
+				'PATH'                => '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
+				'SSH_ASKPASS'         => $helper,
+				'SSH_ASKPASS_REQUIRE' => 'force',
+				// Aelteres OpenSSH verlangt eine gesetzte Anzeige, sonst fragt es gar nicht.
+				'DISPLAY'             => ':0',
+				'NL_SSH_PASSWORD'     => $password,
+			)
+		);
+
+		if ( ! is_resource( $process ) ) {
+			return array( 'ok' => false, 'error' => 'ssh-copy-id konnte nicht gestartet werden.', 'output' => '' );
+		}
+
+		$output = (string) stream_get_contents( $pipes[1] );
+
+		fclose( $pipes[1] );
+		fclose( $pipes[2] );
+
+		$code = proc_close( $process );
+
+		// Das Hilfsprogramm wird nur fuer diesen einen Vorgang gebraucht.
+		@unlink( $helper );
+
+		if ( 0 !== $code ) {
+			return array(
+				'ok'     => false,
+				'error'  => self::explain( $output, $code ),
+				'output' => $output,
+			);
+		}
+
+		return array( 'ok' => true, 'error' => '', 'output' => $output );
+	}
+
+	/**
+	 * Schreibt das Hilfsprogramm, das ssh nach dem Passwort fragt.
+	 *
+	 * Die Datei selbst enthält kein Geheimnis — sie gibt nur weiter, was in der
+	 * Umgebung steht.
+	 */
+	private static function writeAskpass(): ?string {
+		if ( null !== self::prepareDirectories() ) {
+			return null;
+		}
+
+		$path = self::sshDir() . '/askpass.sh';
+
+		$script = array(
+			'#!/bin/sh',
+			'# Von NorthLab erzeugt. Gibt weiter, was in der Umgebung steht.',
+			'printf \'%s\\n\' "$NL_SSH_PASSWORD"',
+			'',
+		);
+
+		if ( false === file_put_contents( $path, implode( "\n", $script ), LOCK_EX ) ) {
+			return null;
+		}
+
+		// Nur der eigene Benutzer darf es lesen und ausfuehren.
+		@chmod( $path, 0700 );
+
+		return $path;
+	}
+
+	/**
+	 * Aus der Ausgabe von ssh etwas machen, mit dem man etwas anfangen kann.
+	 */
+	private static function explain( string $output, int $code ): string {
+		$lower = strtolower( $output );
+
+		if ( 124 === $code ) {
+			return 'Zeitablauf — der Speicher hat nicht geantwortet.';
+		}
+		if ( str_contains( $lower, 'permission denied' ) ) {
+			return 'Das Passwort wurde abgelehnt.';
+		}
+		if ( str_contains( $lower, 'host key verification failed' ) ) {
+			return 'Der Wirtsschlüssel passt nicht zum hinterlegten.';
+		}
+		if ( str_contains( $lower, 'could not resolve hostname' ) ) {
+			return 'Der Wirtsname lässt sich nicht auflösen — Benutzername richtig geschrieben?';
+		}
+		if ( str_contains( $lower, 'connection refused' ) || str_contains( $lower, 'connection timed out' ) ) {
+			return 'Keine Verbindung zum Speicher — Port oder Firewall prüfen.';
+		}
+
+		$lines = array_filter( array_map( 'trim', explode( "\n", $output ) ) );
+
+		return implode( ' | ', array_slice( $lines, -2 ) ) ?: ( 'Abbruch mit Code ' . $code . '.' );
+	}
+
+	/**
+	 * Weicht ein abgerufener Wirtsschlüssel von dem ab, der schon hinterlegt ist?
+	 *
+	 * Das ist der Fall, den man nicht wegklicken darf: entweder hat der Anbieter
+	 * den Schlüssel getauscht — oder es sitzt jemand dazwischen.
+	 *
+	 * @param array<int,array{type:string,line:string,fingerprint:string}> $scanned
+	 */
+	public static function hostKeyConflict( array $scanned ): bool {
+		if ( ! self::hostKnown() ) {
+			return false;
+		}
+
+		$sftp = self::parseSftp( self::repository() );
+
+		if ( null === $sftp ) {
+			return false;
+		}
+
+		$stored = array();
+
+		foreach ( explode( "\n", (string) file_get_contents( self::knownHostsPath() ) ) as $line ) {
+			$line = trim( $line );
+
+			if ( ! self::matchesHost( $line, $sftp['host'], $sftp['port'] ) ) {
+				continue;
+			}
+
+			$parts = preg_split( '/\s+/', $line );
+
+			if ( is_array( $parts ) && count( $parts ) >= 3 ) {
+				$stored[ $parts[1] ] = $parts[2];
+			}
+		}
+
+		foreach ( $scanned as $entry ) {
+			$type = (string) ( $entry['type'] ?? '' );
+			$parts = preg_split( '/\s+/', (string) ( $entry['line'] ?? '' ) );
+			$blob  = is_array( $parts ) && count( $parts ) >= 3 ? $parts[2] : '';
+
+			if ( isset( $stored[ $type ] ) && '' !== $blob && $stored[ $type ] !== $blob ) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	/**
+	 * Die ganze Einrichtung in einem Rutsch.
+	 *
+	 * Jeder Schritt meldet für sich, ob er geklappt hat — bleibt es stecken,
+	 * ist zu sehen, wo.
+	 *
+	 * @return array<int,array{label:string,ok:bool,detail:string}>
+	 */
+	public static function autoSetup( string $boxPassword ): array {
+		$steps = array();
+		$add   = static function ( string $label, bool $ok, string $detail ) use ( &$steps ): bool {
+			$steps[] = array( 'label' => $label, 'ok' => $ok, 'detail' => $detail );
+			return $ok;
+		};
+
+		$version = self::version();
+
+		if ( ! $add( 'restic gefunden', null !== $version, $version ?? 'Nicht installiert. Auf dem Panel-Server: apt install restic' ) ) {
+			return $steps;
+		}
+
+		$error = self::prepareDirectories();
+
+		if ( ! $add( 'Arbeitsverzeichnis angelegt', null === $error, $error ?? self::workDir() ) ) {
+			return $steps;
+		}
+
+		if ( '' === self::repository() ) {
+			$add( 'Ziel eingetragen', false, 'Bitte oben die Speicherart und den Benutzer speichern.' );
+			return $steps;
+		}
+
+		if ( '' === self::password() ) {
+			$add( 'Repository-Passwort gesetzt', false, 'Bitte oben ein Passwort für die Verschlüsselung setzen.' );
+			return $steps;
+		}
+
+		$sftp = self::parseSftp( self::repository() );
+
+		if ( null !== $sftp ) {
+			if ( ! self::hasKey() ) {
+				$key = self::generateKey();
+
+				if ( ! $add( 'Schlüsselpaar erzeugt', $key['ok'], $key['ok'] ? self::keyPath() : $key['error'] ) ) {
+					return $steps;
+				}
+			} else {
+				$add( 'Schlüsselpaar vorhanden', true, self::keyPath() );
+			}
+
+			$scan = self::scanHostKey();
+
+			if ( ! $add( 'Wirtsschlüssel abgerufen', $scan['ok'], $scan['ok'] ? $sftp['host'] : $scan['error'] ) ) {
+				return $steps;
+			}
+
+			if ( self::hostKeyConflict( $scan['keys'] ) ) {
+				$add(
+					'Wirtsschlüssel geprüft',
+					false,
+					'Der Speicher meldet einen anderen Schlüssel als den hinterlegten. Das wird hier nicht '
+					. 'einfach übernommen — bitte bei Hetzner nachsehen, ob der Schlüssel getauscht wurde.'
+				);
+				return $steps;
+			}
+
+			$lines       = array_column( $scan['keys'], 'line' );
+			$fingerprint = implode( ', ', array_column( $scan['keys'], 'fingerprint' ) );
+			$trust       = self::trustHostKeys( $lines );
+
+			if ( ! $add( 'Wirtsschlüssel übernommen', null === $trust, $trust ?? $fingerprint ) ) {
+				return $steps;
+			}
+
+			if ( '' !== $boxPassword ) {
+				$install = self::installKey( $boxPassword );
+
+				if ( ! $add( 'Schlüssel auf dem Speicher abgelegt', $install['ok'], $install['ok'] ? 'Erledigt.' : $install['error'] ) ) {
+					return $steps;
+				}
+			} else {
+				$add( 'Schlüssel auf dem Speicher', true, 'Übersprungen — kein Passwort angegeben.' );
+			}
+		}
+
+		$init = self::initRepository();
+
+		$add(
+			'Repository erreichbar',
+			$init['ok'],
+			$init['ok'] ? trim( $init['output'] ) : self::explain( $init['output'], 1 )
+		);
+
+		return $steps;
+	}
+
 	/* ------------------------------------------------------------ Befehle */
 
 	/**
@@ -719,6 +1051,15 @@ final class Restic {
 
 			if ( null !== $prepared ) {
 				return array( 'ok' => false, 'output' => $prepared, 'code' => 1 );
+			}
+		}
+
+		if ( $withRepository ) {
+			$sftp = self::parseSftp( self::repository() );
+
+			if ( null !== $sftp ) {
+				// Vor den Unterbefehl, so wie restic globale Schalter erwartet.
+				$args = array_merge( array( '-o', 'sftp.command=' . self::sftpCommand( $sftp ) ), $args );
 			}
 		}
 
