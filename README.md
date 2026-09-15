@@ -100,9 +100,15 @@ Ersteller des Plugins ist **NorthLab**.
 - Jederzeit manuell erzeugbar, im Browser ansehbar und als HTML herunterladbar
 
 **Sicherungen**
-- Nächtliche Sicherung aller Seiten auf einen entfernten Speicher (Hetzner Storage Box, S3, jedes restic-Ziel)
+- Nächtliche Sicherung aller Seiten auf einen entfernten Speicher
+- **Geführte Einrichtung** für vier Speicherarten: Hetzner Storage Box, Objektspeicher (Hetzner Object Storage oder ein anderer S3-Dienst), eigener SFTP-Server, Verzeichnis auf dem Panel-Server. Die Repository-Adresse baut das Panel aus den Einzelfeldern — bei der Storage Box genügt der Benutzername `uXXXXXX`, Wirt und Port 23 ergeben sich daraus
+- **SSH-Zugang aus dem Panel**: Schlüsselpaar erzeugen, öffentlichen Teil kopieren, fertiger `ssh-copy-id`-Befehl. Schlüssel, `known_hosts` und die ssh-Konfiguration liegen unter `storage/restic/` — also unter demselben Benutzer, unter dem auch der Webserver läuft, statt in einem `/root/.ssh`, das er nicht lesen kann
+- Der **Wirtsschlüssel** wird in zwei Schritten übernommen: erst abrufen und den Fingerabdruck anzeigen, dann nach dem Vergleich bestätigen. `StrictHostKeyChecking` bleibt an
+- **Bereitschaftsanzeige**: restic gefunden, Verzeichnis beschreibbar, Ziel und Passwort gesetzt, Schlüssel vorhanden, Wirt bekannt, Port erreichbar — was fehlt, steht mit dem nötigen Handgriff daneben, statt als restic-Fehlermeldung
+- Repository-Passwort und S3-Secret liegen **verschlüsselt** in der Datenbank
 - Läuft **ohne SSH-Zugang zu den Kundenseiten**: das Child-Plugin liefert Dateiliste und Datenbank über die signierte Verbindung, das Panel hält je Seite einen Spiegel und holt nur Geändertes — verglichen über Grösse und Änderungszeit
 - Datenbank-Export läuft auf der Kundenseite in Etappen, damit kein Aufruf ins Zeitlimit gerät
+- **Das Panel sichert sich selbst mit**: Datenbank und `config.php`. Darin stecken die privaten Schlüssel aller Verbindungen — ohne diese Sicherung wäre nach einem Serverausfall jede Seite von Hand neu zu verbinden. Der Export entsteht über PDO, nicht über `mysqldump`, das auf manchem Webhosting fehlt
 - restic übernimmt Deduplizierung, Verschlüsselung und Aufbewahrung (täglich/wöchentlich/monatlich einstellbar)
 - Wiederherstellung über die restic-Kommandozeile; bewusst kein Knopf im Panel
 
@@ -186,6 +192,7 @@ dashboard/
   resources/child-plugin/     Quelle des WordPress-Plugins, wird auf Abruf gezippt
   storage/                    Logs, Cache, erzeugte ZIPs — muss beschreibbar sein
     branding/                 Hinterlegtes Logo und die daraus erzeugten Symbole
+    restic/                   SSH-Schlüssel, known_hosts und Cache der Sicherung
   config.php                  Wird vom Installer erzeugt, nicht im Repository
 ```
 

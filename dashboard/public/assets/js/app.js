@@ -227,6 +227,39 @@
 	applySiteType();
 
 	/**
+	 * Auswahlgruppen: [data-choice="name"] schaltet die Bloecke
+	 * [data-choice-when="name:wert"]. Getrennt vom Seitentyp oben, damit beide
+	 * Formulare unabhaengig voneinander bleiben.
+	 */
+	function applyChoice(name) {
+		var checked = document.querySelector('[data-choice="' + name + '"]:checked');
+		if (!checked) {
+			return;
+		}
+
+		document.querySelectorAll('[data-choice-when^="' + name + ':"]').forEach(function (element) {
+			element.hidden = element.getAttribute('data-choice-when') !== name + ':' + checked.value;
+		});
+
+		document.querySelectorAll('[data-choice="' + name + '"]').forEach(function (radio) {
+			var option = radio.closest('.type-option');
+			if (option) {
+				option.classList.toggle('selected', radio.checked);
+			}
+		});
+	}
+
+	document.addEventListener('change', function (event) {
+		if (event.target.matches('[data-choice]')) {
+			applyChoice(event.target.getAttribute('data-choice'));
+		}
+	});
+
+	document.querySelectorAll('[data-choice]').forEach(function (radio) {
+		applyChoice(radio.getAttribute('data-choice'));
+	});
+
+	/**
 	 * Service Worker anmelden — nur über HTTPS oder auf localhost, sonst lehnt
 	 * der Browser ab und wirft eine Ausnahme in die Konsole.
 	 */

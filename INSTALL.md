@@ -8,9 +8,11 @@
 | PHP-Erweiterungen | `pdo_mysql`, `openssl`, `curl`, `mbstring`, `json` | zusätzlich `sodium`, `zip` |
 | Datenbank | MySQL 5.7 / MariaDB 10.3 | MariaDB 11 |
 | Sonstiges | Cron-Zugang, eigene (Sub-)Domain mit TLS | |
+| Für Sicherungen | — | `restic`, `openssh-client` |
 
 `sodium` verbessert die Verschlüsselung der privaten Schlüssel, `zip` beschleunigt den
 Plugin-Download. Beides ist optional — es gibt für jeden Fall einen Ersatzweg.
+`restic` und `openssh-client` braucht nur, wer die Sicherung nutzen will (Schritt 7b).
 
 Composer wird nicht benötigt.
 
@@ -158,6 +160,44 @@ Teil an das Plugin und zieht sofort den ersten Statusbericht.
 
 Optional auf der Kundenseite unter *Einstellungen → NorthLab* einschränken, was das Panel
 darf, und die IP dieses Servers in die Allowlist eintragen.
+
+## 7b. Sicherungen einrichten (optional)
+
+Die Sicherung braucht zwei Pakete auf dem Panel-Server:
+
+```bash
+sudo apt install restic openssh-client
+```
+
+Danach im Panel unter **Sicherungen**:
+
+1. **Speicherart** wählen. Für eine **Hetzner Storage Box** genügt der Benutzername
+   (`uXXXXXX`) und ein Unterordner — Wirt und Port 23 ergeben sich daraus. Für
+   **Hetzner Object Storage** Endpunkt (`fsn1`, `nbg1` oder `hel1`), Bucket und die
+   S3-Zugangsdaten.
+2. **Repository-Passwort** setzen. Damit sind die Sicherungen verschlüsselt — geht es
+   verloren, ist keine davon mehr lesbar. Gehört in den Passwortmanager, nicht nur auf
+   diesen Server.
+3. Bei SFTP-Zielen: **Schlüsselpaar erzeugen**, dann den angezeigten `ssh-copy-id`-Befehl
+   auf dem Panel-Server ausführen (er fragt einmalig nach dem Passwort der Storage Box):
+
+   ```bash
+   sudo -u www-data ssh-copy-id -s -p 23 \
+     -i /var/www/northlab/storage/restic/.ssh/id_ed25519.pub \
+     uXXXXXX@uXXXXXX.your-storagebox.de
+   ```
+
+   Wichtig ist `sudo -u www-data`: unter diesem Benutzer laufen Webserver und Zeitplaner,
+   und nur dessen Schlüssel liegt im Arbeitsverzeichnis der Sicherung.
+4. **Wirtsschlüssel abrufen**, den Fingerabdruck mit dem vergleichen, den Hetzner für die
+   Storage Box anzeigt, und erst dann übernehmen.
+5. **Verbindung prüfen und Repository anlegen.** Die Bereitschaftsanzeige listet auf, was
+   noch fehlt.
+6. **Zeitplan** aktivieren und die Uhrzeit setzen.
+
+Der erste Lauf überträgt alles und kann bei grossen Mediatheken Stunden dauern; danach geht
+nur noch das Delta über die Leitung. Das Panel braucht dafür lokalen Plattenplatz in der
+Grössenordnung der Summe aller Kundenseiten — es hält je Seite einen Spiegel.
 
 ## 8. Einrichtung abschließen
 

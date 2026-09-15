@@ -6,6 +6,8 @@ dashboard/storage/logs/*
 dashboard/storage/cache/*
 dashboard/storage/tmp/*
 dashboard/storage/branding/*
+dashboard/storage/restic/*
+dashboard/storage/backups/*
 !dashboard/storage/*/.gitkeep
 !dashboard/storage/*/.htaccess
 

@@ -425,6 +425,18 @@ final class BackupService {
 			}
 		}
 
+		// Das Panel zuletzt: dann steht in seiner Datenbank schon, wie der Lauf
+		// fuer die Seiten ausgegangen ist.
+		if ( Setting::getBool( 'backup_panel', true ) ) {
+			$panel = self::runPanel();
+
+			if ( $panel['ok'] ) {
+				$ok++;
+			} else {
+				$failed++;
+			}
+		}
+
 		if ( $ok + $failed > 0 ) {
 			ActivityRepository::log(
 				'backup.batch',
@@ -436,16 +448,87 @@ final class BackupService {
 		return array( 'ok' => $ok, 'failed' => $failed );
 	}
 
-	/* ----------------------------------------------------------- Werkzeuge */
-
-	public static function mirrorPath( int $siteId ): string {
-		$base = trim( Setting::get( 'backup_mirror_dir', '' ) );
-
-		if ( '' === $base ) {
-			$base = NL_STORAGE . '/backups';
+	/**
+	 * Sichert das Panel selbst: Datenbank und Konfiguration.
+	 *
+	 * In der Datenbank stehen die privaten Schlüssel aller Verbindungen, in der
+	 * config.php der Schlüssel, mit dem sie verschlüsselt sind. Beides zusammen
+	 * ist die Voraussetzung dafür, das Panel nach einem Ausfall wieder
+	 * hinzustellen, ohne jede Seite neu zu verbinden.
+	 *
+	 * @return array{ok:bool,error:string,bytes:int}
+	 */
+	public static function runPanel(): array {
+		if ( ! Restic::configured() ) {
+			return array( 'ok' => false, 'error' => 'Es ist kein Sicherungsziel eingerichtet.', 'bytes' => 0 );
 		}
 
-		return rtrim( $base, '/' ) . '/site-' . $siteId;
+		$mirror = self::mirrorBase() . '/_panel';
+
+		try {
+			if ( ! is_dir( $mirror ) && ! mkdir( $mirror, 0750, true ) && ! is_dir( $mirror ) ) {
+				throw new \RuntimeException( 'Spiegelverzeichnis nicht anlegbar: ' . $mirror );
+			}
+
+			$bytes = PanelBackup::dump( $mirror . '/datenbank.sql.gz' );
+
+			// Ohne die config.php liesse sich die Datenbank zwar einspielen, aber
+			// nichts darin entschluesseln.
+			$config = NL_ROOT . '/config.php';
+
+			if ( is_file( $config ) ) {
+				copy( $config, $mirror . '/config.php' );
+			}
+
+			$backup = Restic::backup( $mirror, 'panel', array( 'northlab', 'panel' ) );
+
+			if ( ! $backup['ok'] ) {
+				throw new \RuntimeException( 'restic: ' . self::lastLines( $backup['output'] ) );
+			}
+
+			Restic::forget( 'panel' );
+
+			Setting::setMany(
+				array(
+					'panel_backup_at'      => nl_utc(),
+					'panel_backup_status'  => 'success',
+					'panel_backup_message' => sprintf( 'Datenbank %s gesichert.', size_format_de( $bytes ) ),
+				)
+			);
+
+			return array( 'ok' => true, 'error' => '', 'bytes' => $bytes );
+
+		} catch ( Throwable $e ) {
+			Logger::exception( $e );
+
+			Setting::setMany(
+				array(
+					'panel_backup_at'      => nl_utc(),
+					'panel_backup_status'  => 'failed',
+					'panel_backup_message' => substr( $e->getMessage(), 0, 500 ),
+				)
+			);
+
+			EventBus::dispatch(
+				'backup.failed',
+				array( 'error' => $e->getMessage() ),
+				array( 'message' => 'Sicherung des Panels fehlgeschlagen: ' . $e->getMessage() )
+			);
+
+			return array( 'ok' => false, 'error' => $e->getMessage(), 'bytes' => 0 );
+		}
+	}
+
+	/* ----------------------------------------------------------- Werkzeuge */
+
+	public static function mirrorBase(): string {
+		$base = trim( Setting::get( 'backup_mirror_dir', '' ) );
+
+		return rtrim( '' === $base ? NL_STORAGE . '/backups' : $base, '/' );
+	}
+
+	public static function mirrorPath( int $siteId ): string {
+		return self::mirrorBase() . '/site-' . $siteId;
 	}
 
 	/**
