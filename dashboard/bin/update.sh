@@ -96,7 +96,10 @@ if PANEL_URL="$(sudo -u "$NL_USER" php -r '
 	$c = require "'"$NL_TARGET"'/config.php";
 	echo rtrim($c["app"]["url"] ?? "", "/");
 ')" && [ -n "$PANEL_URL" ]; then
-	CODE="$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 "$PANEL_URL/login" || echo 000)"
+	# curl schreibt bei einem Verbindungsfehler selbst 000 und liefert einen
+	# Fehlercode. Ohne das || true stuende danach 000000 da.
+	CODE="$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 "$PANEL_URL/login" || true)"
+	CODE="${CODE:-000}"
 	if [ "$CODE" = "200" ]; then
 		gruen "  $PANEL_URL/login → HTTP 200"
 	else
