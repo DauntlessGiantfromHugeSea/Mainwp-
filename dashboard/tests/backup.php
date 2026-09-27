@@ -370,6 +370,62 @@ $netz = array();
 foreach ( Restic::diagnose( true ) as $entry ) { $netz[ $entry['label'] ] = $entry['state']; }
 check( 'Auf Wunsch wird auch der Port geprueft', array_key_exists( 'Port 23 erreichbar', $netz ) );
 
+/* ------------------- Ein falscher Pfad zum Programm ist kein fehlendes Paket */
+
+// Genau das ist passiert: die Adresse des Speichers landete im Feld
+// "Pfad zu restic". Danach meldete das Panel "restic fehlt" und riet zur
+// Installation — obwohl restic laengst installiert war.
+Setting::$values = array( 'restic_binary' => 'sftp://u669261@u669261.your-storagebox.de:23/northlab' );
+
+$grund = Restic::binaryProblem();
+
+check( 'Ein unbrauchbarer Pfad wird als solcher erkannt', null !== $grund );
+check( 'Die Meldung nennt das Feld', str_contains( (string) $grund, 'Pfad zu restic' ) );
+check( 'Und raet nicht zur Installation', ! str_contains( (string) $grund, 'apt install' ) );
+check( 'Sie sagt, was dort hingehoert', str_contains( (string) $grund, 'Adresse des Speichers' ) );
+check( 'restic gilt damit als nicht verfuegbar', '' === Restic::binary() );
+
+// Ein Lauf meldet denselben Grund statt "nicht installiert".
+$versuch = Restic::run( array( 'snapshots' ) );
+check( 'Auch der Lauf nennt den richtigen Grund',
+	str_contains( $versuch['output'], 'Pfad zu restic' ), $versuch['output'] );
+
+// Leeres Feld: dann sucht das Panel selbst und findet die Attrappe nicht mehr,
+// aber die Meldung ist die richtige.
+Setting::$values = array( 'restic_binary' => '' );
+$leer = Restic::binaryProblem();
+check( 'Ohne Eintrag geht es um das Paket, nicht um das Feld',
+	null === $leer || str_contains( (string) $leer, 'nicht installiert' ) );
+
+// Ein gueltiger Pfad ist kein Problem.
+Setting::$values = array( 'restic_binary' => $fakeBin );
+check( 'Ein brauchbarer Pfad meldet nichts', null === Restic::binaryProblem() );
+
+/* ------------------------ Aus restics Ausgabe eine Anweisung machen */
+
+// Genau die Meldung, die auf der Storage Box ankam, als der Schluessel dort
+// noch fehlte.
+$abgelehnt = 'subprocess ssh: u669261@u669261.your-storagebox.de: Permission denied (publickey,password).'
+	. "\n" . '{"message_type":"exit_error","code":1,"message":"Fatal: unable to open repository"}';
+
+$hinweis = Restic::hinweis( $abgelehnt );
+
+check( 'Eine abgelehnte Anmeldung wird erkannt', null !== $hinweis );
+check( 'Der Hinweis nennt den fehlenden Schluessel',
+	str_contains( (string) $hinweis, 'Schlüssel des Panels' ) );
+check( 'Und sagt, wo man ihn ablegt', str_contains( (string) $hinweis, 'Einrichten' ) );
+
+check( 'Ein falscher Wirtsschluessel wird erkannt',
+	str_contains( (string) Restic::hinweis( 'Host key verification failed.' ), 'Fingerabdruck' ) );
+check( 'Ein falsches Repository-Passwort wird erkannt',
+	str_contains( (string) Restic::hinweis( 'Fatal: wrong password or no key found' ), 'Repository-Passwort' ) );
+check( 'Ein unbekannter Wirt wird erkannt',
+	str_contains( (string) Restic::hinweis( 'ssh: Could not resolve hostname x' ), 'Benutzername' ) );
+check( 'Eine tote Leitung nennt die Hetzner-Schalter',
+	str_contains( (string) Restic::hinweis( 'connect: Connection timed out' ), 'Externe Erreichbarkeit' ) );
+check( 'Zu einer unbekannten Meldung gibt es keinen erfundenen Hinweis',
+	null === Restic::hinweis( 'irgendetwas ganz anderes' ) );
+
 /* -------------------------------------------- Wer gehoert in den Zeitplan */
 
 use NorthLab\Service\BackupService;

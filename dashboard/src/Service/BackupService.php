@@ -102,7 +102,7 @@ final class BackupService {
 			);
 
 			if ( ! $backup['ok'] ) {
-				throw new \RuntimeException( 'restic: ' . self::lastLines( $backup['output'] ) );
+				throw new \RuntimeException( self::resticFehler( $backup['output'] ) );
 			}
 
 			Restic::forget( self::hostFor( $site ) );
@@ -506,7 +506,7 @@ final class BackupService {
 			$backup = Restic::backup( $mirror, 'panel', array( 'northlab', 'panel' ) );
 
 			if ( ! $backup['ok'] ) {
-				throw new \RuntimeException( 'restic: ' . self::lastLines( $backup['output'] ) );
+				throw new \RuntimeException( self::resticFehler( $backup['output'] ) );
 			}
 
 			Restic::forget( 'panel' );
@@ -596,6 +596,16 @@ final class BackupService {
 		}
 
 		return true;
+	}
+
+	/**
+	 * Aus einem restic-Fehlschlag eine Meldung machen, mit der man etwas
+	 * anfangen kann. Die rohe Ausgabe bleibt dahinter stehen.
+	 */
+	private static function resticFehler( string $output ): string {
+		$hinweis = Restic::hinweis( $output );
+
+		return ( null === $hinweis ? '' : $hinweis . ' — ' ) . 'restic: ' . self::lastLines( $output );
 	}
 
 	private static function lastLines( string $text, int $lines = 4 ): string {

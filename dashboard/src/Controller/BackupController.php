@@ -52,6 +52,7 @@ final class BackupController extends BaseController {
 				'configured'  => Restic::configured(),
 				'available'   => $available,
 				'resticInfo'  => $available ? Restic::version() : null,
+				'resticProblem' => Restic::binaryProblem(),
 				'repository'  => Restic::repository(),
 				'targetType'  => Restic::type(),
 				'checks'      => Restic::diagnose(),
@@ -298,6 +299,21 @@ final class BackupController extends BaseController {
 
 		if ( '' === $repository ) {
 			$this->respond( $request, false, 'Die Angaben reichen nicht für eine Zieladresse.', '/backups' );
+		}
+
+		// Ein unbrauchbarer Pfad zum Programm legt die ganze Sicherung lahm und
+		// sieht danach aus, als fehlte restic. Lieber gleich hier abweisen.
+		$programm = $request->string( 'restic_binary' );
+
+		if ( '' !== $programm && ! is_executable( $programm ) ) {
+			$this->respond(
+				$request,
+				false,
+				'"Pfad zu restic" zeigt nicht auf ein ausführbares Programm. Dort gehört der Pfad zum '
+				. 'restic-Programm hin (etwa /usr/bin/restic), nicht die Adresse des Speichers. '
+				. 'Am besten leer lassen — dann sucht das Panel selbst.',
+				'/backups'
+			);
 		}
 
 		$values = array(

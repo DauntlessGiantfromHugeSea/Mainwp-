@@ -96,6 +96,7 @@ function render( array $data ): string {
 		'configured'  => false,
 		'available'   => true,
 		'resticInfo'  => 'restic 0.17.3',
+		'resticProblem' => null,
 		'repository'  => Restic::repository(),
 		'targetType'  => Restic::type(),
 		'checks'      => Restic::diagnose(),
@@ -308,12 +309,32 @@ check( 'Ergebnis: der gescheiterte Schritt nennt den Grund',
 check( 'Ergebnis: und ist als Fehler gekennzeichnet',
 	substr_count( $html, 'badge bad' ) >= 1 );
 
-/* ------------------------------------------------------ restic fehlt */
+/* --------------------------------------------- restic nicht einsatzbereit */
 
-$html = render( array( 'available' => false, 'resticInfo' => null ) );
+Setting::$values = array();
+$html = render( array( 'available' => false, 'resticInfo' => null, 'resticProblem' => null ) );
 
-check( 'Fehlt restic, steht es ganz oben', str_contains( $html, 'restic fehlt' ) );
+check( 'Fehlt restic, steht es ganz oben', str_contains( $html, 'nicht einsatzbereit' ) );
 check( 'Mit dem Installationsbefehl', str_contains( $html, 'apt install restic' ) );
+
+// Steht dort eine Adresse statt eines Programms, ist die Empfehlung "apt
+// install" falsch — restic ist ja da.
+Setting::$values = array( 'restic_binary' => 'sftp://u669261@u669261.your-storagebox.de:23/northlab' );
+$html = render( array(
+	'available'     => false,
+	'resticInfo'    => null,
+	'resticProblem' => Restic::binaryProblem(),
+) );
+
+check( 'Ein falscher Pfad wird als solcher benannt', str_contains( $html, 'Pfad zu restic' ) );
+check( 'Und nicht zur Installation geraten', ! str_contains( $html, 'apt install restic' ) );
+check( 'Der falsche Wert wird gezeigt', str_contains( $html, 'u669261.your-storagebox.de' ) );
+
+// Das Feld selbst liegt jetzt hinter "Erweitert" und heisst deutlicher.
+check( 'Das Programmfeld steckt unter "Erweitert"', str_contains( $html, '<summary class="small muted">Erweitert' ) );
+check( 'Es ist aufgeklappt, wenn etwas drinsteht', str_contains( $html, '<details open>' ) );
+check( 'Und warnt davor, die Speicheradresse einzutragen',
+	str_contains( $html, 'Nicht</strong> die Adresse des' ) );
 
 printf( "%d Prüfungen, %d Fehler\n", $n, $fails );
 exit( $fails ? 1 : 0 );

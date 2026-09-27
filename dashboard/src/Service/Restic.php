@@ -42,11 +42,53 @@ final class Restic {
 		return '' !== self::binary() && null !== self::version();
 	}
 
+	/**
+	 * Warum ist restic nicht benutzbar?
+	 *
+	 * Ein eingetragener, aber unbrauchbarer Pfad ist etwas anderes als ein
+	 * fehlendes Paket — und fuehrt sonst zu der falschen Empfehlung, restic zu
+	 * installieren, obwohl es laengst da ist.
+	 *
+	 * @return string|null Grund oder null, wenn alles in Ordnung ist.
+	 */
+	public static function binaryProblem(): ?string {
+		$configured = trim( Setting::get( 'restic_binary', '' ) );
+
+		if ( '' !== $configured && ! self::istProgramm( $configured ) ) {
+			return sprintf(
+				'Unter "Pfad zu restic" steht %s — das ist kein ausführbares Programm. '
+				. 'In dieses Feld gehört der Pfad zum restic-Programm, nicht die Adresse des Speichers. '
+				. 'Leer lassen, dann sucht das Panel selbst.',
+				'"' . $configured . '"'
+			);
+		}
+
+		if ( '' === self::binary() ) {
+			return 'restic ist auf diesem Server nicht installiert. Auf dem Panel-Server: apt install restic';
+		}
+
+		return null;
+	}
+
+	/**
+	 * Ist das ein ausführbares Programm auf dieser Maschine?
+	 *
+	 * Enthält der Wert "://", ist es eine Adresse — is_executable() wuerde
+	 * darauf einen Stream-Wrapper suchen und eine Warnung werfen.
+	 */
+	public static function istProgramm( string $pfad ): bool {
+		if ( '' === $pfad || str_contains( $pfad, '://' ) ) {
+			return false;
+		}
+
+		return is_executable( $pfad );
+	}
+
 	public static function binary(): string {
 		$configured = trim( Setting::get( 'restic_binary', '' ) );
 
 		if ( '' !== $configured ) {
-			return is_executable( $configured ) ? $configured : '';
+			return self::istProgramm( $configured ) ? $configured : '';
 		}
 
 		foreach ( array( '/usr/local/bin/restic', '/usr/bin/restic', '/opt/restic/restic' ) as $candidate ) {
@@ -748,6 +790,42 @@ final class Restic {
 	}
 
 	/**
+	 * Aus der Ausgabe eines fehlgeschlagenen Laufs einen Hinweis machen.
+	 *
+	 * "Permission denied (publickey)" heisst fast immer: der Schlüssel des
+	 * Panels liegt noch nicht auf dem Speicher. Das steht in der rohen Meldung
+	 * nirgends.
+	 *
+	 * @return string|null Hinweis oder null, wenn keiner passt.
+	 */
+	public static function hinweis( string $output ): ?string {
+		$lower = strtolower( $output );
+
+		if ( str_contains( $lower, 'permission denied' ) ) {
+			return 'Der Speicher hat die Anmeldung abgelehnt. Der Schlüssel des Panels liegt dort '
+				. 'offenbar noch nicht — unter Sicherungen → Einrichten einmal das Passwort des '
+				. 'Speichers eintippen, dann legt das Panel ihn selbst ab.';
+		}
+		if ( str_contains( $lower, 'host key verification failed' ) ) {
+			return 'Der Wirtsschlüssel passt nicht zum hinterlegten. Unter Sicherungen → Einrichten '
+				. 'erneut abrufen und den Fingerabdruck vergleichen.';
+		}
+		if ( str_contains( $lower, 'wrong password or no key found' ) ) {
+			return 'Das Repository-Passwort passt nicht zu diesem Repository. Liegt dort schon eine '
+				. 'Sicherung mit einem anderen Passwort?';
+		}
+		if ( str_contains( $lower, 'could not resolve hostname' ) ) {
+			return 'Der Wirtsname lässt sich nicht auflösen — Benutzername der Storage Box richtig geschrieben?';
+		}
+		if ( str_contains( $lower, 'connection refused' ) || str_contains( $lower, 'connection timed out' ) ) {
+			return 'Keine Verbindung zum Speicher. Bei einer Storage Box müssen im Hetzner-Konto '
+				. '"SSH-Support" und "Externe Erreichbarkeit" eingeschaltet sein.';
+		}
+
+		return null;
+	}
+
+	/**
 	 * Die erste brauchbare Zeile einer Ausgabe.
 	 *
 	 * restic haengt an "created restic repository ..." noch einen Absatz ueber
@@ -860,7 +938,7 @@ final class Restic {
 
 		$version = self::version();
 
-		if ( ! $add( 'restic gefunden', null !== $version, $version ?? 'Nicht installiert. Auf dem Panel-Server: apt install restic' ) ) {
+		if ( ! $add( 'restic gefunden', null !== $version, $version ?? ( self::binaryProblem() ?? 'Nicht gefunden.' ) ) ) {
 			return $steps;
 		}
 
@@ -1064,7 +1142,11 @@ final class Restic {
 		$binary = self::binary();
 
 		if ( '' === $binary ) {
-			return array( 'ok' => false, 'output' => 'restic ist auf diesem Server nicht installiert.', 'code' => 127 );
+			return array(
+				'ok'     => false,
+				'output' => self::binaryProblem() ?? 'restic ist auf diesem Server nicht installiert.',
+				'code'   => 127,
+			);
 		}
 
 		if ( $withRepository ) {
@@ -1179,7 +1261,7 @@ final class Restic {
 		$add(
 			'restic installiert',
 			null !== $version ? 'ok' : 'bad',
-			$version ?? 'Nicht gefunden. Auf dem Panel-Server: apt install restic'
+			$version ?? ( self::binaryProblem() ?? 'Nicht gefunden.' )
 		);
 
 		$writable = self::workDirWritable();

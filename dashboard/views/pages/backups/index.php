@@ -6,6 +6,7 @@
  * @var bool                           $configured
  * @var bool                           $available
  * @var string|null                    $resticInfo
+ * @var string|null                    $resticProblem
  * @var string                         $repository
  * @var int                            $hour
  * @var int                            $diskFree
@@ -50,9 +51,8 @@ $needsSsh = in_array( $targetType, array( 'storagebox', 'sftp' ), true );
 
 <?php if ( ! $available ) : ?>
 	<div class="notice bad">
-		<strong>restic fehlt.</strong> Ohne dieses Werkzeug gibt es keine Sicherung.
-		Installation auf dem Panel-Server: <code>apt install restic</code> —
-		danach diese Seite neu laden.
+		<strong>restic ist nicht einsatzbereit.</strong>
+		<?= e( $resticProblem ?? 'restic ist auf diesem Server nicht installiert. Auf dem Panel-Server: apt install restic' ) ?>
 	</div>
 <?php elseif ( ! $configured ) : ?>
 	<div class="notice warn">
@@ -409,11 +409,19 @@ $needsSsh = in_array( $targetType, array( 'storagebox', 'sftp' ), true );
 							</div>
 						</div>
 
-						<div class="field">
-							<label for="bin">Pfad zu restic</label>
-							<input type="text" id="bin" name="restic_binary" class="mono"
-								value="<?= e( $get( 'restic_binary' ) ) ?>" placeholder="leer = automatisch suchen">
-						</div>
+						<details<?= '' !== $get( 'restic_binary' ) ? ' open' : '' ?>>
+							<summary class="small muted">Erweitert</summary>
+							<div class="field mt">
+								<label for="bin">Pfad zum <em>restic-Programm</em></label>
+								<input type="text" id="bin" name="restic_binary" class="mono"
+									value="<?= e( $get( 'restic_binary' ) ) ?>" placeholder="leer lassen — das Panel sucht selbst">
+								<div class="hint">
+									Nur ausfüllen, wenn restic an einer ungewöhnlichen Stelle liegt, etwa
+									<code>/usr/local/bin/restic</code>. <strong>Nicht</strong> die Adresse des
+									Speichers — die entsteht oben von selbst.
+								</div>
+							</div>
+						</details>
 
 						<button class="btn primary">Ziel speichern</button>
 					</form>
