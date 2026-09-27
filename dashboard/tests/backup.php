@@ -396,6 +396,31 @@ check( 'Und raet nicht zur Installation', ! str_contains( (string) $grund, 'apt 
 check( 'Sie sagt, was dort hingehoert', str_contains( (string) $grund, 'Adresse des Speichers' ) );
 check( 'restic gilt damit als nicht verfuegbar', '' === Restic::binary() );
 
+// Und es darf dabei keine PHP-Warnung geben. Eine einzige hat gereicht, um
+// die Seite unbrauchbar zu machen: PHP schrieb sie in die Antwort, und der
+// Webserver bekam einen kaputten Kopf.
+$warnungen = array();
+
+set_error_handler( static function ( int $nr, string $text ) use ( &$warnungen ): bool {
+	$warnungen[] = $text;
+	return true;
+} );
+
+Restic::binary();
+Restic::binaryProblem();
+Restic::available();
+Restic::istProgramm( 'sftp://u1@wirt:23/pfad' );
+Restic::istProgramm( 's3:https://x/y' );
+Restic::diagnose();
+
+restore_error_handler();
+
+check( 'Keine PHP-Warnung bei einer Adresse im Programmfeld',
+	array() === $warnungen, implode( ' | ', $warnungen ) );
+check( 'Eine Adresse ist kein Programm', ! Restic::istProgramm( 'sftp://u1@wirt:23/pfad' ) );
+check( 'Ein leerer Pfad auch nicht', ! Restic::istProgramm( '' ) );
+check( 'Ein echtes Programm schon', Restic::istProgramm( $fakeBin ) );
+
 // Ein Lauf meldet denselben Grund statt "nicht installiert".
 $versuch = Restic::run( array( 'snapshots' ) );
 check( 'Auch der Lauf nennt den richtigen Grund',

@@ -309,7 +309,10 @@ final class BackupController extends BaseController {
 		// sieht danach aus, als fehlte restic. Lieber gleich hier abweisen.
 		$programm = $request->string( 'restic_binary' );
 
-		if ( '' !== $programm && ! is_executable( $programm ) ) {
+		// Nicht is_executable(): auf einer Adresse mit :// sucht das einen
+		// Stream-Wrapper und wirft eine Warnung — genau die, die die Seite
+		// unbrauchbar gemacht hat.
+		if ( '' !== $programm && ! Restic::istProgramm( $programm ) ) {
 			$this->respond(
 				$request,
 				false,
