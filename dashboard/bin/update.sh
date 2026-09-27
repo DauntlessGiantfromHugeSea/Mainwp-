@@ -68,12 +68,19 @@ echo "→ Dateien abgleichen"
 # Das Zielverzeichnis ist im Normalbetrieb schreibgeschützt.
 chmod 750 "$NL_TARGET"
 
+# storage/ bleibt vom --delete vollstaendig ausgenommen. Dort liegen
+# Laufzeitdaten, die es im Quellbaum nicht gibt: der SSH-Schluessel der
+# Sicherung, die known_hosts, die Spiegel der Kundenseiten und das
+# hochgeladene Logo. Eine Ausnahmeliste einzelner Unterordner ist die falsche
+# Form — sie vergisst jeden Ordner, der spaeter dazukommt.
 rsync -a --delete \
 	--exclude 'config.php' \
-	--exclude 'storage/logs/' \
-	--exclude 'storage/cache/' \
-	--exclude 'storage/tmp/' \
+	--exclude '/storage/***' \
 	"$NL_SRC/dashboard/" "$NL_TARGET/"
+
+# Das Geruest unter storage/ (.htaccess, index.php, .gitkeep) trotzdem
+# nachziehen — aber ohne --delete, damit nichts verschwindet.
+rsync -a "$NL_SRC/dashboard/storage/" "$NL_TARGET/storage/"
 
 # --- 3. Rechte wiederherstellen --------------------------------------------
 

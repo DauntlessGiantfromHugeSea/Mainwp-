@@ -106,6 +106,7 @@ lauf "push-send" "php '$HIER/push-send.php'"
 gruen "== Mit Datenbank =="
 if [ "$hat_db" -eq 1 ]; then
 	lauf "setting" "php '$HIER/setting.php'"
+	lauf "update" "php '$HIER/update.php'"
 	lauf "paneldump" "php '$HIER/paneldump.php'"
 
 	if [ "$hat_restic" -eq 1 ]; then
@@ -120,7 +121,7 @@ if [ "$hat_db" -eq 1 ]; then
 		ueberspringe "backup-e2e, backup-setup" "restic ist nicht installiert"
 	fi
 else
-	ueberspringe "setting, paneldump, backup-e2e, backup-setup" "keine MariaDB auf 127.0.0.1:3306"
+	ueberspringe "setting, update, paneldump, backup-e2e, backup-setup" "keine MariaDB auf 127.0.0.1:3306"
 fi
 
 # --- Laeufe im Browser -------------------------------------------------------
