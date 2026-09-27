@@ -145,6 +145,10 @@ check( 'Frisch: dafuer wird das Passwort des Speichers erfragt',
 check( 'Frisch: mit dem Hinweis, dass es nicht gespeichert wird',
 	str_contains( $html, 'nirgends gespeichert' ) );
 check( 'Frisch: Port 23 wird erklaert', str_contains( $html, 'Port 23' ) );
+// Neue Storage Boxen haben SSH ab Werk aus — das ist die haeufigste Huerde.
+check( 'Frisch: auf SSH-Support und externe Erreichbarkeit wird hingewiesen',
+	str_contains( $html, 'SSH-Support' ) && str_contains( $html, 'Externe Erreichbarkeit' ) );
+check( 'Frisch: Unterkonten werden erwaehnt', str_contains( $html, 'u123456-sub1' ) );
 
 // Ausgeblendete Felder werden trotzdem mitgeschickt. Traegt ein leeres Feld
 // denselben Namen wie ein ausgefuelltes, gewinnt das letzte — und die Eingabe

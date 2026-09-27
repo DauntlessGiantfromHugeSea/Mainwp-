@@ -313,7 +313,11 @@ $needsSsh = in_array( $targetType, array( 'storagebox', 'sftp' ), true );
 									<label for="sbuser">Benutzer der Storage Box</label>
 									<input type="text" id="sbuser" name="sb_user" class="mono"
 										value="<?= e( $get( 'sb_user' ) ) ?>" placeholder="u123456">
-									<div class="hint">Steht im Hetzner-Konto. Der Wirt heisst genauso: <code>u123456.your-storagebox.de</code>.</div>
+									<div class="hint">
+										Steht im Hetzner-Konto. Der Wirt heisst genauso:
+										<code>u123456.your-storagebox.de</code>. Ein Unterkonto geht auch —
+										dann <code>u123456-sub1</code> eintragen.
+									</div>
 								</div>
 								<div class="field">
 									<label for="sbpath">Unterordner</label>
@@ -321,6 +325,13 @@ $needsSsh = in_array( $targetType, array( 'storagebox', 'sftp' ), true );
 										value="<?= e( $get( 'sb_path', 'northlab' ) ) ?>" placeholder="northlab">
 									<div class="hint">Relativ zum Anmeldeverzeichnis. Wird beim Anlegen erzeugt.</div>
 								</div>
+							</div>
+
+							<div class="notice warn">
+								<strong>Vorher im Hetzner-Konto einschalten:</strong> bei der Storage Box unter
+								„Einstellungen ändern“ die Punkte <strong>SSH-Support</strong> und
+								<strong>Externe Erreichbarkeit</strong>. Ohne beides antwortet Port 23 nicht,
+								und das Einrichten bleibt gleich im ersten Schritt stehen.
 							</div>
 						</div>
 

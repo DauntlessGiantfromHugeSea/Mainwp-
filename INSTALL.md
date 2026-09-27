@@ -175,10 +175,14 @@ Das Skript findet die Panel-Wurzel selbst, erkennt den Betriebsbenutzer am Besit
 
 Danach im Panel unter **Sicherungen** — mehr als diese drei Angaben braucht es nicht:
 
+0. Bei einer **Hetzner Storage Box** zuerst im Hetzner-Konto bei der Box unter
+   *Einstellungen ändern* die Punkte **SSH-Support** und **Externe Erreichbarkeit**
+   einschalten. Neue Boxen haben beides ab Werk aus, und ohne sie antwortet Port 23
+   nicht.
 1. **Speicherart** wählen. Für eine **Hetzner Storage Box** genügt der Benutzername
-   (`uXXXXXX`) und ein Unterordner — Wirt und Port 23 ergeben sich daraus. Für
-   **Hetzner Object Storage** Endpunkt (`fsn1`, `nbg1` oder `hel1`), Bucket und die
-   S3-Zugangsdaten.
+   (`uXXXXXX`, ein Unterkonto `uXXXXXX-subN` geht ebenso) und ein Unterordner — Wirt
+   und Port 23 ergeben sich daraus. Für **Hetzner Object Storage** Endpunkt (`fsn1`,
+   `nbg1` oder `hel1`), Bucket und die S3-Zugangsdaten.
 2. **Repository-Passwort** setzen. Damit sind die Sicherungen verschlüsselt — geht es
    verloren, ist keine davon mehr lesbar. Gehört in den Passwortmanager, nicht nur auf
    diesen Server.

@@ -784,7 +784,10 @@ final class Restic {
 			return 'Der Wirtsname lässt sich nicht auflösen — Benutzername richtig geschrieben?';
 		}
 		if ( str_contains( $lower, 'connection refused' ) || str_contains( $lower, 'connection timed out' ) ) {
-			return 'Keine Verbindung zum Speicher — Port oder Firewall prüfen.';
+			return 'storagebox' === self::type()
+				? 'Keine Verbindung zur Storage Box. Im Hetzner-Konto unter "Einstellungen ändern" '
+					. 'müssen "SSH-Support" und "Externe Erreichbarkeit" eingeschaltet sein.'
+				: 'Keine Verbindung zum Speicher — Port oder Firewall prüfen.';
 		}
 
 		$lines = array_filter( array_map( 'trim', explode( "\n", $output ) ) );
@@ -1256,7 +1259,16 @@ final class Restic {
 					$reachable ? 'ok' : 'bad',
 					$reachable
 						? $sftp['host'] . ' antwortet.'
-						: sprintf( 'Keine Verbindung zu %s:%d — Firewall oder falscher Port.', $sftp['host'], $sftp['port'] )
+						: sprintf(
+							'Keine Verbindung zu %s:%d. %s',
+							$sftp['host'],
+							$sftp['port'],
+							'storagebox' === $type
+								// Neue Storage Boxen haben SSH ab Werk aus.
+								? 'Bei einer Storage Box sind dafür im Hetzner-Konto unter "Einstellungen ändern" '
+									. 'die Punkte "SSH-Support" und "Externe Erreichbarkeit" nötig.'
+								: 'Firewall oder falscher Port?'
+						)
 				);
 			}
 		}

@@ -122,6 +122,17 @@ check( 'Storage Box: fuehrende Schraegstriche fliegen raus',
 check( 'Storage Box: ohne Benutzer keine Adresse',
 	'' === Restic::buildRepository( 'storagebox', array( 'user' => '' ) ) );
 
+// Ein Unterkonto heisst uXXXXXX-subN und hat einen eigenen Wirtsnamen, der
+// genauso lautet — nicht den des Hauptkontos.
+$unterkonto = Restic::buildRepository( 'storagebox', array( 'user' => 'u123456-sub1', 'path' => 'northlab' ) );
+
+check( 'Storage Box: ein Unterkonto bekommt seinen eigenen Wirt',
+	'sftp://u123456-sub1@u123456-sub1.your-storagebox.de:23/northlab' === $unterkonto, $unterkonto );
+check( 'Storage Box: das Unterkonto laesst sich zerlegen',
+	'u123456-sub1.your-storagebox.de' === ( Restic::parseSftp( $unterkonto )['host'] ?? '' ) );
+check( 'Storage Box: und der Benutzer stimmt',
+	'u123456-sub1' === ( Restic::parseSftp( $unterkonto )['user'] ?? '' ) );
+
 $s3 = Restic::buildRepository( 's3', array(
 	'endpoint' => 'https://fsn1.your-objectstorage.com',
 	'bucket'   => 'nl-sicherung',
