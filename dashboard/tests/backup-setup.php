@@ -221,5 +221,35 @@ check( 'Der untergeschobene Eintrag wird nicht stillschweigend ersetzt',
 	str_contains( (string) file_get_contents( Restic::knownHostsPath() ), base64_encode( 'ein-ganz-anderer-schluessel' ) ) );
 check( 'Und es wird kein Schluessel abgelegt', ! is_file( '/home/boxuser/.ssh/authorized_keys' ) );
 
+/* ------------------------------ Passwoerter mit Sonderzeichen ------------ */
+
+// Das Passwort wandert durch die Prozessumgebung und ein Hilfsprogramm. Ein
+// ~ { } $ ! ^ ; darin darf unterwegs nicht zerlegt oder ersetzt werden.
+$knifflig = 'qZt~wPx8.Lm4K{v$$jhRcS2nB!aQ^p;X7';
+
+// Die Pruefung davor hat absichtlich einen falschen Wirtsschluessel
+// untergeschoben — hier wieder den echten eintragen.
+$echterScan = Restic::scanHostKey();
+Restic::trustHostKeys( array_column( $echterScan['keys'], 'line' ) );
+
+shell_exec( 'printf %s ' . escapeshellarg( 'boxuser:' . $knifflig . "\n" ) . ' | chpasswd' );
+shell_exec( 'rm -rf /home/boxuser/.ssh' );
+
+$mitSonderzeichen = Restic::installKey( $knifflig );
+
+check( 'Ein Passwort mit Sonderzeichen kommt unveraendert an',
+	$mitSonderzeichen['ok'], $mitSonderzeichen['error'] );
+check( 'Der Schluessel liegt danach dort', is_file( '/home/boxuser/.ssh/authorized_keys' ) );
+
+// Und ein leeres Passwort wird nicht als richtig durchgewunken.
+shell_exec( 'rm -rf /home/boxuser/.ssh' );
+$leeresPasswort = Restic::installKey( '' );
+
+check( 'Ein leeres Passwort wird abgelehnt', ! $leeresPasswort['ok'] );
+check( 'Und legt nichts ab', ! is_file( '/home/boxuser/.ssh/authorized_keys' ) );
+
+// Fuer die folgenden Pruefungen wieder das bekannte Passwort.
+shell_exec( 'printf %s ' . escapeshellarg( "boxuser:StorageBoxGeheim123\n" ) . ' | chpasswd' );
+
 printf( "%d Prüfungen, %d Fehler\n", $n, $fails );
 exit( $fails ? 1 : 0 );
