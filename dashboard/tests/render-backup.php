@@ -194,6 +194,12 @@ check( 'Mit Schluessel: der Einspielbefehl nennt Port 23',
 	str_contains( $html, 'ssh-copy-id -s -p 23' ) );
 check( 'Mit Schluessel: der Befehl nennt Benutzer und Wirt',
 	str_contains( $html, 'u123456@u123456.your-storagebox.de' ) );
+// An der Kachel oben erkennt man, welche Box gemeint ist. Der Benutzer
+// gehoert dort hin, ein Passwort nicht.
+check( 'Die Kachel zeigt den Benutzer der Storage Box',
+	str_contains( $html, 'u123456@u123456.your-storagebox.de' ) );
+check( 'Und verdeckt ihn nicht', ! str_contains( $html, 'sftp:•••@' ) );
+
 check( 'Mit Schluessel: die Wiederherstellung nennt den Verbindungsbefehl',
 	str_contains( $html, 'sftp.command=ssh -F' ) );
 check( 'Mit Schluessel: und erklaert, warum HOME dafuer nicht reicht',

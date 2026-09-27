@@ -375,6 +375,20 @@ check( 'Ein Passwort in der Adresse wird verdeckt',
 	str_contains( Restic::mask( 'sftp://u1:passwort@wirt/p' ), '•••' ) );
 check( 'Und steht nicht mehr drin',
 	! str_contains( Restic::mask( 'sftp://u1:passwort@wirt/p' ), 'passwort' ) );
+check( 'Der Benutzer bleibt aber lesbar',
+	str_contains( Restic::mask( 'sftp://u1:passwort@wirt/p' ), 'u1@' ) === false
+	&& str_contains( Restic::mask( 'sftp://u1:passwort@wirt/p' ), 'u1:•••@' ) );
+
+// Ohne Passwort gibt es nichts zu verdecken — und der Benutzer der Storage
+// Box ist die Angabe, an der man die eigene Box ueberhaupt erkennt.
+$sbAdresse = Restic::buildRepository( 'storagebox', array( 'user' => 'u123456', 'path' => 'northlab' ) );
+
+check( 'Ohne Passwort bleibt die Adresse unveraendert', $sbAdresse === Restic::mask( $sbAdresse ) );
+check( 'Der Benutzer der Storage Box bleibt sichtbar',
+	str_contains( Restic::mask( $sbAdresse ), 'u123456@u123456.your-storagebox.de' ), Restic::mask( $sbAdresse ) );
+check( 'Und der Port auch', str_contains( Restic::mask( $sbAdresse ), ':23/northlab' ) );
+check( 'Eine S3-Adresse bleibt unangetastet',
+	's3:https://fsn1.your-objectstorage.com/eimer' === Restic::mask( 's3:https://fsn1.your-objectstorage.com/eimer' ) );
 
 /* ------------------------------------------------------ Art des Ziels */
 

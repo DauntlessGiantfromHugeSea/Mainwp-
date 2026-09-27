@@ -86,7 +86,7 @@ $needsSsh = in_array( $targetType, array( 'storagebox', 'sftp' ), true );
 	<div class="stat">
 		<div class="label">Ziel</div>
 		<div class="value" style="font-size:15px;margin-top:8px;word-break:break-all">
-			<?= '' !== $repository ? e( preg_replace( '/:[^:@]*@/', ':•••@', $repository ) ) : '<span class="muted">nicht gesetzt</span>' ?>
+			<?= '' !== $repository ? e( \NorthLab\Service\Restic::mask( $repository ) ) : '<span class="muted">nicht gesetzt</span>' ?>
 		</div>
 	</div>
 </div>

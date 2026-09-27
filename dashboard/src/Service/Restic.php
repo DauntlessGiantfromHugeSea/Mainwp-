@@ -1281,8 +1281,13 @@ final class Restic {
 
 	/**
 	 * Adresse ohne Passwortanteil, für die Anzeige.
+	 *
+	 * Verdeckt wird nur das Passwort in benutzer:passwort@wirt. Der Benutzer
+	 * bleibt stehen — an ihm erkennt man, welches Konto gemeint ist, und ein
+	 * Geheimnis ist er nicht. Die frühere Fassung hat am Doppelpunkt hinter
+	 * "sftp" angesetzt und damit den Benutzernamen unkenntlich gemacht.
 	 */
 	public static function mask( string $repository ): string {
-		return (string) preg_replace( '/:[^:@\/]*@/', ':•••@', $repository );
+		return (string) preg_replace( '#://([^:/@]+):[^@/]*@#', '://$1:•••@', $repository );
 	}
 }
