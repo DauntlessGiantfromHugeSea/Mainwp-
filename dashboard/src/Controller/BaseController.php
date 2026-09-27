@@ -61,10 +61,19 @@ abstract class BaseController {
 
 		if ( '' !== $referer ) {
 			$path = (string) parse_url( $referer, PHP_URL_PATH );
-			$host = (string) parse_url( $referer, PHP_URL_HOST );
+			$host = strtolower( (string) parse_url( $referer, PHP_URL_HOST ) );
 
-			// Nur Ziele auf dem eigenen Host akzeptieren.
-			if ( '' !== $path && ( '' === $host || $host === (string) ( $_SERVER['HTTP_HOST'] ?? '' ) ) ) {
+			// HTTP_HOST traegt den Port mit, parse_url gibt ihn getrennt zurueck.
+			// Ohne das Abschneiden passt auf einem Panel, das nicht auf dem
+			// Standardport laeuft, nie etwas zusammen — und "zurueck" landet
+			// immer auf der Ausweichadresse.
+			$eigener = strtolower( (string) ( $_SERVER['HTTP_HOST'] ?? '' ) );
+			$eigener = (string) preg_replace( '/:\d+$/', '', $eigener );
+
+			// Zurueckgegeben wird ohnehin nur der Pfad, nie eine ganze Adresse.
+			// Der Vergleich ist die zweite Sicherung dagegen, dass eine fremde
+			// Seite die Weiterleitung bestimmt.
+			if ( '' !== $path && ( '' === $host || $host === $eigener ) ) {
 				$query = (string) parse_url( $referer, PHP_URL_QUERY );
 				return $path . ( '' !== $query ? '?' . $query : '' );
 			}

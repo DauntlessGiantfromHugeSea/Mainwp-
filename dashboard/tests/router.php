@@ -102,5 +102,59 @@ foreach ( $expected as $request => $want ) {
 	}
 }
 
-printf( "%d Prüfungen, %d Fehler\n", count( $expected ), $fails );
+$zusatz = 0;
+
+function check( string $label, bool $ok ): void {
+	global $fails, $zusatz;
+	$zusatz++;
+	if ( ! $ok ) {
+		$fails++;
+		echo "  FEHLT: $label\n";
+	}
+}
+
+/* ---------------------------------------- Zurueck nach dem Absenden */
+
+/**
+ * back() ist geschuetzt — ein Erbe macht es pruefbar.
+ */
+final class RueckwegProbe extends \NorthLab\Controller\BaseController {
+	public function ziel( \NorthLab\Core\Request $request, string $fallback ): string {
+		return $this->back( $request, $fallback );
+	}
+}
+
+$probe = new RueckwegProbe();
+$anfrage = new \NorthLab\Core\Request();
+
+$zurueck = static function ( string $referer, string $host ) use ( $probe, $anfrage ): string {
+	$_SERVER['HTTP_REFERER'] = $referer;
+	$_SERVER['HTTP_HOST']    = $host;
+	return $probe->ziel( $anfrage, '/ausweich' );
+};
+
+check( 'Zurueck zur Herkunftsseite',
+	'/sites/7' === $zurueck( 'https://panel.example/sites/7', 'panel.example' ) );
+check( 'Mit Abfrageteil',
+	'/sites/7?tab=backup' === $zurueck( 'https://panel.example/sites/7?tab=backup', 'panel.example' ) );
+
+// Der Fall, der lange danebenging: HTTP_HOST traegt den Port, parse_url nicht.
+check( 'Auch wenn das Panel auf einem eigenen Port laeuft',
+	'/sites/7' === $zurueck( 'http://127.0.0.1:8090/sites/7', '127.0.0.1:8090' ) );
+check( 'Und bei Grossschreibung im Wirtsnamen',
+	'/sites/7' === $zurueck( 'https://Panel.Example/sites/7', 'panel.example' ) );
+
+check( 'Eine fremde Seite bestimmt die Weiterleitung nicht',
+	'/ausweich' === $zurueck( 'https://boese.example/sites/7', 'panel.example' ) );
+check( 'Auch ein aehnlicher Name nicht',
+	'/ausweich' === $zurueck( 'https://panel.example.boese.tld/x', 'panel.example' ) );
+check( 'Ohne Herkunft die Ausweichadresse',
+	'/ausweich' === $zurueck( '', 'panel.example' ) );
+check( 'Ein relativer Verweis wird uebernommen',
+	'/sites/7' === $zurueck( '/sites/7', 'panel.example' ) );
+
+unset( $_SERVER['HTTP_REFERER'], $_SERVER['HTTP_HOST'] );
+
+
+printf( "%d Prüfungen, %d Fehler\n", count( $expected ) + $zusatz, $fails );
 exit( $fails ? 1 : 0 );
