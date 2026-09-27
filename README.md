@@ -192,6 +192,8 @@ dashboard/
   views/                      PHP-Templates (Layouts, Seiten, Berichtsvorlage)
   bin/cron.php                Zeitplaner-Einstiegspunkt
   bin/setup-backup.sh         Bereitet den Server für die Sicherung vor
+  bin/check-storagebox.sh     Sagt, warum eine Storage Box nicht hereinlässt
+  bin/deploy-and-setup.sh     Update einspielen und Sicherung vorbereiten
   tests/                      Prüfläufe — `sh dashboard/tests/run.sh`
   resources/child-plugin/     Quelle des WordPress-Plugins, wird auf Abruf gezippt
   storage/                    Logs, Cache, erzeugte ZIPs — muss beschreibbar sein

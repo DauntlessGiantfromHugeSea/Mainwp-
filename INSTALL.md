@@ -192,6 +192,14 @@ Danach im Panel unter **Sicherungen** — mehr als diese drei Angaben braucht es
    sich, ob er geklappt hat. Das Passwort wird nur dafür benutzt und nirgends gespeichert.
 4. **Zeitplan** aktivieren und die Uhrzeit setzen.
 
+Bleibt ein Schritt stehen, sagt dieses Werkzeug auf dem Panel-Server, woran es liegt —
+Namensauflösung, offene Ports, angebotene Anmeldeverfahren und ob die Box den Schlüssel
+des Panels schon kennt:
+
+```bash
+sudo sh /var/www/northlab/bin/check-storagebox.sh uXXXXXX
+```
+
 Den Fingerabdruck des Wirtsschlüssels zeigt das Panel im Ergebnis an — bei Gelegenheit mit
 dem vergleichen, den Hetzner für die Storage Box nennt. Meldet der Speicher später einen
 anderen, bricht das Panel ab, statt ihn stillschweigend zu übernehmen.
