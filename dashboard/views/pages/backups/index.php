@@ -99,7 +99,7 @@ $needsSsh = in_array( $targetType, array( 'storagebox', 'sftp' ), true );
 		<?php else : ?>
 			<div class="table-wrap">
 				<table class="data">
-					<thead><tr><th>Seite</th><th>Letzte Sicherung</th><th>Ergebnis</th><th class="num">Dateien</th><th class="num">Spiegel</th><th class="shrink"></th></tr></thead>
+					<thead><tr><th>Seite</th><th>Letzte Sicherung</th><th>Ergebnis</th><th class="num">Dateien</th><th class="num">Spiegel</th><th>Nachts</th><th class="shrink"></th></tr></thead>
 					<tbody>
 					<?php foreach ( $rows as $row ) : ?>
 						<?php $site = $row['site']; $last = $row['last']; ?>
@@ -124,6 +124,20 @@ $needsSsh = in_array( $targetType, array( 'storagebox', 'sftp' ), true );
 							</td>
 							<td class="num small"><?= $last ? e( nl_number( (int) $last['files_total'] ) ) : '—' ?></td>
 							<td class="num small"><?= e( size_format_de( (int) $row['mirror'] ) ) ?></td>
+							<td>
+								<?php $imPlan = \NorthLab\Service\BackupService::scheduled( $site ); ?>
+								<?php if ( $canWrite ) : ?>
+									<form method="post" action="<?= e( url( '/backups/' . $site['id'] . '/schedule' ) ) ?>">
+										<?= csrf_field() ?>
+										<input type="hidden" name="backup_enabled" value="<?= $imPlan ? '0' : '1' ?>">
+										<button class="btn sm <?= $imPlan ? '' : 'ghost' ?>" data-busy="…">
+											<?= $imPlan ? 'dabei' : 'ausgenommen' ?>
+										</button>
+									</form>
+								<?php else : ?>
+									<span class="badge <?= $imPlan ? 'ok' : 'warn' ?>"><?= $imPlan ? 'dabei' : 'ausgenommen' ?></span>
+								<?php endif; ?>
+							</td>
 							<td class="shrink">
 								<?php if ( $canWrite ) : ?>
 									<form method="post" action="<?= e( url( '/backups/' . $site['id'] . '/run' ) ) ?>"
@@ -135,7 +149,7 @@ $needsSsh = in_array( $targetType, array( 'storagebox', 'sftp' ), true );
 							</td>
 						</tr>
 						<?php if ( $last && 'failed' === $last['status'] && ! empty( $last['message'] ) ) : ?>
-							<tr><td colspan="6" class="small" style="background:var(--bad-bg);color:#fca5a8"><?= e( (string) $last['message'] ) ?></td></tr>
+							<tr><td colspan="7" class="small" style="background:var(--bad-bg);color:#fca5a8"><?= e( (string) $last['message'] ) ?></td></tr>
 						<?php endif; ?>
 					<?php endforeach; ?>
 					</tbody>

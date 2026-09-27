@@ -109,6 +109,7 @@ Ersteller des Plugins ist **NorthLab**.
 - Repository-Passwort und S3-Secret liegen **verschlüsselt** in der Datenbank
 - Läuft **ohne SSH-Zugang zu den Kundenseiten**: das Child-Plugin liefert Dateiliste und Datenbank über die signierte Verbindung, das Panel hält je Seite einen Spiegel und holt nur Geändertes — verglichen über Grösse und Änderungszeit
 - Datenbank-Export läuft auf der Kundenseite in Etappen, damit kein Aufruf ins Zeitlimit gerät
+- **Pro Seite steuerbar**: jede Seite lässt sich einzeln aus dem nächtlichen Lauf nehmen und weiterhin von Hand sichern. Auf der Seite selbst zeigt ein eigener Reiter den letzten Lauf, die Größe des Spiegels und — auf Knopfdruck direkt vom Speicher geholt — die vorhandenen Sicherungspunkte dieser Seite. Jede Seite liegt als eigener Wirtsname im selben Repository, mit eigener Aufbewahrung
 - **Das Panel sichert sich selbst mit**: Datenbank und `config.php`. Darin stecken die privaten Schlüssel aller Verbindungen — ohne diese Sicherung wäre nach einem Serverausfall jede Seite von Hand neu zu verbinden. Der Export entsteht über PDO, nicht über `mysqldump`, das auf manchem Webhosting fehlt
 - restic übernimmt Deduplizierung, Verschlüsselung und Aufbewahrung (täglich/wöchentlich/monatlich einstellbar)
 - Wiederherstellung über die restic-Kommandozeile; bewusst kein Knopf im Panel
@@ -190,6 +191,8 @@ dashboard/
     Controller/               Ein Controller je Bereich
   views/                      PHP-Templates (Layouts, Seiten, Berichtsvorlage)
   bin/cron.php                Zeitplaner-Einstiegspunkt
+  bin/setup-backup.sh         Bereitet den Server für die Sicherung vor
+  tests/                      Prüfläufe — `sh dashboard/tests/run.sh`
   resources/child-plugin/     Quelle des WordPress-Plugins, wird auf Abruf gezippt
   storage/                    Logs, Cache, erzeugte ZIPs — muss beschreibbar sein
     branding/                 Hinterlegtes Logo und die daraus erzeugten Symbole

@@ -129,6 +129,8 @@ $router->get( '/backups', array( BackupController::class, 'index' ) );
 $router->post( '/backups', array( BackupController::class, 'save' ) );
 $router->post( '/backups/panel', array( BackupController::class, 'runPanel' ) );
 $router->post( '/backups/{id:\d+}/run', array( BackupController::class, 'run' ) );
+$router->post( '/backups/{id:\d+}/schedule', array( BackupController::class, 'schedule' ) );
+$router->get( '/backups/{id:\d+}/snapshots', array( BackupController::class, 'snapshots' ) );
 
 // Uptime
 $router->get( '/uptime', array( UptimeController::class, 'index' ) );

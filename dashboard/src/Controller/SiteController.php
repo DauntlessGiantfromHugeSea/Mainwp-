@@ -137,6 +137,16 @@ final class SiteController extends BaseController {
 				'childOutdated' => ChildPluginService::isOutdated( $site ),
 				'mmodeDesign' => MaintenanceModeService::design(),
 				'mmodeTimes'  => MaintenanceModeService::DURATIONS,
+				// Sicherung: der Stand aus der Datenbank. Die Sicherungspunkte
+				// selbst holt die Seite spaeter nach — dafuer geht eine
+				// Verbindung zum Speicher raus.
+				'backupLast'      => \NorthLab\Core\Database::selectOne(
+					'SELECT * FROM `' . \NorthLab\Core\Database::table( 'backups' ) . '` WHERE `site_id` = :id ORDER BY `id` DESC LIMIT 1',
+					array( 'id' => $siteId )
+				),
+				'backupMirror'    => \NorthLab\Service\BackupService::mirrorSize( $siteId ),
+				'backupScheduled' => \NorthLab\Service\BackupService::scheduled( $site ),
+				'backupReady'     => \NorthLab\Service\Restic::configured(),
 			)
 		);
 	}

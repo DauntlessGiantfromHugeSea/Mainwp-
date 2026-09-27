@@ -412,10 +412,18 @@ final class BackupService {
 	 * @return array{ok:int,failed:int}
 	 */
 	public static function runAll(): array {
-		$ok     = 0;
-		$failed = 0;
+		$ok      = 0;
+		$failed  = 0;
+		$skipped = 0;
 
 		foreach ( SiteRepository::active() as $site ) {
+			// Wer eine Seite bewusst aus dem Zeitplan genommen hat, will sie
+			// nachts nicht sehen — von Hand laesst sie sich weiter sichern.
+			if ( ! self::scheduled( $site ) ) {
+				$skipped++;
+				continue;
+			}
+
 			$result = self::run( $site );
 
 			if ( $result['ok'] ) {
@@ -440,12 +448,27 @@ final class BackupService {
 		if ( $ok + $failed > 0 ) {
 			ActivityRepository::log(
 				'backup.batch',
-				sprintf( 'Sicherungslauf: %d erfolgreich, %d fehlgeschlagen.', $ok, $failed ),
+				sprintf(
+					'Sicherungslauf: %d erfolgreich, %d fehlgeschlagen%s.',
+					$ok,
+					$failed,
+					$skipped > 0 ? sprintf( ', %d nicht im Zeitplan', $skipped ) : ''
+				),
 				array( 'level' => $failed > 0 ? 'warning' : 'info' )
 			);
 		}
 
-		return array( 'ok' => $ok, 'failed' => $failed );
+		return array( 'ok' => $ok, 'failed' => $failed, 'skipped' => $skipped );
+	}
+
+	/**
+	 * Gehört die Seite in den nächtlichen Lauf?
+	 *
+	 * @param array<string,mixed> $site
+	 */
+	public static function scheduled( array $site ): bool {
+		// Fehlt die Spalte noch (altes Schema), gilt die Vorgabe: mitsichern.
+		return ! array_key_exists( 'backup_enabled', $site ) || (bool) $site['backup_enabled'];
 	}
 
 	/**

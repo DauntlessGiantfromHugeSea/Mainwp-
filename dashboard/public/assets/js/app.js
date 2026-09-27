@@ -260,6 +260,98 @@
 	});
 
 	/**
+	 * Sicherungspunkte einer Seite abrufen.
+	 *
+	 * Auf Klick, nicht beim Laden: dafuer geht eine Verbindung zum entfernten
+	 * Speicher raus, und die dauert.
+	 */
+	var snapshotBox = document.getElementById('snapshot-box');
+
+	if (snapshotBox) {
+		var snapshotBtn = snapshotBox.querySelector('[data-snapshot-load]');
+		var snapshotOut = snapshotBox.querySelector('[data-snapshot-out]');
+
+		var sagen = function (text, art) {
+			snapshotOut.innerHTML = '';
+			var box = document.createElement('div');
+			box.className = 'notice' + (art ? ' ' + art : '');
+			box.textContent = text;
+			snapshotOut.appendChild(box);
+		};
+
+		if (snapshotBtn) {
+			snapshotBtn.addEventListener('click', function () {
+				snapshotBtn.disabled = true;
+				sagen('Frage den Speicher…');
+
+				window
+					.fetch(snapshotBox.getAttribute('data-snapshot-url'), {
+						credentials: 'same-origin',
+						headers: { Accept: 'application/json' },
+					})
+					.then(function (res) {
+						return res.json();
+					})
+					.then(function (data) {
+						snapshotBtn.disabled = false;
+
+						if (!data.ok) {
+							sagen(data.error || 'Abruf fehlgeschlagen.', 'bad');
+							return;
+						}
+						if (!data.punkte.length) {
+							sagen('Für diese Seite liegt noch kein Sicherungspunkt auf dem Speicher.', 'warn');
+							return;
+						}
+
+						snapshotOut.innerHTML = '';
+
+						var tabelle = document.createElement('table');
+						tabelle.className = 'data';
+						tabelle.innerHTML =
+							'<thead><tr><th>Zeitpunkt</th><th>Kennung</th><th>Markierungen</th></tr></thead>';
+
+						var koerper = document.createElement('tbody');
+
+						data.punkte.forEach(function (punkt) {
+							var zeile = document.createElement('tr');
+							var zeit = document.createElement('td');
+							var kennung = document.createElement('td');
+							var tags = document.createElement('td');
+
+							// Datum als Text einsetzen, nie als HTML — der Inhalt
+							// kommt vom Speicher.
+							zeit.className = 'small';
+							zeit.textContent = new Date(punkt.zeit).toLocaleString('de-DE');
+							kennung.className = 'small mono';
+							kennung.textContent = punkt.id;
+							tags.className = 'small muted';
+							tags.textContent = punkt.tags.join(', ');
+
+							zeile.appendChild(zeit);
+							zeile.appendChild(kennung);
+							zeile.appendChild(tags);
+							koerper.appendChild(zeile);
+						});
+
+						tabelle.appendChild(koerper);
+						snapshotOut.appendChild(tabelle);
+
+						var fuss = document.createElement('p');
+						fuss.className = 'small muted mt';
+						fuss.textContent =
+							data.punkte.length + ' Sicherungspunkt(e) unter dem Wirtsnamen ' + data.host + '.';
+						snapshotOut.appendChild(fuss);
+					})
+					.catch(function (error) {
+						snapshotBtn.disabled = false;
+						sagen('Abruf fehlgeschlagen: ' + error.message, 'bad');
+					});
+			});
+		}
+	}
+
+	/**
 	 * Service Worker anmelden — nur über HTTPS oder auf localhost, sonst lehnt
 	 * der Browser ab und wirft eine Ausnahme in die Konsole.
 	 */

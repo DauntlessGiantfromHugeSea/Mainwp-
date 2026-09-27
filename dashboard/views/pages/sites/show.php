@@ -11,6 +11,10 @@
  * @var array<int,array<string,mixed>> $activity
  * @var string                         $monitorUrl
  * @var array<string,string>           $tasks
+ * @var array<string,mixed>|null       $backupLast
+ * @var int                            $backupMirror
+ * @var bool                           $backupScheduled
+ * @var bool                           $backupReady
  */
 
 use NorthLab\Core\Auth;
@@ -137,6 +141,7 @@ $users    = (array) ( $payload['users'] ?? array() );
 	<button data-tab="uptime">Uptime</button>
 	<?php if ( $managed ) : ?>
 		<button data-tab="maintenance">Wartung</button>
+		<button data-tab="backup">Sicherung</button>
 	<?php endif; ?>
 	<button data-tab="settings">Einstellungen</button>
 	<button data-tab="activity">Protokoll</button>
@@ -778,6 +783,116 @@ $outdatedPlugins = array_values(
 					<button class="btn primary" data-busy="Läuft…">Ausführen</button>
 				</form>
 			<?php endif; ?>
+		</div>
+	</div>
+</div>
+<?php endif; ?>
+
+<!-- ------------------------------------------------------------- Sicherung -->
+<?php if ( $managed ) : ?>
+<div class="tab-panel" data-tab-panel="backup">
+	<?php if ( ! $backupReady ) : ?>
+		<div class="notice warn">
+			<strong>Es ist noch kein Sicherungsziel eingerichtet.</strong>
+			Das gilt fürs ganze Panel, nicht nur für diese Seite —
+			<a href="<?= e( url( '/backups' ) ) ?>">unter Sicherungen</a> einzurichten.
+		</div>
+	<?php endif; ?>
+
+	<div class="grid side">
+		<div class="card" id="snapshot-box" data-snapshot-url="<?= e( url( '/backups/' . $site['id'] . '/snapshots' ) ) ?>">
+			<div class="card-head">
+				<h2>Sicherungspunkte auf dem Speicher</h2>
+				<div class="spacer"></div>
+				<?php if ( $backupReady ) : ?>
+					<button class="btn sm" type="button" data-snapshot-load>Abrufen</button>
+				<?php endif; ?>
+			</div>
+			<div class="card-body">
+				<p class="small muted">
+					Jede Seite liegt als eigener Eintrag im selben Repository — getrennt nach Wirtsnamen,
+					mit eigener Aufbewahrung. Was hier steht, kommt direkt vom Speicher, nicht aus der
+					Datenbank des Panels.
+				</p>
+				<div data-snapshot-out></div>
+			</div>
+		</div>
+
+		<div>
+			<div class="card">
+				<div class="card-head">
+					<h3>Stand</h3>
+					<div class="spacer"></div>
+					<?php if ( ! $backupLast ) : ?>
+						<span class="badge warn">noch nie</span>
+					<?php elseif ( 'success' === $backupLast['status'] ) : ?>
+						<span class="badge ok"><span class="dot"></span>erfolgreich</span>
+					<?php elseif ( 'running' === $backupLast['status'] ) : ?>
+						<span class="badge warn">läuft</span>
+					<?php else : ?>
+						<span class="badge bad"><span class="dot"></span>Fehler</span>
+					<?php endif; ?>
+				</div>
+				<div class="card-body">
+					<table class="data">
+						<tbody>
+							<tr>
+								<td class="small muted">Letzter Lauf</td>
+								<td class="small"><?= $backupLast ? e( nl_ago( (string) $backupLast['started_at'] ) ) : '—' ?></td>
+							</tr>
+							<tr>
+								<td class="small muted">Dateien</td>
+								<td class="small"><?= $backupLast ? e( nl_number( (int) $backupLast['files_total'] ) ) : '—' ?></td>
+							</tr>
+							<tr>
+								<td class="small muted">Spiegel auf dem Panel</td>
+								<td class="small"><?= e( size_format_de( $backupMirror ) ) ?></td>
+							</tr>
+						</tbody>
+					</table>
+
+					<?php if ( $backupLast && 'failed' === $backupLast['status'] && ! empty( $backupLast['message'] ) ) : ?>
+						<div class="notice bad mt"><?= e( (string) $backupLast['message'] ) ?></div>
+					<?php endif; ?>
+				</div>
+				<?php if ( $canWrite ) : ?>
+					<div class="card-foot">
+						<form method="post" action="<?= e( url( '/backups/' . $site['id'] . '/run' ) ) ?>"
+							data-confirm="Sicherung dieser Seite jetzt starten? Der erste Lauf kann lange dauern.">
+							<?= csrf_field() ?>
+							<button class="btn primary" data-busy="läuft…">Jetzt sichern</button>
+						</form>
+					</div>
+				<?php endif; ?>
+			</div>
+
+			<div class="card">
+				<div class="card-head">
+					<h3>Nächtlicher Lauf</h3>
+					<div class="spacer"></div>
+					<span class="badge <?= $backupScheduled ? 'ok' : 'warn' ?>">
+						<?= $backupScheduled ? 'dabei' : 'ausgenommen' ?>
+					</span>
+				</div>
+				<div class="card-body">
+					<p class="small muted">
+						<?php if ( $backupScheduled ) : ?>
+							Diese Seite wird im nächtlichen Lauf mitgesichert.
+						<?php else : ?>
+							Diese Seite bleibt nachts aussen vor. Von Hand lässt sie sich weiterhin sichern.
+						<?php endif; ?>
+					</p>
+					<?php if ( $canWrite ) : ?>
+						<form method="post" action="<?= e( url( '/backups/' . $site['id'] . '/schedule' ) ) ?>">
+							<?= csrf_field() ?>
+							<input type="hidden" name="backup_enabled" value="<?= $backupScheduled ? '0' : '1' ?>">
+							<button class="btn<?= $backupScheduled ? '' : ' primary' ?>" data-busy="…">
+								<?= $backupScheduled ? 'Aus dem Zeitplan nehmen' : 'In den Zeitplan aufnehmen' ?>
+							</button>
+						</form>
+					<?php endif; ?>
+				</div>
+			</div>
 		</div>
 	</div>
 </div>

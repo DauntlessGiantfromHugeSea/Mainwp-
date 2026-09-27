@@ -9,7 +9,7 @@ namespace NorthLab\Core;
  */
 final class Migrator {
 
-	public const SCHEMA_VERSION = 8;
+	public const SCHEMA_VERSION = 9;
 
 	/**
 	 * Alle Tabellen anlegen (idempotent).
@@ -44,6 +44,9 @@ final class Migrator {
 				// Schema 7: Agentur-Branding auf der Kundenseite.
 				'branding_bar'      => 'TINYINT(1) NOT NULL DEFAULT 0',
 				'branding_login'    => 'TINYINT(1) NOT NULL DEFAULT 0',
+				// Schema 9: nimmt der naechtliche Lauf diese Seite mit?
+				// Vorgabe 1 — wer eine Seite betreut, will sie in der Regel sichern.
+				'backup_enabled'    => 'TINYINT(1) NOT NULL DEFAULT 1',
 			),
 
 			// Schema 2: Zwei-Faktor-Anmeldung und Seitenzuordnung.

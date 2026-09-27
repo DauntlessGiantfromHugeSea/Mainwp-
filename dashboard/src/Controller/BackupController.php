@@ -8,6 +8,7 @@ use NorthLab\Core\Auth;
 use NorthLab\Core\Crypto;
 use NorthLab\Core\Database;
 use NorthLab\Core\Request;
+use NorthLab\Core\Response;
 use NorthLab\Core\Setting;
 use NorthLab\Repository\SiteRepository;
 use NorthLab\Service\BackupService;
@@ -93,6 +94,75 @@ final class BackupController extends BaseController {
 				: 'Sicherung fehlgeschlagen: ' . $result['error'],
 			'/backups'
 		);
+	}
+
+	/**
+	 * Eine Seite in den nächtlichen Lauf nehmen oder herausnehmen.
+	 */
+	public function schedule( Request $request ): void {
+		Auth::requireWrite();
+
+		$siteId = (int) $request->params['id'];
+		Auth::requireSite( $siteId );
+
+		$site = SiteRepository::find( $siteId );
+
+		if ( null === $site ) {
+			$this->respond( $request, false, 'Seite nicht gefunden.', '/backups' );
+		}
+
+		$an = $request->bool( 'backup_enabled' );
+
+		SiteRepository::update( $siteId, array( 'backup_enabled' => $an ? 1 : 0 ) );
+
+		$this->respond(
+			$request,
+			true,
+			$an
+				? sprintf( '"%s" wird nachts mitgesichert.', $site['name'] )
+				: sprintf( '"%s" ist aus dem Zeitplan genommen — von Hand geht es weiter.', $site['name'] ),
+			$this->back( $request, '/backups' )
+		);
+	}
+
+	/**
+	 * Die Sicherungspunkte einer Seite, direkt vom Speicher.
+	 *
+	 * Bewusst ein eigener Abruf: dafür geht eine Verbindung zum Speicher raus,
+	 * und das darf nicht bei jedem Seitenaufruf passieren.
+	 */
+	public function snapshots( Request $request ): void {
+		Auth::requireLogin();
+
+		$siteId = (int) $request->params['id'];
+		Auth::requireSite( $siteId );
+
+		$site = SiteRepository::find( $siteId );
+
+		if ( null === $site ) {
+			Response::json( array( 'ok' => false, 'error' => 'Seite nicht gefunden.' ), 404 );
+			return;
+		}
+
+		if ( ! Restic::configured() ) {
+			Response::json( array( 'ok' => false, 'error' => 'Es ist kein Sicherungsziel eingerichtet.' ), 422 );
+			return;
+		}
+
+		$punkte = array();
+
+		foreach ( Restic::snapshots( BackupService::hostFor( $site ) ) as $eintrag ) {
+			$punkte[] = array(
+				'id'   => (string) ( $eintrag['short_id'] ?? '' ),
+				'zeit' => (string) ( $eintrag['time'] ?? '' ),
+				'tags' => array_values( (array) ( $eintrag['tags'] ?? array() ) ),
+			);
+		}
+
+		// Neueste zuerst — danach sucht man.
+		usort( $punkte, static fn( array $a, array $b ): int => strcmp( $b['zeit'], $a['zeit'] ) );
+
+		Response::json( array( 'ok' => true, 'punkte' => $punkte, 'host' => BackupService::hostFor( $site ) ) );
 	}
 
 	/**
