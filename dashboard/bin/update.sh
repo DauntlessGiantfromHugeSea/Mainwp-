@@ -107,25 +107,55 @@ gruen "  Schema aktuell"
 
 # --- 5. Kurzer Funktionstest ------------------------------------------------
 
+ANTWORTET=ja
+
 echo "→ Anwendung antwortet?"
-if PANEL_URL="$(sudo -u "$NL_USER" php -r '
+
+# Antwortet die Anwendung? 2xx und 3xx zaehlen beide — viele Installationen
+# leiten /login auf https um, und eine Umleitung ist eine Antwort.
+antwortet() {
+	code=$( curl -s -o /dev/null -w '%{http_code}' --max-time 15 "$@" || true )
+
+	case "${code:-000}" in
+		2??|3??) echo "$code"; return 0 ;;
+		*)       echo "${code:-000}"; return 1 ;;
+	esac
+}
+
+PANEL_URL="$( sudo -u "$NL_USER" php -r '
 	$c = require "'"$NL_TARGET"'/config.php";
 	echo rtrim($c["app"]["url"] ?? "", "/");
-')" && [ -n "$PANEL_URL" ]; then
-	# curl schreibt bei einem Verbindungsfehler selbst 000 und liefert einen
-	# Fehlercode. Ohne das || true stuende danach 000000 da.
-	CODE="$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 "$PANEL_URL/login" || true)"
-	CODE="${CODE:-000}"
-	if [ "$CODE" = "200" ]; then
-		gruen "  $PANEL_URL/login → HTTP 200"
-	else
-		rot "  $PANEL_URL/login → HTTP $CODE"
-		rot "  Logs prüfen: tail -30 $NL_TARGET/storage/logs/app.log"
-		exit 1
-	fi
+' 2>/dev/null )"
+
+if [ -z "$PANEL_URL" ]; then
+	info "  Panel-URL nicht ermittelbar, Test uebersprungen."
 else
-	info "  Panel-URL nicht ermittelbar, Test übersprungen."
+	if CODE=$( antwortet "$PANEL_URL/login" ); then
+		gruen "  $PANEL_URL/login → HTTP $CODE"
+	else
+		# Von aussen nicht erreichbar heisst nicht, dass die Anwendung steht.
+		# Hinter einem vorgelagerten Proxy oder einem Tunnel kommt der Server
+		# an seine eigene oeffentliche Adresse oft gar nicht heran. Also noch
+		# einmal ueber die Loopback-Adresse, mit dem richtigen Host-Namen.
+		HOSTNAME_NUR=$( printf '%s' "$PANEL_URL" | sed -e 's#^https\{0,1\}://##' -e 's#/.*##' )
+
+		if LOKAL=$( antwortet -H "Host: $HOSTNAME_NUR" "http://127.0.0.1/login" ); then
+			gruen "  Anwendung antwortet lokal → HTTP $LOKAL"
+			info  "  ($PANEL_URL/login → HTTP $CODE — der Server erreicht seine eigene"
+			info  "   oeffentliche Adresse nicht. Hinter Proxy oder Tunnel ist das normal.)"
+		else
+			rot "  $PANEL_URL/login → HTTP $CODE, lokal → HTTP $LOKAL"
+			rot "  Die Dateien sind eingespielt, aber die Anwendung antwortet nicht."
+			rot "  Logs pruefen: tail -30 $NL_TARGET/storage/logs/app.log"
+			rot "  und:          tail -20 /var/log/nginx/error.log"
+			ANTWORTET=nein
+		fi
+	fi
 fi
 
 echo
-gruen "Update abgeschlossen."
+if [ "$ANTWORTET" = ja ]; then
+	gruen "Update abgeschlossen."
+else
+	rot "Update eingespielt — aber die Anwendung antwortet nicht."
+fi
