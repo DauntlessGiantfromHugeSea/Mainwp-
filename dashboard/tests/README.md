@@ -14,7 +14,7 @@ Lauf ist kein bestandener.**
 | Voraussetzung | Betrifft |
 |---|---|
 | `php` | alle |
-| MariaDB auf `127.0.0.1:3306`, Benutzer `nl`/`nlpass` | `paneldump`, `backup-e2e`, `backup-setup` |
+| MariaDB auf `127.0.0.1:3306`, Benutzer `nl`/`nlpass` | `setting`, `paneldump`, `backup-e2e`, `backup-setup` |
 | `restic` | `backup-e2e`, `backup-setup` |
 | SSH-Server auf `127.0.0.1:2223` | `backup-setup` |
 | `node` mit `playwright` | alle Browser-Läufe |
@@ -34,7 +34,8 @@ Ansichten, `backup` die restic-Hülle, `router` das Routing, `asset` die
 Cache-Kennungen, `push-send` die Verschlüsselung der Push-Meldungen gegen
 einen nachgebauten Push-Dienst.
 
-**Mit Datenbank.** `paneldump` exportiert die Panel-Datenbank und spielt sie
+**Mit Datenbank.** `setting` prüft, dass der Zwischenspeicher der
+Einstellungen nie ein unvollständiges Bild liefert. `paneldump` exportiert die Panel-Datenbank und spielt sie
 in eine zweite Datenbank zurück — Apostrophe, Backslashes, Steuerzeichen,
 Emoji und NULL müssen unverändert ankommen. `backup-e2e` legt ein echtes
 restic-Repository an, sichert, stellt wieder her und prüft den Zeitplan.

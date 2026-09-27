@@ -59,6 +59,12 @@ final class Setting {
 			$value = (string) json_encode( $value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES );
 		}
 
+		// Erst den Zwischenspeicher fuellen. Sonst legt die Zuweisung unten ein
+		// Feld mit genau diesem einen Eintrag an, all() haelt es fuer geladen,
+		// und jede weitere Abfrage im selben Aufruf bekommt den Vorgabewert —
+		// obwohl in der Datenbank etwas anderes steht.
+		self::all();
+
 		Database::run(
 			'INSERT INTO `' . Database::table( 'settings' ) . '` (`name`, `value`) VALUES (:name, :value)
 			 ON DUPLICATE KEY UPDATE `value` = VALUES(`value`)',
@@ -78,6 +84,9 @@ final class Setting {
 	}
 
 	public static function forget( string $name ): void {
+		// Aus demselben Grund wie in set().
+		self::all();
+
 		Database::delete( 'settings', array( 'name' => $name ) );
 		unset( self::$cache[ $name ] );
 	}
