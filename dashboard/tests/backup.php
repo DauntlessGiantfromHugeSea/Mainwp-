@@ -437,6 +437,53 @@ check( 'Ohne Eintrag geht es um das Paket, nicht um das Feld',
 Setting::$values = array( 'restic_binary' => $fakeBin );
 check( 'Ein brauchbarer Pfad meldet nichts', null === Restic::binaryProblem() );
 
+/* ------------------- Die Sicherung darf den Server nicht lahmlegen ------- */
+
+Setting::$values = array(
+	'backup_target_type' => 'storagebox',
+	'restic_repository'  => $sb,
+	'restic_binary'      => $fakeBin,
+	'restic_password'    => \NorthLab\Core\Crypto::encrypt( 'x' ),
+);
+
+@unlink( $logFile );
+Restic::run( array( 'snapshots' ) );
+
+// nice und ionice stellen restic hinter alles andere zurueck.
+$aufrufzeile = (string) @file_get_contents( '/proc/self/cmdline' );
+check( 'restic laeuft mit gesenktem Anspruch', (function () use ( $fakeBin ) {
+	// Der Vorspann steht in der Befehlszeile, nicht in der Ausgabe — also
+	// pruefen wir ihn ueber die Methode selbst.
+	$m = new ReflectionMethod( \NorthLab\Service\Restic::class, 'sanft' );
+	$m->setAccessible( true );
+	$v = (string) $m->invoke( null );
+	return str_contains( $v, 'nice -n 19' ) || '' === $v;
+})() );
+
+// Aufraeumen darf nicht mehr an jeder einzelnen Sicherung haengen.
+@unlink( $logFile );
+Restic::forget( 'wirt.de' );
+check( 'forget raeumt nicht mehr von sich aus auf', ! str_contains( aufruf(), '--prune' ), aufruf() );
+
+@unlink( $logFile );
+Restic::forget( 'wirt.de', true );
+check( 'Auf Wunsch schon', str_contains( aufruf(), '--prune' ) );
+
+@unlink( $logFile );
+Restic::prune();
+check( 'Und es gibt einen eigenen Aufruf dafuer', str_contains( aufruf(), 'ARGS:' ) && str_contains( aufruf(), 'prune' ) );
+
+// Eine Bremse fuer die Leitung.
+Setting::$values['backup_upload_limit'] = '2048';
+@unlink( $logFile );
+Restic::run( array( 'snapshots' ) );
+check( 'Die Uebertragung laesst sich bremsen', str_contains( aufruf(), '--limit-upload 2048' ), aufruf() );
+
+Setting::$values['backup_upload_limit'] = '0';
+@unlink( $logFile );
+Restic::run( array( 'snapshots' ) );
+check( 'Ohne Bremse steht kein Schalter da', ! str_contains( aufruf(), '--limit-upload' ) );
+
 /* ------------------------ Aus restics Ausgabe eine Anweisung machen */
 
 // Genau die Meldung, die auf der Storage Box ankam, als der Schluessel dort

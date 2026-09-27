@@ -105,7 +105,16 @@ final class BackupService {
 				throw new \RuntimeException( self::resticFehler( $backup['output'] ) );
 			}
 
+			// Nur die Sicherungspunkte ausbuchen. Das Umschreiben der Pakete
+			// kommt einmal am Ende des Laufs — siehe runWindow().
 			Restic::forget( self::hostFor( $site ) );
+
+			// Der Spiegel ist eine Arbeitskopie, keine zweite Sicherung. Wer
+			// den Platz nicht hat, kann ihn verwerfen — dann holt der naechste
+			// Lauf die Seite allerdings wieder vollstaendig.
+			if ( ! Setting::getBool( 'backup_keep_mirror', true ) ) {
+				self::discardMirror( $siteId );
+			}
 
 			Database::update(
 				'backups',
@@ -462,6 +471,171 @@ final class BackupService {
 	}
 
 	/**
+	 * Ein Durchgang im nächtlichen Zeitfenster.
+	 *
+	 * Statt alle Seiten in einem Rutsch zu sichern, kommt je Aufruf genau eine
+	 * dran — mit dem eingestellten Abstand dazwischen. Ein Dutzend Seiten
+	 * gleichzeitig zu ziehen bringt weder den Panel-Server noch die
+	 * Kundenseiten in einen guten Zustand.
+	 *
+	 * Der Zeitplaner ruft das alle paar Minuten auf; die Methode entscheidet
+	 * selbst, ob gerade etwas zu tun ist.
+	 */
+	public static function runWindow(): string {
+		if ( ! Setting::getBool( 'backup_enabled', false ) ) {
+			return 'deaktiviert';
+		}
+
+		$start   = self::windowStart();
+		$abstand = self::spacing();
+
+		// Ohne Abstand das alte Verhalten: alles hintereinander in einem Lauf.
+		if ( 0 === $abstand ) {
+			$stats = self::runAll();
+
+			return sprintf( '%d gesichert, %d fehlgeschlagen', $stats['ok'], $stats['failed'] );
+		}
+
+		$erledigt = self::handledSince( $start );
+		$offen    = array();
+
+		foreach ( SiteRepository::active() as $site ) {
+			if ( self::scheduled( $site ) && ! isset( $erledigt[ (int) $site['id'] ] ) ) {
+				$offen[] = $site;
+			}
+		}
+
+		if ( ! $offen ) {
+			// Die Seiten sind durch — dann noch das Panel selbst.
+			if ( Setting::getBool( 'backup_panel', true ) && ! self::panelHandledSince( $start ) ) {
+				$panel = self::runPanel();
+
+				return $panel['ok'] ? 'Panel gesichert' : 'Panel fehlgeschlagen: ' . $panel['error'];
+			}
+
+			return self::pruneOnce( $start );
+		}
+
+		$wartet = self::waitFor( $start, $abstand );
+
+		if ( $wartet > 0 ) {
+			return sprintf( 'Abstand: noch %d Minute(n), %d Seite(n) offen', (int) ceil( $wartet / 60 ), count( $offen ) );
+		}
+
+		$site   = $offen[0];
+		$result = self::run( $site );
+
+		return sprintf(
+			'%s: %s (%d weitere offen)',
+			$site['name'],
+			$result['ok'] ? 'gesichert' : 'fehlgeschlagen',
+			count( $offen ) - 1
+		);
+	}
+
+	/**
+	 * Einmal je Zeitfenster aufräumen.
+	 *
+	 * Vorher lief das hinter jeder einzelnen Seite. Bei einem Dutzend Seiten
+	 * war das ein Dutzend Mal die schwerste Operation, die restic kennt —
+	 * genau deshalb war der Server während der Sicherung nicht zu gebrauchen.
+	 */
+	private static function pruneOnce( string $start ): string {
+		$letztes = Setting::get( 'backup_pruned_at', '' );
+
+		if ( '' !== $letztes && $letztes >= $start ) {
+			return 'nichts offen';
+		}
+
+		$ergebnis = Restic::prune();
+
+		Setting::set( 'backup_pruned_at', nl_utc() );
+
+		if ( ! $ergebnis['ok'] ) {
+			Logger::error( 'Aufräumen des Repositories fehlgeschlagen', array( 'output' => substr( $ergebnis['output'], -500 ) ) );
+
+			return 'alles gesichert, Aufräumen fehlgeschlagen';
+		}
+
+		return 'alles gesichert und aufgeräumt';
+	}
+
+	/**
+	 * Abstand zwischen zwei Sicherungen, in Sekunden. 0 heisst: alle auf einmal.
+	 */
+	public static function spacing(): int {
+		return max( 0, min( 240, Setting::getInt( 'backup_spacing', 30 ) ) ) * 60;
+	}
+
+	/**
+	 * Beginn des laufenden Zeitfensters.
+	 *
+	 * Das Fenster beginnt zur eingestellten Stunde und laeuft bis zur selben
+	 * Stunde am naechsten Tag. Bei vielen Seiten und grossem Abstand reicht
+	 * eine Stunde nicht — und ein Fenster, das zumacht, bevor alle durch sind,
+	 * liesse die letzten Seiten stillschweigend aus.
+	 *
+	 * Ein "ausserhalb" gibt es damit nicht: ist alles gesichert, meldet der
+	 * Durchgang schlicht, dass nichts offen ist.
+	 */
+	private static function windowStart(): string {
+		$stunde = max( 0, min( 23, Setting::getInt( 'backup_hour', 3 ) ) );
+		$jetzt  = time();
+
+		$heute = (int) strtotime( gmdate( 'Y-m-d', $jetzt ) . sprintf( ' %02d:00:00 UTC', $stunde ) );
+
+		// Vor der Stunde gehoert der Zeitpunkt noch zum Fenster von gestern.
+		$beginn = $jetzt >= $heute ? $heute : $heute - 86400;
+
+		return gmdate( 'Y-m-d H:i:s', $beginn );
+	}
+
+	/**
+	 * Welche Seiten wurden in diesem Fenster schon angefasst?
+	 *
+	 * Auch Fehlversuche zaehlen — sonst blockierte eine Seite, die nicht
+	 * erreichbar ist, bei jedem Durchgang alle anderen.
+	 *
+	 * @return array<int,true>
+	 */
+	private static function handledSince( string $start ): array {
+		$ids = array();
+
+		foreach ( Database::select(
+			'SELECT DISTINCT `site_id` FROM `' . Database::table( 'backups' ) . '` WHERE `started_at` >= :s',
+			array( 's' => $start )
+		) as $row ) {
+			$ids[ (int) $row['site_id'] ] = true;
+		}
+
+		return $ids;
+	}
+
+	private static function panelHandledSince( string $start ): bool {
+		$letzte = Setting::get( 'panel_backup_at', '' );
+
+		return '' !== $letzte && $letzte >= $start;
+	}
+
+	/**
+	 * Wie viele Sekunden sind bis zum nächsten Durchgang noch zu warten?
+	 */
+	private static function waitFor( string $start, int $abstand ): int {
+		$letzte = Database::scalar(
+			'SELECT MAX(COALESCE(`finished_at`, `started_at`)) FROM `' . Database::table( 'backups' ) . '`
+			 WHERE `started_at` >= :s',
+			array( 's' => $start )
+		);
+
+		if ( ! is_string( $letzte ) ) {
+			// Noch nichts gelaufen in diesem Fenster: sofort loslegen.
+			return 0;
+		}
+
+		return max( 0, (int) strtotime( $letzte . ' UTC' ) + $abstand - time() );
+	}
+
+	/**
 	 * Läuft die nächtliche Sicherung wirklich?
 	 *
 	 * Eine Sicherung, die stillschweigend nicht stattfindet, ist schlimmer als
@@ -586,6 +760,34 @@ final class BackupService {
 	}
 
 	/* ----------------------------------------------------------- Werkzeuge */
+
+	/**
+	 * Spiegel einer Seite wegräumen.
+	 *
+	 * Der Datenbank-Export gehört dazu — er liegt im selben Baum.
+	 */
+	public static function discardMirror( int $siteId ): bool {
+		$pfad = self::mirrorPath( $siteId );
+
+		if ( ! is_dir( $pfad ) ) {
+			return true;
+		}
+
+		$eintraege = new \RecursiveIteratorIterator(
+			new \RecursiveDirectoryIterator( $pfad, \FilesystemIterator::SKIP_DOTS ),
+			\RecursiveIteratorIterator::CHILD_FIRST
+		);
+
+		foreach ( $eintraege as $eintrag ) {
+			if ( $eintrag->isDir() ) {
+				@rmdir( $eintrag->getPathname() );
+			} else {
+				@unlink( $eintrag->getPathname() );
+			}
+		}
+
+		return @rmdir( $pfad );
+	}
 
 	public static function mirrorBase(): string {
 		$base = trim( Setting::get( 'backup_mirror_dir', '' ) );

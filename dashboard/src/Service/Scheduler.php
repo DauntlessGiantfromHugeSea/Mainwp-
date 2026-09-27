@@ -26,12 +26,23 @@ final class Scheduler {
 		'sync'         => array( 'label' => 'Seiten synchronisieren', 'interval' => 900 ),
 		'auto_updates' => array( 'label' => 'Automatische Updates', 'interval' => 3600 ),
 		'reports'      => array( 'label' => 'Fällige Berichte', 'interval' => 3600 ),
-		'backups'      => array( 'label' => 'Sicherungen', 'interval' => 3600 ),
+		// Alle fuenf Minuten nachsehen: im Zeitfenster kommt dann je Durchgang
+		// eine Seite dran, mit dem eingestellten Abstand dazwischen.
+		'backups'      => array( 'label' => 'Sicherungen', 'interval' => 300 ),
 		'cleanup'      => array( 'label' => 'Aufräumen', 'interval' => 86400 ),
 	);
 
 	/** Eine Aufgabe gilt nach dieser Zeit als hängengeblieben. */
 	private const LOCK_TIMEOUT = 1800;
+
+	/**
+	 * Aufgaben, die länger dürfen.
+	 *
+	 * Eine Sicherung überträgt beim ersten Lauf die ganze Mediathek — eine
+	 * halbe Stunde ist dafür nichts. Liefe die Sperre vorher ab, startete der
+	 * nächste Durchgang dieselbe Sicherung ein zweites Mal.
+	 */
+	private const LOCK_TIMEOUTS = array( 'backups' => 21600 );
 
 	/**
 	 * Alle fälligen Aufgaben ausführen.
@@ -113,16 +124,7 @@ final class Scheduler {
 				return sprintf( '%d Bericht(e) erstellt', ReportService::runScheduled() );
 
 			case 'backups':
-				if ( ! Setting::getBool( 'backup_enabled', false ) ) {
-					return 'deaktiviert';
-				}
-				// Läuft stündlich an, arbeitet aber nur zur eingestellten Stunde.
-				if ( (int) date( 'G' ) !== Setting::getInt( 'backup_hour', 3 ) ) {
-					return 'ausserhalb des Zeitfensters';
-				}
-
-				$stats = BackupService::runAll();
-				return sprintf( '%d gesichert, %d fehlgeschlagen', $stats['ok'], $stats['failed'] );
+				return BackupService::runWindow();
 
 			case 'cleanup':
 				$activity = ActivityRepository::prune( Setting::getInt( 'activity_retention', 180 ) );
@@ -245,7 +247,7 @@ final class Scheduler {
 			$lockedAt = ! empty( $state['locked_at'] ) ? (int) strtotime( (string) $state['locked_at'] . ' UTC' ) : 0;
 
 			// Abgelaufene Sperre eines abgestürzten Laufs übernehmen.
-			if ( time() - $lockedAt < self::LOCK_TIMEOUT ) {
+			if ( time() - $lockedAt < ( self::LOCK_TIMEOUTS[ $name ] ?? self::LOCK_TIMEOUT ) ) {
 				return false;
 			}
 		}

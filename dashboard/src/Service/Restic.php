@@ -729,6 +729,7 @@ final class Restic {
 		// greift SSH_ASKPASS zuverlässig.
 		$prefix = '' !== trim( (string) shell_exec( 'command -v setsid 2>/dev/null' ) ) ? 'setsid -w ' : '';
 
+
 		$descriptors = array( 1 => array( 'pipe', 'w' ), 2 => array( 'pipe', 'w' ) );
 
 		$process = proc_open(
@@ -1096,19 +1097,31 @@ final class Restic {
 	 *
 	 * @return array{ok:bool,output:string}
 	 */
-	public static function forget( string $host ): array {
-		return self::run(
-			array(
-				'forget',
-				'--host', $host,
-				'--keep-daily', (string) max( 1, Setting::getInt( 'backup_keep_daily', 7 ) ),
-				'--keep-weekly', (string) max( 0, Setting::getInt( 'backup_keep_weekly', 4 ) ),
-				'--keep-monthly', (string) max( 0, Setting::getInt( 'backup_keep_monthly', 6 ) ),
-				'--prune',
-			),
-			true,
-			3600
+	public static function forget( string $host, bool $prune = false ): array {
+		$args = array(
+			'forget',
+			'--host', $host,
+			'--keep-daily', (string) max( 1, Setting::getInt( 'backup_keep_daily', 7 ) ),
+			'--keep-weekly', (string) max( 0, Setting::getInt( 'backup_keep_weekly', 4 ) ),
+			'--keep-monthly', (string) max( 0, Setting::getInt( 'backup_keep_monthly', 6 ) ),
 		);
+
+		if ( $prune ) {
+			$args[] = '--prune';
+		}
+
+		return self::run( $args, true, 3600 );
+	}
+
+	/**
+	 * Aufräumen: die Pakete umschreiben, aus denen nichts mehr gebraucht wird.
+	 *
+	 * Das ist die mit Abstand schwerste Arbeit, die restic verrichtet — es
+	 * liest den gesamten Index und schreibt Pakete neu. Das gehört einmal an
+	 * das Ende eines Sicherungslaufs, nicht hinter jede einzelne Seite.
+	 */
+	public static function prune(): array {
+		return self::run( array( 'prune' ), true, 7200 );
 	}
 
 	/**
@@ -1178,12 +1191,26 @@ final class Restic {
 		}
 
 		if ( $withRepository ) {
+			$global = array();
+
 			$sftp = self::parseSftp( self::repository() );
 
 			if ( null !== $sftp ) {
-				// Vor den Unterbefehl, so wie restic globale Schalter erwartet.
-				$args = array_merge( array( '-o', 'sftp.command=' . self::sftpCommand( $sftp ) ), $args );
+				$global[] = '-o';
+				$global[] = 'sftp.command=' . self::sftpCommand( $sftp );
 			}
+
+			// Ohne Bremse zieht restic die Leitung zu, und nebenher ist der
+			// Server nicht mehr zu gebrauchen.
+			$limit = max( 0, Setting::getInt( 'backup_upload_limit', 0 ) );
+
+			if ( $limit > 0 ) {
+				$global[] = '--limit-upload';
+				$global[] = (string) $limit;
+			}
+
+			// Vor den Unterbefehl, so wie restic globale Schalter erwartet.
+			$args = array_merge( $global, $args );
 		}
 
 		$command = escapeshellcmd( $binary );
@@ -1198,7 +1225,7 @@ final class Restic {
 		);
 
 		$process = proc_open(
-			'timeout ' . (int) $timeout . ' ' . $command . ' 2>&1',
+			self::sanft() . 'timeout ' . (int) $timeout . ' ' . $command . ' 2>&1',
 			$descriptors,
 			$pipes,
 			null,
@@ -1228,6 +1255,33 @@ final class Restic {
 		}
 
 		return array( 'ok' => 0 === $code, 'output' => $output, 'code' => $code );
+	}
+
+	/**
+	 * Vorspann, der restic hinter alles andere zurücktreten lässt.
+	 *
+	 * Eine Sicherung darf den Server nicht lahmlegen. nice senkt den Anspruch
+	 * auf Rechenzeit, ionice auf Plattenzugriffe — letzteres wiegt schwerer,
+	 * weil das Umschreiben der Pakete vor allem die Platte beschäftigt.
+	 */
+	private static function sanft(): string {
+		static $vorspann = null;
+
+		if ( null !== $vorspann ) {
+			return $vorspann;
+		}
+
+		$vorspann = '';
+
+		if ( '' !== trim( (string) shell_exec( 'command -v nice 2>/dev/null' ) ) ) {
+			$vorspann .= 'nice -n 19 ';
+		}
+		if ( '' !== trim( (string) shell_exec( 'command -v ionice 2>/dev/null' ) ) ) {
+			// Klasse 3: nur wenn die Platte sonst nichts zu tun hat.
+			$vorspann .= 'ionice -c 3 ';
+		}
+
+		return $vorspann;
 	}
 
 	/**

@@ -168,6 +168,127 @@ check( 'Beide Sicherungspunkte des Tages bleiben',
 check( 'Der zweite Lauf uebertraegt nur noch das Delta',
 	$zweiter['bytes'] > 0 );
 
+/* ------------------------------- Spiegel behalten oder verwerfen -------- */
+
+// Der Spiegel ist eine Arbeitskopie. Wer ihn verwirft, spart Platz und zahlt
+// mit vollstaendiger Uebertragung in der naechsten Nacht.
+$spiegel = BackupService::mirrorPath( 1 );
+@mkdir( $spiegel . '/wp-content', 0750, true );
+file_put_contents( $spiegel . '/wp-content/datei.txt', 'Inhalt' );
+
+check( 'Der Spiegel liegt vor', is_dir( $spiegel ) );
+check( 'Verwerfen raeumt ihn weg', BackupService::discardMirror( 1 ) );
+check( 'Danach ist er fort', ! is_dir( $spiegel ) );
+check( 'Ein zweiter Aufruf stoert nicht', BackupService::discardMirror( 1 ) );
+check( 'Und ein Spiegel, den es nie gab, auch nicht', BackupService::discardMirror( 999 ) );
+
+// Die Panel-Sicherung haengt nicht daran.
+Setting::set( 'backup_keep_mirror', '0' );
+$mitVerwerfen = BackupService::runPanel();
+check( 'Die Panel-Sicherung laeuft unabhaengig davon', $mitVerwerfen['ok'], $mitVerwerfen['error'] );
+Setting::set( 'backup_keep_mirror', '1' );
+
+/* ------------------------------- Verteilung ueber das Zeitfenster -------- */
+
+// Drei Seiten, Abstand 30 Minuten: je Durchgang darf genau eine drankommen.
+Setting::setMany( array(
+	'backup_enabled' => '1',
+	'backup_panel'   => '0',
+	// Eine Stunde zurueck: das Fenster laeuft dann schon, und es bleibt Raum,
+	// den letzten Lauf darin zurueckzudatieren.
+	'backup_hour'    => (string) ( ( (int) gmdate( 'G' ) + 23 ) % 24 ),
+	'backup_spacing' => '30',
+) );
+
+Database::run( 'DELETE FROM `' . Database::table( 'backups' ) . '`' );
+Database::run( 'UPDATE `' . Database::table( 'sites' ) . "` SET `status` = 'connected', `backup_enabled` = 1" );
+
+foreach ( array( 'Zweite Seite', 'Dritte Seite' ) as $name ) {
+	Database::insert( 'sites', array(
+		'name' => $name, 'url' => 'https://' . strtolower( str_replace( ' ', '-', $name ) ) . '.example',
+		'status' => 'connected', 'backup_enabled' => 1, 'created_at' => nl_utc(), 'updated_at' => nl_utc(),
+	) );
+}
+
+$seiten = (int) Database::scalar( 'SELECT COUNT(*) FROM `' . Database::table( 'sites' ) . "` WHERE `status` = 'connected'" );
+
+check( 'Drei Seiten stehen bereit', 3 === $seiten, (string) $seiten );
+
+$erster = BackupService::runWindow();
+
+check( 'Der erste Durchgang nimmt sich eine Seite vor',
+	str_contains( $erster, 'weitere offen' ), $erster );
+check( 'Und nennt, wie viele noch fehlen', str_contains( $erster, '(2 weitere offen)' ), $erster );
+check( 'Genau ein Lauf steht in der Liste',
+	1 === (int) Database::scalar( 'SELECT COUNT(*) FROM `' . Database::table( 'backups' ) . '`' ) );
+
+$zweiter = BackupService::runWindow();
+
+check( 'Der naechste Durchgang wartet auf den Abstand',
+	str_contains( $zweiter, 'Abstand' ), $zweiter );
+check( 'Er nennt die verbleibende Wartezeit', str_contains( $zweiter, 'Minute' ), $zweiter );
+check( 'Und hat nichts zusaetzlich angefasst',
+	1 === (int) Database::scalar( 'SELECT COUNT(*) FROM `' . Database::table( 'backups' ) . '`' ) );
+
+// Die Uhr vorstellen, indem der letzte Lauf zurueckdatiert wird.
+Database::run(
+	'UPDATE `' . Database::table( 'backups' ) . '` SET `started_at` = :s, `finished_at` = :f',
+	array( 's' => gmdate( 'Y-m-d H:i:s', time() - 2400 ), 'f' => gmdate( 'Y-m-d H:i:s', time() - 2400 ) )
+);
+
+$dritter = BackupService::runWindow();
+
+check( 'Nach Ablauf des Abstands kommt die naechste Seite dran',
+	str_contains( $dritter, 'weitere offen' ), $dritter );
+check( 'Jetzt stehen zwei Laeufe in der Liste',
+	2 === (int) Database::scalar( 'SELECT COUNT(*) FROM `' . Database::table( 'backups' ) . '`' ) );
+check( 'Eine bereits erledigte Seite kommt nicht noch einmal dran',
+	str_contains( $dritter, '(1 weitere offen)' ), $dritter );
+
+/* --- Ist alles durch, passiert nichts mehr ------------------------------ */
+
+$nochmal = BackupService::runWindow();
+while ( str_contains( $nochmal, 'Abstand' ) || str_contains( $nochmal, 'weitere offen' ) ) {
+	Database::run( 'UPDATE `' . Database::table( 'backups' ) . '` SET `finished_at` = :f',
+		array( 'f' => gmdate( 'Y-m-d H:i:s', time() - 2400 ) ) );
+	$nochmal = BackupService::runWindow();
+}
+
+check( 'Ist alles angefasst, wird einmal aufgeraeumt',
+	str_contains( $nochmal, 'aufgeräumt' ) || 'nichts offen' === $nochmal, $nochmal );
+check( 'Und das Aufraeumen wird vermerkt', '' !== Setting::get( 'backup_pruned_at' ) );
+
+// Ein zweiter Durchgang raeumt nicht noch einmal auf.
+$dritterDurchgang = BackupService::runWindow();
+check( 'Im selben Fenster wird nur einmal aufgeraeumt',
+	'nichts offen' === $dritterDurchgang, $dritterDurchgang );
+check( 'Jede Seite genau einmal im Fenster',
+	3 === (int) Database::scalar( 'SELECT COUNT(DISTINCT `site_id`) FROM `' . Database::table( 'backups' ) . '`' ) );
+
+/* --- Abstand 0: alles in einem Rutsch ----------------------------------- */
+
+Setting::set( 'backup_spacing', '0' );
+Database::run( 'DELETE FROM `' . Database::table( 'backups' ) . '`' );
+
+$alles = BackupService::runWindow();
+
+check( 'Ohne Abstand laeuft alles in einem Durchgang',
+	str_contains( $alles, 'gesichert' ) && str_contains( $alles, 'fehlgeschlagen' ), $alles );
+check( 'Und dabei kommen alle drei Seiten dran',
+	3 === (int) Database::scalar( 'SELECT COUNT(DISTINCT `site_id`) FROM `' . Database::table( 'backups' ) . '`' ) );
+
+check( 'Abgeschaltet passiert gar nichts', (function () {
+	NorthLab\Core\Setting::set( 'backup_enabled', '0' );
+	$r = NorthLab\Service\BackupService::runWindow();
+	NorthLab\Core\Setting::set( 'backup_enabled', '1' );
+	return 'deaktiviert' === $r;
+})() );
+
+// Fuer die folgenden Pruefungen wieder aufraeumen.
+Database::run( 'DELETE FROM `' . Database::table( 'sites' ) . '` WHERE `id` > 1' );
+Database::run( 'DELETE FROM `' . Database::table( 'backups' ) . '`' );
+Setting::setMany( array( 'backup_enabled' => '0', 'backup_spacing' => '30' ) );
+
 /* ------------------------------------ Der naechtliche Lauf und der Zeitplan */
 
 // Zwei Seiten, beide aus dem Zeitplan genommen: der Lauf darf sie

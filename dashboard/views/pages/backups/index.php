@@ -628,6 +628,20 @@ $needsSsh = in_array( $targetType, array( 'storagebox', 'sftp' ), true );
 						</div>
 
 						<div class="field inline">
+							<input type="checkbox" id="spiegel" name="backup_keep_mirror" value="1"
+								<?= '0' === $get( 'backup_keep_mirror', '1' ) ? '' : 'checked' ?>>
+							<label for="spiegel">Spiegel auf diesem Server behalten</label>
+						</div>
+						<div class="hint" style="margin:-6px 0 14px">
+							Die Sicherung selbst liegt immer nur auf dem entfernten Speicher — der Spiegel
+							ist eine Arbeitskopie. restic kann nur ein lokales Verzeichnis sichern, und
+							deine Kundenseiten geben ihre Dateien nur über HTTPS heraus.
+							<strong>Behalten</strong> heisst: nachts wird nur geholt, was sich geändert hat.
+							<strong>Verwerfen</strong> spart Plattenplatz, überträgt aber jede Nacht jede
+							Seite vollständig neu — das dauert und belastet die Kundenseiten.
+						</div>
+
+						<div class="field inline">
 							<input type="checkbox" id="pnl" name="backup_panel" value="1"
 								<?= '1' === $get( 'backup_panel', '1' ) ? 'checked' : '' ?>>
 							<label for="pnl">Das Panel selbst mitsichern</label>
@@ -641,7 +655,20 @@ $needsSsh = in_array( $targetType, array( 'storagebox', 'sftp' ), true );
 							<div class="field">
 								<label for="hour">Uhrzeit</label>
 								<input type="number" id="hour" name="backup_hour" min="0" max="23" value="<?= e( (string) $hour ) ?>">
-								<div class="hint">Serverzeit. Nachts, wenn wenig los ist.</div>
+								<div class="hint">
+								Beginn des Fensters. Es läuft bis zur selben Stunde am nächsten Tag,
+								damit auch viele Seiten mit Abstand durchkommen.
+							</div>
+							</div>
+							<div class="field">
+								<label for="abstand">Abstand zwischen Seiten</label>
+								<input type="number" id="abstand" name="backup_spacing" min="0" max="240" step="5"
+									value="<?= e( $get( 'backup_spacing', '30' ) ) ?>">
+								<div class="hint">
+									Minuten. Es kommt immer nur eine Seite dran, dann diese Pause —
+									so liegt nicht die ganze Last auf einmal an. <code>0</code> sichert
+									alles hintereinander weg.
+								</div>
 							</div>
 							<div class="field">
 								<label for="root">Umfang</label>
@@ -662,6 +689,15 @@ $needsSsh = in_array( $targetType, array( 'storagebox', 'sftp' ), true );
 							<div class="field">
 								<label for="km">monatlich</label>
 								<input type="number" id="km" name="backup_keep_monthly" min="0" value="<?= e( $get( 'backup_keep_monthly', '6' ) ) ?>">
+							</div>
+							<div class="field">
+								<label for="tempo">Übertragung bremsen</label>
+								<input type="number" id="tempo" name="backup_upload_limit" min="0" step="256"
+									value="<?= e( $get( 'backup_upload_limit', '0' ) ) ?>">
+								<div class="hint">
+									KiB/s zum Speicher. <code>0</code> = ohne Bremse. Sinnvoll, wenn der
+									Server während der Sicherung sonst nicht mehr zu gebrauchen ist.
+								</div>
 							</div>
 							<div class="field">
 								<label for="mir">Spiegelverzeichnis</label>
