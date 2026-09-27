@@ -288,6 +288,7 @@ final class BackupController extends BaseController {
 			$type,
 			array(
 				'user'       => $request->string( 'sb_user' ),
+				'port'       => $request->int( 'sb_port', \NorthLab\Service\Restic::STORAGEBOX_PORT ),
 				'path'       => 's3' === $type ? $request->string( 's3_prefix' ) : $request->string( 'sb_path' ),
 				'endpoint'   => $request->string( 's3_endpoint' ),
 				'bucket'     => $request->string( 's3_bucket' ),
@@ -322,6 +323,7 @@ final class BackupController extends BaseController {
 			'restic_binary'      => $request->string( 'restic_binary' ),
 			'sb_user'            => $request->string( 'sb_user' ),
 			'sb_path'            => $request->string( 'sb_path' ),
+			'sb_port'            => (string) $request->int( 'sb_port', \NorthLab\Service\Restic::STORAGEBOX_PORT ),
 			's3_endpoint'        => $request->string( 's3_endpoint' ),
 			's3_bucket'          => $request->string( 's3_bucket' ),
 			's3_prefix'          => $request->string( 's3_prefix' ),

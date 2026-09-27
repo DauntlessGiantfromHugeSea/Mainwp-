@@ -136,6 +136,8 @@ check( 'Frisch: die S3-Felder sind ausgeblendet',
 	preg_match( '/data-choice-when="target:s3"[^>]*hidden/', $html ) === 1 );
 check( 'Frisch: es wird zum Schluesselerzeugen aufgefordert',
 	str_contains( $html, 'Schlüsselpaar erzeugen' ) );
+check( 'Frisch: ohne Schluessel verweist der Kasten aufs Erzeugen',
+	str_contains( $html, 'erst unten unter „SSH-Zugang“ ein Schlüsselpaar erzeugen' ) );
 check( 'Frisch: die Bereitschaft meldet offene Punkte', str_contains( $html, 'offen' ) );
 check( 'Frisch: kein Wirtsschluessel-Block ohne Ziel', ! str_contains( $html, 'Wirtsschlüssel abrufen' ) );
 check( 'Frisch: das Panel selbst wird angeboten', str_contains( $html, 'Das Panel selbst' ) );
@@ -150,6 +152,15 @@ check( 'Frisch: Port 23 wird erklaert', str_contains( $html, 'Port 23' ) );
 check( 'Frisch: auf SSH-Support und externe Erreichbarkeit wird hingewiesen',
 	str_contains( $html, 'SSH-Support' ) && str_contains( $html, 'Externe Erreichbarkeit' ) );
 check( 'Frisch: Unterkonten werden erwaehnt', str_contains( $html, 'u123456-sub1' ) );
+check( 'Frisch: der Port laesst sich waehlen', str_contains( $html, 'name="sb_port"' ) );
+check( 'Frisch: mit 23 als Vorgabe', 1 === preg_match( '/value="23"[^>]*selected/', $html ) );
+check( 'Frisch: und 22 als Ausweg', str_contains( $html, '22 — nur SFTP' ) );
+check( 'Frisch: der Weg ohne Passwort wird gezeigt',
+	str_contains( $html, 'Kein Passwort zur Hand?' ) );
+check( 'Frisch: mit dem Hinweis aufs eigene Box-Passwort',
+	str_contains( $html, 'nicht das deines' ) );
+check( 'Frisch: und der Anweisung, das Feld leer zu lassen',
+	str_contains( $html, 'leer lassen' ) );
 
 // Ausgeblendete Felder werden trotzdem mitgeschickt. Traegt ein leeres Feld
 // denselben Namen wie ein ausgefuelltes, gewinnt das letzte — und die Eingabe
@@ -195,6 +206,10 @@ $html = render( array( 'configured' => true, 'enabled' => true ) );
 
 check( 'Mit Schluessel: der oeffentliche Teil steht da',
 	str_contains( $html, 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5 northlab-panel' ) );
+// Auch im Kasten "Kein Passwort zur Hand" — dort wird er gebraucht.
+check( 'Mit Schluessel: er steht auch zum Einfuegen ins Hetzner-Konto bereit',
+	2 === substr_count( $html, 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5 northlab-panel' ) );
+check( 'Mit Schluessel: mit der Anleitung dazu', str_contains( $html, 'SSH-Keys' ) );
 check( 'Mit Schluessel: der Einspielbefehl nennt Port 23',
 	str_contains( $html, 'ssh-copy-id -s -p 23' ) );
 check( 'Mit Schluessel: der Befehl nennt Benutzer und Wirt',

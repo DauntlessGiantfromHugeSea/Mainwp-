@@ -158,6 +158,33 @@ check( 'Auf dem Speicher steht immer noch genau ein Schluessel',
 	1 === count( array_filter( explode( "\n", (string) file_get_contents( '/home/boxuser/.ssh/authorized_keys' ) ),
 		static fn( $l ) => '' !== trim( $l ) ) ) );
 
+/* ------------- Der Weg ohne Passwort: Schluessel kommt von woanders ------- */
+
+// So laeuft es, wenn der Schluessel ueber das Hetzner-Konto hinterlegt wurde
+// statt ueber ssh-copy-id: das Passwortfeld bleibt leer.
+shell_exec( 'rm -rf /home/boxuser/.ssh /home/boxuser/repo' );
+
+// "Jemand anderes" legt den Schluessel ab — hier von Hand, im Ernstfall die
+// Weboberflaeche von Hetzner.
+shell_exec( 'install -d -o boxuser -g boxuser -m 700 /home/boxuser/.ssh' );
+shell_exec( 'install -o boxuser -g boxuser -m 600 ' . escapeshellarg( Restic::keyPath() . '.pub' ) . ' /home/boxuser/.ssh/authorized_keys' );
+
+$ohnePasswort = Restic::autoSetup( '' );
+
+check( 'Ohne Passwort laeuft die Einrichtung vollstaendig durch',
+	count( array_filter( $ohnePasswort, static fn( $s ) => ! $s['ok'] ) ) === 0, zeige( $ohnePasswort ) );
+check( 'Das Ablegen wird uebersprungen',
+	str_contains( (string) ( schritt( $ohnePasswort, 'Schlüssel auf dem Speicher' )['detail'] ?? '' ), 'Übersprungen' ) );
+check( 'Mit dem Hinweis, dass er anders dorthin muss',
+	str_contains( (string) ( schritt( $ohnePasswort, 'Schlüssel auf dem Speicher' )['detail'] ?? '' ), 'Hetzner-Konto' ) );
+check( 'Und das Repository entsteht trotzdem',
+	( schritt( $ohnePasswort, 'Repository erreichbar' )['ok'] ?? false ) );
+check( 'Es liegt danach auf dem Speicher', is_file( '/home/boxuser/repo/config' ) );
+
+// Und eine echte Sicherung geht darueber auch.
+$sicherung = BackupService::runPanel();
+check( 'Eine Sicherung laeuft ohne je ein Passwort gesehen zu haben', $sicherung['ok'], $sicherung['error'] );
+
 /* ------------------------------------------------- Falsches Passwort */
 
 shell_exec( 'rm -rf /home/boxuser/.ssh' );

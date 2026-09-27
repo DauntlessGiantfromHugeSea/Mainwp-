@@ -33,8 +33,15 @@ final class Restic {
 		'https://hel1.your-objectstorage.com' => 'Hetzner Helsinki (hel1)',
 	);
 
-	/** SSH-Port einer Hetzner Storage Box. Port 22 ist dort nicht der Weg. */
-	public const STORAGEBOX_PORT = 23;
+	/**
+	 * Übliche Ports einer Hetzner Storage Box.
+	 *
+	 * 23 trägt SFTP und eine eingeschränkte Shell, hängt aber am Schalter
+	 * „SSH-Support“. 22 trägt nur SFTP und SCP — das genügt restic, und laut
+	 * Hetzner lässt sich Port 22 nicht abschalten.
+	 */
+	public const STORAGEBOX_PORT  = 23;
+	public const STORAGEBOX_PORTS = array( 23, 22 );
 
 	/* --------------------------------------------------------- Werkzeug */
 
@@ -215,13 +222,19 @@ final class Restic {
 					return '';
 				}
 
+				$port = (int) ( $values['port'] ?? self::STORAGEBOX_PORT );
+
+				if ( ! in_array( $port, self::STORAGEBOX_PORTS, true ) ) {
+					$port = self::STORAGEBOX_PORT;
+				}
+
 				// Der Benutzer ist zugleich der Wirtsname. Ein einzelner
 				// Schraegstrich heisst: relativ zum Anmeldeverzeichnis.
 				return sprintf(
 					'sftp://%s@%s.your-storagebox.de:%d/%s',
 					$user,
 					$user,
-					self::STORAGEBOX_PORT,
+					$port,
 					'' === $path ? 'northlab' : $path
 				);
 
@@ -853,7 +866,9 @@ final class Restic {
 			return 'Zeitablauf — der Speicher hat nicht geantwortet.';
 		}
 		if ( str_contains( $lower, 'permission denied' ) ) {
-			return 'Das Passwort wurde abgelehnt.';
+			return 'Das Passwort wurde abgelehnt. Die Storage Box hat ein eigenes Passwort — nicht das '
+				. 'des Hetzner-Kontos. Alternativ den Schlüssel unten im Hetzner-Konto hinterlegen und '
+				. 'hier ohne Passwort einrichten.';
 		}
 		if ( str_contains( $lower, 'host key verification failed' ) ) {
 			return 'Der Wirtsschlüssel passt nicht zum hinterlegten.';
@@ -1002,7 +1017,12 @@ final class Restic {
 					return $steps;
 				}
 			} else {
-				$add( 'Schlüssel auf dem Speicher', true, 'Übersprungen — kein Passwort angegeben.' );
+				$add(
+					'Schlüssel auf dem Speicher',
+					true,
+					'Übersprungen — kein Passwort angegeben. Er muss dort auf anderem Weg liegen, '
+					. 'etwa über das Hetzner-Konto.'
+				);
 			}
 		}
 
@@ -1336,22 +1356,36 @@ final class Restic {
 			if ( $withNetwork ) {
 				$reachable = self::portOpen( $sftp['host'], $sftp['port'] );
 
-				$add(
-					sprintf( 'Port %d erreichbar', $sftp['port'] ),
-					$reachable ? 'ok' : 'bad',
-					$reachable
-						? $sftp['host'] . ' antwortet.'
-						: sprintf(
-							'Keine Verbindung zu %s:%d. %s',
-							$sftp['host'],
-							$sftp['port'],
-							'storagebox' === $type
-								// Neue Storage Boxen haben SSH ab Werk aus.
-								? 'Bei einer Storage Box sind dafür im Hetzner-Konto unter "Einstellungen ändern" '
-									. 'die Punkte "SSH-Support" und "Externe Erreichbarkeit" nötig.'
-								: 'Firewall oder falscher Port?'
-						)
-				);
+				// Antwortet der eingestellte Port nicht, hilft die Frage, ob es
+				// der andere tut: dann ist nicht die Leitung das Problem,
+				// sondern ein Schalter im Hetzner-Konto.
+				$andererPort = 'storagebox' === $type && ! $reachable
+					? ( 23 === $sftp['port'] ? 22 : 23 )
+					: 0;
+
+				$andererOffen = 0 !== $andererPort && self::portOpen( $sftp['host'], $andererPort );
+
+				if ( $reachable ) {
+					$detail = $sftp['host'] . ' antwortet.';
+				} elseif ( $andererOffen ) {
+					$detail = sprintf(
+						'Port %d antwortet nicht, Port %d aber schon. Für restic genügt Port %d — '
+						. 'oben unter "Port" umstellen. Oder im Hetzner-Konto "SSH-Support" einschalten.',
+						$sftp['port'],
+						$andererPort,
+						$andererPort
+					);
+				} elseif ( 'storagebox' === $type ) {
+					$detail = sprintf(
+						'Weder Port 22 noch Port 23 antworten auf %s. Im Hetzner-Konto unter '
+						. '"Einstellungen ändern" muss "Externe Erreichbarkeit" eingeschaltet sein.',
+						$sftp['host']
+					);
+				} else {
+					$detail = sprintf( 'Keine Verbindung zu %s:%d — Firewall oder falscher Port?', $sftp['host'], $sftp['port'] );
+				}
+
+				$add( sprintf( 'Port %d erreichbar', $sftp['port'] ), $reachable ? 'ok' : 'bad', $detail );
 			}
 		}
 

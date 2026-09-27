@@ -122,6 +122,17 @@ check( 'Storage Box: fuehrende Schraegstriche fliegen raus',
 check( 'Storage Box: ohne Benutzer keine Adresse',
 	'' === Restic::buildRepository( 'storagebox', array( 'user' => '' ) ) );
 
+// Port 22 traegt das SFTP ebenfalls und laesst sich bei Hetzner nicht
+// abschalten — fuer den Fall, dass "SSH-Support" aus bleibt.
+check( 'Storage Box: Port 22 laesst sich waehlen',
+	'sftp://u1@u1.your-storagebox.de:22/northlab'
+		=== Restic::buildRepository( 'storagebox', array( 'user' => 'u1', 'port' => 22 ) ) );
+check( 'Storage Box: Vorgabe bleibt 23',
+	str_contains( Restic::buildRepository( 'storagebox', array( 'user' => 'u1' ) ), ':23/' ) );
+check( 'Storage Box: ein unsinniger Port faellt auf 23 zurueck',
+	str_contains( Restic::buildRepository( 'storagebox', array( 'user' => 'u1', 'port' => 9999 ) ), ':23/' ) );
+check( 'Storage Box: beide Ports sind hinterlegt', array( 23, 22 ) === Restic::STORAGEBOX_PORTS );
+
 // Ein Unterkonto heisst uXXXXXX-subN und hat einen eigenen Wirtsnamen, der
 // genauso lautet — nicht den des Hauptkontos.
 $unterkonto = Restic::buildRepository( 'storagebox', array( 'user' => 'u123456-sub1', 'path' => 'northlab' ) );
@@ -411,6 +422,15 @@ $abgelehnt = 'subprocess ssh: u669261@u669261.your-storagebox.de: Permission den
 $hinweis = Restic::hinweis( $abgelehnt );
 
 check( 'Eine abgelehnte Anmeldung wird erkannt', null !== $hinweis );
+// Die haeufigste Verwechslung: Konto-Passwort statt Box-Passwort.
+$abgelehntText = ( new ReflectionMethod( Restic::class, 'explain' ) );
+$abgelehntText->setAccessible( true );
+$erklaerung = (string) $abgelehntText->invoke( null, 'Permission denied, please try again.', 1 );
+
+check( 'Die Erklaerung trennt Box- und Kontopasswort',
+	str_contains( $erklaerung, 'eigenes Passwort' ) && str_contains( $erklaerung, 'Hetzner-Kontos' ), $erklaerung );
+check( 'Und nennt den Weg ohne Passwort',
+	str_contains( $erklaerung, 'ohne Passwort einrichten' ), $erklaerung );
 check( 'Der Hinweis nennt den fehlenden Schluessel',
 	str_contains( (string) $hinweis, 'Schlüssel des Panels' ) );
 check( 'Und sagt, wo man ihn ablegt', str_contains( (string) $hinweis, 'Einrichten' ) );

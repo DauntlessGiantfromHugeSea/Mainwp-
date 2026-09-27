@@ -230,6 +230,31 @@ $needsSsh = in_array( $targetType, array( 'storagebox', 'sftp' ), true );
 				</div>
 			</form>
 
+			<details<?= '' === $publicKey ? '' : ' open' ?>>
+				<summary class="small muted">Kein Passwort zur Hand?</summary>
+				<div class="small mt">
+					<p>
+						Das Passwort der Storage Box ist ein <strong>eigenes</strong> — nicht das deines
+						Hetzner-Kontos, und die Zwei-Faktor-Anmeldung deines Kontos gilt dafür nicht.
+						Wenn du es nicht zur Hand hast oder gar nicht verwenden willst, geht es auch
+						andersherum: den Schlüssel selbst im Hetzner-Konto hinterlegen.
+					</p>
+					<ol>
+						<li>Im Hetzner-Konto bei der Storage Box <em>SSH-Keys</em> öffnen.</li>
+						<li>Diesen öffentlichen Schlüssel dort einfügen:
+							<?php if ( '' === $publicKey ) : ?>
+								<em>— erst unten unter „SSH-Zugang“ ein Schlüsselpaar erzeugen.</em>
+							<?php else : ?>
+								<textarea class="mono mt" rows="3" readonly onclick="this.select()"><?= e( $publicKey ) ?></textarea>
+							<?php endif; ?>
+						</li>
+						<li>Hier oben auf <em>Jetzt einrichten</em> klicken und das Passwortfeld
+							<strong>leer lassen</strong>. Das Panel überspringt dann das Ablegen und
+							erledigt den Rest.</li>
+					</ol>
+				</div>
+			</details>
+
 			<?php if ( $setupSteps ) : ?>
 				<h3 class="mt">Letzter Versuch<?= '' !== $setupAt ? ' — ' . e( nl_ago( $setupAt ) ) : '' ?></h3>
 				<table class="data">
@@ -317,6 +342,17 @@ $needsSsh = in_array( $targetType, array( 'storagebox', 'sftp' ), true );
 										Steht im Hetzner-Konto. Der Wirt heisst genauso:
 										<code>u123456.your-storagebox.de</code>. Ein Unterkonto geht auch —
 										dann <code>u123456-sub1</code> eintragen.
+									</div>
+								</div>
+								<div class="field">
+									<label for="sbport">Port</label>
+									<select id="sbport" name="sb_port">
+										<option value="23" <?= '22' !== $get( 'sb_port', '23' ) ? 'selected' : '' ?>>23 — SFTP und Shell</option>
+										<option value="22" <?= '22' === $get( 'sb_port' ) ? 'selected' : '' ?>>22 — nur SFTP</option>
+									</select>
+									<div class="hint">
+										23 braucht „SSH-Support“ im Hetzner-Konto. 22 lässt sich dort nicht
+										abschalten und genügt für die Sicherung.
 									</div>
 								</div>
 								<div class="field">
