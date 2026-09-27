@@ -748,6 +748,24 @@ final class Restic {
 	}
 
 	/**
+	 * Die erste brauchbare Zeile einer Ausgabe.
+	 *
+	 * restic haengt an "created restic repository ..." noch einen Absatz ueber
+	 * das Passwort. Der gehoert nicht in eine Schrittmeldung.
+	 */
+	private static function firstLine( string $output ): string {
+		foreach ( explode( "\n", $output ) as $line ) {
+			$line = trim( $line );
+
+			if ( '' !== $line ) {
+				return $line;
+			}
+		}
+
+		return 'Erledigt.';
+	}
+
+	/**
 	 * Aus der Ausgabe von ssh etwas machen, mit dem man etwas anfangen kann.
 	 */
 	private static function explain( string $output, int $code ): string {
@@ -912,7 +930,7 @@ final class Restic {
 		$add(
 			'Repository erreichbar',
 			$init['ok'],
-			$init['ok'] ? trim( $init['output'] ) : self::explain( $init['output'], 1 )
+			$init['ok'] ? self::firstLine( $init['output'] ) : self::explain( $init['output'], 1 )
 		);
 
 		return $steps;
