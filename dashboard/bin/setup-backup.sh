@@ -11,8 +11,9 @@
 #
 set -eu
 
-sagen() { printf '%s\n' "$*"; }
-fehler() { printf 'FEHLER: %s\n' "$*" >&2; exit 1; }
+sagen()  { printf '%s\n' "$*"; }
+rot()    { printf '\033[31m%s\033[0m\n' "$*" >&2; }
+fehler() { rot "FEHLER: $*"; exit 1; }
 
 # --- Wo liegt das Panel? -----------------------------------------------------
 # Das Skript liegt in dashboard/bin/, die Wurzel ist also zwei Ebenen darueber.
@@ -37,19 +38,34 @@ fehlt=''
 command -v restic >/dev/null 2>&1 || fehlt="$fehlt restic"
 command -v ssh-copy-id >/dev/null 2>&1 || fehlt="$fehlt openssh-client"
 
+# Unvorhersehbarer Name: ein fester Pfad in /tmp liesse sich als root
+# ueber einen vorher angelegten Symlink missbrauchen.
+APT_LOG=$( mktemp )
+trap 'rm -f "$APT_LOG"' EXIT
+
 if [ -n "$fehlt" ]; then
 	sagen "Fehlt noch:$fehlt — wird nachinstalliert."
 
 	if command -v apt-get >/dev/null 2>&1; then
-		DEBIAN_FRONTEND=noninteractive apt-get update -qq
+		# Eine einzelne kaputte Fremdquelle (ein falscher Schluesselpfad reicht)
+		# laesst apt-get update scheitern. Das darf die Installation nicht
+		# aufhalten: die Paketlisten der Distribution sind dann trotzdem da.
+		if ! DEBIAN_FRONTEND=noninteractive apt-get update -qq > "$APT_LOG" 2>&1; then
+			sagen ""
+			sagen "Hinweis: apt-get update meldet Fehler. Betroffene Quelle(n):"
+			grep -E '^(E|W):' "$APT_LOG" | sed 's/^/    /' | head -6
+			sagen "    (wird uebergangen — die Installation laeuft weiter)"
+			sagen ""
+		fi
+
 		# shellcheck disable=SC2086
-		DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends $fehlt
+		DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends $fehlt || true
 	elif command -v dnf >/dev/null 2>&1; then
 		# shellcheck disable=SC2086
-		dnf install -y $fehlt
+		dnf install -y $fehlt || true
 	elif command -v yum >/dev/null 2>&1; then
 		# shellcheck disable=SC2086
-		yum install -y $fehlt
+		yum install -y $fehlt || true
 	else
 		fehler "Kein bekannter Paketmanager. Bitte von Hand installieren:$fehlt"
 	fi
@@ -57,7 +73,19 @@ else
 	sagen "restic und openssh-client sind schon da."
 fi
 
-command -v restic >/dev/null 2>&1 || fehler "restic liess sich nicht installieren."
+if ! command -v restic >/dev/null 2>&1; then
+	rot "restic liess sich nicht installieren."
+	if [ -s "$APT_LOG" ] && grep -q '^E:' "$APT_LOG"; then
+		rot ""
+		rot "Wahrscheinliche Ursache: eine defekte Paketquelle. Die Meldung war:"
+		grep '^E:' "$APT_LOG" | sed 's/^/    /' | head -4
+		rot ""
+		rot "Die betreffende Datei liegt in /etc/apt/sources.list.d/. Entweder den"
+		rot "Schluesselpfad darin richtigstellen oder die Quelle abschalten, dann"
+		rot "dieses Skript erneut aufrufen."
+	fi
+	exit 1
+fi
 
 sagen "restic: $( restic version | head -1 )"
 
