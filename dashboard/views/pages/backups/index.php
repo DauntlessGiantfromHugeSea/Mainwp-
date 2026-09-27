@@ -7,6 +7,9 @@
  * @var bool                           $available
  * @var string|null                    $resticInfo
  * @var string|null                    $resticProblem
+ * @var bool                           $cronHealthy
+ * @var string|null                    $cronLast
+ * @var string|null                    $scheduleWarning
  * @var string                         $repository
  * @var int                            $hour
  * @var int                            $diskFree
@@ -49,6 +52,13 @@ foreach ( $checks as $check ) {
 $needsSsh = in_array( $targetType, array( 'storagebox', 'sftp' ), true );
 ?>
 
+<?php if ( null !== $scheduleWarning ) : ?>
+	<div class="notice bad">
+		<strong>Die nächtliche Sicherung läuft nicht.</strong>
+		<?= e( $scheduleWarning ) ?>
+	</div>
+<?php endif; ?>
+
 <?php if ( ! $available ) : ?>
 	<div class="notice bad">
 		<strong>restic ist nicht einsatzbereit.</strong>
@@ -66,12 +76,18 @@ $needsSsh = in_array( $targetType, array( 'storagebox', 'sftp' ), true );
 <?php endif; ?>
 
 <div class="grid cols-4" style="margin-bottom:18px">
-	<div class="stat <?= $enabled && $configured ? 'ok' : 'warn' ?>">
+	<div class="stat <?= $enabled && $configured ? ( $cronHealthy ? 'ok' : 'bad' ) : 'warn' ?>">
 		<div class="label">Zeitplan</div>
 		<div class="value" style="font-size:19px;margin-top:6px">
 			<?= $enabled ? 'täglich ' . e( sprintf( '%02d:00', $hour ) ) : 'aus' ?>
 		</div>
-		<div class="sub"><?= e( $resticInfo ?: 'restic nicht gefunden' ) ?></div>
+		<div class="sub">
+			<?php if ( ! $cronHealthy ) : ?>
+				Zeitplaner still<?= null === $cronLast ? ' (nie gelaufen)' : ' seit ' . e( nl_ago( $cronLast ) ) ?>
+			<?php else : ?>
+				<?= e( $resticInfo ?: 'restic nicht gefunden' ) ?>
+			<?php endif; ?>
+		</div>
 	</div>
 	<div class="stat">
 		<div class="label">Gesicherte Seiten</div>

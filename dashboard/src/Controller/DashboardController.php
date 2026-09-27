@@ -46,6 +46,7 @@ final class DashboardController extends BaseController {
 				'queue'         => WebhookRepository::queueStats(),
 				'jobs'          => Scheduler::overview(),
 				'lastCron'      => Scheduler::lastHeartbeat(),
+				'cronHealthy'   => Scheduler::isCronHealthy(),
 			)
 		);
 	}

@@ -97,6 +97,9 @@ function render( array $data ): string {
 		'available'   => true,
 		'resticInfo'  => 'restic 0.17.3',
 		'resticProblem' => null,
+		'cronHealthy'     => true,
+		'cronLast'        => gmdate( 'Y-m-d H:i:s' ),
+		'scheduleWarning' => null,
 		'repository'  => Restic::repository(),
 		'targetType'  => Restic::type(),
 		'checks'      => Restic::diagnose(),
@@ -323,6 +326,40 @@ check( 'Ergebnis: der gescheiterte Schritt nennt den Grund',
 	str_contains( $html, 'Das Passwort wurde abgelehnt.' ) );
 check( 'Ergebnis: und ist als Fehler gekennzeichnet',
 	substr_count( $html, 'badge bad' ) >= 1 );
+
+/* ------------------------------ Laeuft der Zeitplaner ueberhaupt? -------- */
+
+Setting::$values = array( 'backup_target_type' => 'local', 'restic_repository' => '/mnt/box' );
+
+$stiller = render( array(
+	'configured'      => true,
+	'enabled'         => true,
+	'cronHealthy'     => false,
+	'cronLast'        => gmdate( 'Y-m-d H:i:s', time() - 7200 ),
+	'scheduleWarning' => 'Der Zeitplaner läuft nicht. Der nächtliche Lauf findet damit nicht statt.',
+) );
+
+check( 'Ein stiller Zeitplaner wird ganz oben gemeldet',
+	str_contains( $stiller, 'Die nächtliche Sicherung läuft nicht' ) );
+check( 'Mit dem Grund', str_contains( $stiller, 'Der Zeitplaner läuft nicht' ) );
+check( 'Die Kachel wird rot statt gruen', str_contains( $stiller, 'class="stat bad"' ) );
+check( 'Und sagt, seit wann es still ist', str_contains( $stiller, 'Zeitplaner still seit' ) );
+
+$nie = render( array(
+	'configured'  => true,
+	'enabled'     => true,
+	'cronHealthy' => false,
+	'cronLast'    => null,
+) );
+
+check( 'Ein nie gelaufener Zeitplaner wird als solcher benannt',
+	str_contains( $nie, 'nie gelaufen' ) );
+
+$laeuft = render( array( 'configured' => true, 'enabled' => true ) );
+
+check( 'Bei laufendem Zeitplaner keine Warnung',
+	! str_contains( $laeuft, 'Die nächtliche Sicherung läuft nicht' ) );
+check( 'Und die Kachel bleibt gruen', str_contains( $laeuft, 'class="stat ok"' ) );
 
 /* --------------------------------------------- restic nicht einsatzbereit */
 

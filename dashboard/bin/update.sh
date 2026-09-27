@@ -90,6 +90,15 @@ chmod -R 750 "$NL_TARGET/storage"
 chmod 640 "$NL_TARGET/config.php"
 chmod 550 "$NL_TARGET"
 
+# ssh verweigert einen privaten Schluessel, den auch die Gruppe lesen darf:
+# "Permissions 0750 are too open. This private key will be ignored."
+# Das pauschale 750 oben trifft ihn mit, also hier wieder einschraenken.
+if [ -d "$NL_TARGET/storage/restic/.ssh" ]; then
+	chmod 700 "$NL_TARGET/storage/restic" "$NL_TARGET/storage/restic/.ssh"
+	find "$NL_TARGET/storage/restic/.ssh" -type f ! -name '*.pub' -exec chmod 600 {} +
+	find "$NL_TARGET/storage/restic/.ssh" -type f -name '*.pub' -exec chmod 644 {} +
+fi
+
 # --- 4. Datenbankschema nachziehen -----------------------------------------
 
 echo "→ Schema prüfen"

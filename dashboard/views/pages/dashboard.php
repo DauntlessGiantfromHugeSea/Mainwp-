@@ -11,6 +11,7 @@
  * @var array<int,array<string,mixed>> $jobs
  * @var array<string,int>              $stats
  * @var string|null                    $lastCron
+ * @var bool                           $cronHealthy
  */
 
 use NorthLab\Core\Auth;
@@ -24,6 +25,16 @@ View::set(
 		: ''
 );
 ?>
+
+<?php if ( ! $cronHealthy ) : ?>
+	<div class="notice bad">
+		<strong>Der Zeitplaner läuft nicht.</strong>
+		<?= null === $lastCron ? 'Er ist noch nie gelaufen.' : 'Zuletzt ' . e( nl_ago( $lastCron ) ) . '.' ?>
+		Damit findet nichts von allein statt — keine Synchronisierung, keine
+		Erreichbarkeitsprüfung und keine nächtliche Sicherung.
+		Auf dem Panel-Server prüfen: <code>crontab -u www-data -l</code>
+	</div>
+<?php endif; ?>
 
 <div class="grid cols-4" style="margin-bottom:18px">
 	<div class="stat">

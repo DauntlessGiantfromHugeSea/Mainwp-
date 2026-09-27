@@ -462,6 +462,49 @@ final class BackupService {
 	}
 
 	/**
+	 * Läuft die nächtliche Sicherung wirklich?
+	 *
+	 * Eine Sicherung, die stillschweigend nicht stattfindet, ist schlimmer als
+	 * gar keine — man verlässt sich darauf. Deshalb wird nicht nur geprüft, ob
+	 * der Zeitplan eingeschaltet ist, sondern ob tatsächlich etwas passiert.
+	 *
+	 * @return string|null Warnung oder null, wenn alles seinen Gang geht.
+	 */
+	public static function scheduleWarning(): ?string {
+		if ( ! Setting::getBool( 'backup_enabled', false ) ) {
+			return null;
+		}
+
+		if ( ! Scheduler::isCronHealthy() ) {
+			return 'Der Zeitplaner läuft nicht. Der nächtliche Lauf findet damit nicht statt — '
+				. 'auch wenn er hier eingeschaltet ist. Auf dem Panel-Server den Cron-Eintrag prüfen: '
+				. 'crontab -u www-data -l';
+		}
+
+		$letzte = Database::scalar(
+			'SELECT MAX(`started_at`) FROM `' . Database::table( 'backups' ) . "` WHERE `status` = 'success'"
+		);
+
+		if ( ! is_string( $letzte ) ) {
+			// Noch nie gelaufen ist kein Fehler, solange der Zeitplan jung ist.
+			return null;
+		}
+
+		$alter = time() - (int) strtotime( $letzte . ' UTC' );
+
+		// 26 Stunden: ein Tag plus Luft fuer einen laenger laufenden Lauf.
+		if ( $alter > 93600 ) {
+			return sprintf(
+				'Die letzte erfolgreiche Sicherung liegt %s zurück, obwohl der Zeitplan an ist. '
+				. 'Unten im Verlauf steht, woran der letzte Lauf gescheitert ist.',
+				nl_ago( $letzte )
+			);
+		}
+
+		return null;
+	}
+
+	/**
 	 * Gehört die Seite in den nächtlichen Lauf?
 	 *
 	 * @param array<string,mixed> $site

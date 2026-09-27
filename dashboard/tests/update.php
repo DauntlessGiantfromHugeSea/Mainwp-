@@ -78,6 +78,7 @@ file_put_contents(
 // Laufzeitdaten, wie sie im Betrieb entstehen — im Quellbaum gibt es sie nicht.
 $laufzeit = array(
 	'storage/restic/.ssh/id_ed25519'     => 'GEHEIMER-SCHLUESSEL',
+	'storage/restic/.ssh/id_ed25519.pub' => 'ssh-ed25519 AAAA northlab-panel',
 	'storage/restic/.ssh/known_hosts'    => 'wirt ssh-ed25519 AAAA',
 	'storage/backups/site-1/index.php'   => 'gespiegelte Kundendatei',
 	'storage/backups/_panel/datenbank.sql.gz' => 'export',
@@ -133,6 +134,20 @@ check( 'Die config.php bleibt', is_file( $ziel . '/config.php' ) );
 
 // Das Geruest muss trotzdem geliefert werden.
 check( 'Das Geruest unter storage/ kommt mit', is_file( $ziel . '/storage/.htaccess' ) );
+
+// ssh verwirft einen privaten Schluessel, den die Gruppe lesen darf. Das
+// pauschale chmod -R 750 auf storage/ trifft ihn — danach muss er wieder eng
+// stehen, sonst ist die Sicherung nach jedem Update tot.
+$rechte = static fn( string $p ): string => substr( sprintf( '%o', fileperms( $ziel . '/' . $p ) ), -3 );
+
+check( 'Der private Schluessel ist nur fuer den Eigentuemer lesbar',
+	'600' === $rechte( 'storage/restic/.ssh/id_ed25519' ), $rechte( 'storage/restic/.ssh/id_ed25519' ) );
+check( 'Der oeffentliche darf gelesen werden',
+	'644' === $rechte( 'storage/restic/.ssh/id_ed25519.pub' ), $rechte( 'storage/restic/.ssh/id_ed25519.pub' ) );
+check( 'known_hosts ebenso eng',
+	'600' === $rechte( 'storage/restic/.ssh/known_hosts' ), $rechte( 'storage/restic/.ssh/known_hosts' ) );
+check( 'Das Schluesselverzeichnis ist zu',
+	'700' === $rechte( 'storage/restic/.ssh' ), $rechte( 'storage/restic/.ssh' ) );
 
 // Und der Betriebsbenutzer muss noch drankommen.
 $besitzer = posix_getpwuid( (int) fileowner( $ziel . '/storage/restic/.ssh/id_ed25519' ) )['name'] ?? '';
