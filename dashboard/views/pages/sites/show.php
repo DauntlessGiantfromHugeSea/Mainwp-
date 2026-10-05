@@ -857,10 +857,16 @@ $outdatedPlugins = array_values(
 				</div>
 				<?php if ( $canWrite ) : ?>
 					<div class="card-foot">
-						<form method="post" action="<?= e( url( '/backups/' . $site['id'] . '/run' ) ) ?>"
-							data-confirm="Sicherung dieser Seite jetzt starten? Der erste Lauf kann lange dauern.">
+						<form method="post" action="<?= e( url( '/backups/' . $site['id'] . '/run' ) ) ?>">
 							<?= csrf_field() ?>
-							<button class="btn primary" data-busy="läuft…">Jetzt sichern</button>
+							<button class="btn primary" data-busy="…">Jetzt sichern</button>
+							<span class="small muted">
+								<?php if ( \NorthLab\Service\BackupService::isRequested( $site ) ) : ?>
+									Vorgemerkt — startet innerhalb einer Minute.
+								<?php else : ?>
+									Läuft im Hintergrund, nicht im Browser.
+								<?php endif; ?>
+							</span>
 						</form>
 					</div>
 				<?php endif; ?>

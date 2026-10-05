@@ -9,7 +9,7 @@ namespace NorthLab\Core;
  */
 final class Migrator {
 
-	public const SCHEMA_VERSION = 9;
+	public const SCHEMA_VERSION = 10;
 
 	/**
 	 * Alle Tabellen anlegen (idempotent).
@@ -47,6 +47,8 @@ final class Migrator {
 				// Schema 9: nimmt der naechtliche Lauf diese Seite mit?
 				// Vorgabe 1 — wer eine Seite betreut, will sie in der Regel sichern.
 				'backup_enabled'    => 'TINYINT(1) NOT NULL DEFAULT 1',
+				// Schema 10: von Hand angestossen, vom Zeitplaner abzuarbeiten.
+				'backup_requested_at' => 'DATETIME NULL DEFAULT NULL',
 			),
 
 			// Schema 2: Zwei-Faktor-Anmeldung und Seitenzuordnung.

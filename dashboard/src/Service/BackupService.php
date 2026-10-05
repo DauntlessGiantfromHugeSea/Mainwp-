@@ -486,6 +486,30 @@ final class BackupService {
 			return 'deaktiviert';
 		}
 
+		// Von Hand angestossene Sicherungen zuerst, und ohne auf den Abstand zu
+		// warten — wer den Knopf drueckt, wartet nicht gern eine halbe Stunde.
+		$verlangt = self::requested();
+
+		if ( null !== $verlangt ) {
+			SiteRepository::update( (int) $verlangt['id'], array( 'backup_requested_at' => null ) );
+
+			$result = self::run( $verlangt );
+
+			return sprintf(
+				'%s (von Hand): %s',
+				$verlangt['name'],
+				$result['ok'] ? 'gesichert' : 'fehlgeschlagen'
+			);
+		}
+
+		if ( Setting::getBool( 'panel_backup_requested', false ) ) {
+			Setting::set( 'panel_backup_requested', '0' );
+
+			$panel = self::runPanel();
+
+			return $panel['ok'] ? 'Panel gesichert (von Hand)' : 'Panel fehlgeschlagen: ' . $panel['error'];
+		}
+
 		$start   = self::windowStart();
 		$abstand = self::spacing();
 
@@ -531,6 +555,61 @@ final class BackupService {
 			$result['ok'] ? 'gesichert' : 'fehlgeschlagen',
 			count( $offen ) - 1
 		);
+	}
+
+	/**
+	 * Die am längsten wartende, von Hand angestossene Sicherung.
+	 *
+	 * @return array<string,mixed>|null
+	 */
+	private static function requested(): ?array {
+		return Database::selectOne(
+			'SELECT * FROM `' . Database::table( 'sites' ) . '`
+			 WHERE `backup_requested_at` IS NOT NULL
+			 ORDER BY `backup_requested_at` ASC LIMIT 1'
+		);
+	}
+
+	/**
+	 * Eine Sicherung vormerken, statt sie im Webaufruf durchzuziehen.
+	 *
+	 * Eine Sicherung dauert Minuten bis Stunden. Lief sie im Aufruf, wartete
+	 * der Browser die ganze Zeit, und ein PHP-Arbeiter war so lange belegt —
+	 * zwei davon genügen auf einem kleinen Server, um das Panel lahmzulegen.
+	 *
+	 * @return array{ok:bool,error:string}
+	 */
+	public static function request( int $siteId ): array {
+		$site = SiteRepository::find( $siteId );
+
+		if ( null === $site ) {
+			return array( 'ok' => false, 'error' => 'Seite nicht gefunden.' );
+		}
+		if ( ! SiteRepository::isManaged( $site ) ) {
+			return array( 'ok' => false, 'error' => 'Diese Seite wird nur überwacht — ohne Child-Plugin gibt es nichts zu sichern.' );
+		}
+		if ( ! Restic::configured() ) {
+			return array( 'ok' => false, 'error' => 'Es ist kein Sicherungsziel eingerichtet.' );
+		}
+		if ( ! Scheduler::isCronHealthy() ) {
+			return array(
+				'ok'    => false,
+				'error' => 'Der Zeitplaner läuft nicht — eine vorgemerkte Sicherung würde liegen bleiben.',
+			);
+		}
+
+		SiteRepository::update( $siteId, array( 'backup_requested_at' => nl_utc() ) );
+
+		return array( 'ok' => true, 'error' => '' );
+	}
+
+	/**
+	 * Wartet diese Seite auf eine von Hand angestossene Sicherung?
+	 *
+	 * @param array<string,mixed> $site
+	 */
+	public static function isRequested( array $site ): bool {
+		return ! empty( $site['backup_requested_at'] );
 	}
 
 	/**

@@ -85,18 +85,18 @@ final class BackupController extends BaseController {
 		$siteId = (int) $request->params['id'];
 		Auth::requireSite( $siteId );
 
-		$result = BackupService::run( $siteId );
+		// Nicht hier durchziehen: der Zeitplaner holt sie innerhalb einer Minute
+		// ab. Sonst wartet der Browser minutenlang und ein PHP-Arbeiter ist die
+		// ganze Zeit belegt.
+		$result = BackupService::request( $siteId );
 
 		$this->respond(
 			$request,
 			$result['ok'],
 			$result['ok']
-				? sprintf(
-					'Sicherung abgeschlossen: %d Datei(en) übertragen.',
-					(int) ( $result['stats']['files_changed'] ?? 0 )
-				)
-				: 'Sicherung fehlgeschlagen: ' . $result['error'],
-			'/backups'
+				? 'Sicherung vorgemerkt — sie startet innerhalb einer Minute und läuft im Hintergrund.'
+				: 'Nicht vorgemerkt: ' . $result['error'],
+			$this->back( $request, '/backups' )
 		);
 	}
 
@@ -175,14 +175,21 @@ final class BackupController extends BaseController {
 	public function runPanel( Request $request ): void {
 		Auth::requireAdmin();
 
-		$result = BackupService::runPanel();
+		if ( ! \NorthLab\Service\Scheduler::isCronHealthy() ) {
+			$this->respond(
+				$request,
+				false,
+				'Der Zeitplaner läuft nicht — eine vorgemerkte Sicherung würde liegen bleiben.',
+				'/backups'
+			);
+		}
+
+		Setting::set( 'panel_backup_requested', '1' );
 
 		$this->respond(
 			$request,
-			$result['ok'],
-			$result['ok']
-				? sprintf( 'Panel gesichert: Datenbank %s.', size_format_de( $result['bytes'] ) )
-				: 'Sicherung des Panels fehlgeschlagen: ' . $result['error'],
+			true,
+			'Sicherung des Panels vorgemerkt — sie startet innerhalb einer Minute.',
 			'/backups'
 		);
 	}

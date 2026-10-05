@@ -185,6 +185,17 @@ check( 'Eine eingeplante Seite laesst sich herausnehmen',
 	str_contains( $mitZiel, 'Aus dem Zeitplan nehmen' ) );
 check( 'Von Hand sichern geht in beiden Faellen',
 	str_contains( $mitZiel, '/backups/7/run' ) && str_contains( $ohnePlan, '/backups/7/run' ) );
+// Der Knopf stoesst nur an; gearbeitet wird im Hintergrund.
+check( 'Der Knopf verspricht keinen Lauf im Browser',
+	str_contains( $mitZiel, 'Läuft im Hintergrund, nicht im Browser' ) );
+
+$vorgemerkt = render( 'sites/show', array_replace(
+	$showData( 'wordpress' ),
+	array( 'backupReady' => true, 'site' => array_replace( site( 'wordpress' ), array( 'backup_requested_at' => gmdate( 'Y-m-d H:i:s' ) ) ) )
+) );
+
+check( 'Eine vorgemerkte Sicherung wird als solche gezeigt',
+	str_contains( $vorgemerkt, 'Vorgemerkt — startet innerhalb einer Minute' ) );
 
 check( 'Monitor-Seite ohne Sicherungs-Tab', ! str_contains( $monitor, 'data-tab="backup"' ) );
 check( 'Monitor-Seite ohne Updates-Tab', ! str_contains( $monitor, 'data-tab="updates"' ) );

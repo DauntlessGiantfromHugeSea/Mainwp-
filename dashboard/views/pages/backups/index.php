@@ -128,7 +128,9 @@ $needsSsh = in_array( $targetType, array( 'storagebox', 'sftp' ), true );
 								<?= $last ? e( nl_ago( (string) $last['started_at'] ) ) : '<span class="badge warn">noch nie</span>' ?>
 							</td>
 							<td>
-								<?php if ( ! $last ) : ?>
+								<?php if ( \NorthLab\Service\BackupService::isRequested( $site ) ) : ?>
+									<span class="badge warn"><span class="dot"></span>vorgemerkt</span>
+								<?php elseif ( ! $last ) : ?>
 									<span class="muted small">—</span>
 								<?php elseif ( 'success' === $last['status'] ) : ?>
 									<span class="badge ok"><span class="dot"></span>erfolgreich</span>
@@ -156,10 +158,9 @@ $needsSsh = in_array( $targetType, array( 'storagebox', 'sftp' ), true );
 							</td>
 							<td class="shrink">
 								<?php if ( $canWrite ) : ?>
-									<form method="post" action="<?= e( url( '/backups/' . $site['id'] . '/run' ) ) ?>"
-										data-confirm="Sicherung jetzt starten? Der erste Lauf kann bei grossen Mediatheken lange dauern.">
+									<form method="post" action="<?= e( url( '/backups/' . $site['id'] . '/run' ) ) ?>">
 										<?= csrf_field() ?>
-										<button class="btn sm" data-busy="läuft…">Jetzt sichern</button>
+										<button class="btn sm" data-busy="…">Jetzt sichern</button>
 									</form>
 								<?php endif; ?>
 							</td>
@@ -202,7 +203,7 @@ $needsSsh = in_array( $targetType, array( 'storagebox', 'sftp' ), true );
 		<div class="card-foot">
 			<form method="post" action="<?= e( url( '/backups/panel' ) ) ?>">
 				<?= csrf_field() ?>
-				<button class="btn sm" data-busy="läuft…">Panel jetzt sichern</button>
+				<button class="btn sm" data-busy="…">Panel jetzt sichern</button>
 			</form>
 		</div>
 	<?php endif; ?>

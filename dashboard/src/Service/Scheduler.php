@@ -26,9 +26,10 @@ final class Scheduler {
 		'sync'         => array( 'label' => 'Seiten synchronisieren', 'interval' => 900 ),
 		'auto_updates' => array( 'label' => 'Automatische Updates', 'interval' => 3600 ),
 		'reports'      => array( 'label' => 'Fällige Berichte', 'interval' => 3600 ),
-		// Alle fuenf Minuten nachsehen: im Zeitfenster kommt dann je Durchgang
-		// eine Seite dran, mit dem eingestellten Abstand dazwischen.
-		'backups'      => array( 'label' => 'Sicherungen', 'interval' => 300 ),
+		// Jede Minute nachsehen. Der Durchgang ist billig, wenn nichts ansteht,
+		// und eine von Hand angestossene Sicherung soll nicht erst in fuenf
+		// Minuten loslaufen.
+		'backups'      => array( 'label' => 'Sicherungen', 'interval' => 60 ),
 		'cleanup'      => array( 'label' => 'Aufräumen', 'interval' => 86400 ),
 	);
 

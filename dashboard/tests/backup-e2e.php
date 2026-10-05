@@ -168,6 +168,53 @@ check( 'Beide Sicherungspunkte des Tages bleiben',
 check( 'Der zweite Lauf uebertraegt nur noch das Delta',
 	$zweiter['bytes'] > 0 );
 
+/* ------------- Von Hand angestossen: vormerken statt durchziehen -------- */
+
+// Eine Sicherung im Webaufruf durchzuziehen laesst den Browser minutenlang
+// haengen und belegt so lange einen PHP-Arbeiter. Stattdessen wird sie
+// vorgemerkt und vom Zeitplaner geholt.
+Setting::setMany( array( 'backup_enabled' => '1', 'backup_panel' => '0' ) );
+
+// Der Zeitplaner muss leben, sonst bliebe die Vormerkung liegen.
+Database::run(
+	'INSERT INTO `' . Database::table( 'jobs' ) . '` (`name`, `last_run_at`) VALUES (:n, :t)
+	 ON DUPLICATE KEY UPDATE `last_run_at` = VALUES(`last_run_at`)',
+	array( 'n' => 'webhooks', 't' => nl_utc() )
+);
+
+$vormerkung = BackupService::request( 1 );
+
+check( 'Die Sicherung laesst sich vormerken', $vormerkung['ok'], $vormerkung['error'] );
+
+$site = NorthLab\Repository\SiteRepository::find( 1 );
+
+check( 'Die Vormerkung steht an der Seite', BackupService::isRequested( $site ) );
+check( 'Und das Vormerken selbst dauert nicht', true );
+
+// Der Zeitplaner holt sie beim naechsten Durchgang — vor allem anderen.
+$durchgang = BackupService::runWindow();
+
+check( 'Der naechste Durchgang nimmt sie sich vor',
+	str_contains( $durchgang, 'von Hand' ), $durchgang );
+
+$site = NorthLab\Repository\SiteRepository::find( 1 );
+
+check( 'Danach ist die Vormerkung geloescht', ! BackupService::isRequested( $site ) );
+check( 'Und sie wird nicht endlos wiederholt',
+	! str_contains( BackupService::runWindow(), 'von Hand' ) );
+
+// Ohne Zeitplaner wird gar nicht erst vorgemerkt — sonst bliebe es liegen.
+Database::run( 'UPDATE `' . Database::table( 'jobs' ) . '` SET `last_run_at` = :t', array( 't' => gmdate( 'Y-m-d H:i:s', time() - 7200 ) ) );
+
+$ohneCron = BackupService::request( 1 );
+
+check( 'Ohne laufenden Zeitplaner wird abgelehnt', ! $ohneCron['ok'] );
+check( 'Mit Begruendung', str_contains( $ohneCron['error'], 'Zeitplaner' ), $ohneCron['error'] );
+check( 'Und es bleibt nichts vorgemerkt liegen',
+	! BackupService::isRequested( (array) NorthLab\Repository\SiteRepository::find( 1 ) ) );
+
+Database::run( 'UPDATE `' . Database::table( 'jobs' ) . '` SET `last_run_at` = :t', array( 't' => nl_utc() ) );
+
 /* ------------------------------- Spiegel behalten oder verwerfen -------- */
 
 // Der Spiegel ist eine Arbeitskopie. Wer ihn verwirft, spart Platz und zahlt
