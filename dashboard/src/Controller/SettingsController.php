@@ -11,6 +11,7 @@ use NorthLab\Core\Request;
 use NorthLab\Core\Session;
 use NorthLab\Core\Setting;
 use NorthLab\Service\BrandingService;
+use NorthLab\Service\CertificateService;
 use NorthLab\Service\EventBus;
 use NorthLab\Service\IconService;
 use NorthLab\Service\PushService;
@@ -178,6 +179,26 @@ final class SettingsController extends BaseController {
 
 			case 'monitoring':
 				Setting::set( 'uptime_secret', $request->string( 'uptime_secret' ) );
+				break;
+
+			case 'certificates':
+				Setting::setMany(
+					array(
+						'kuma_url'      => rtrim( $request->string( 'kuma_url' ), '/' ),
+						'ssl_warn_days' => (string) max( 1, min( 180, $request->int( 'ssl_warn_days', CertificateService::WARN_DEFAULT ) ) ),
+					)
+				);
+
+				// Ein leeres Feld heisst "nicht geaendert" und nicht "loeschen" —
+				// der Schluessel wird ja nie im Klartext angezeigt. Zum Entfernen
+				// gibt es den eigenen Schalter.
+				$schluessel = $request->string( 'kuma_api_key' );
+
+				if ( $request->bool( 'kuma_api_key_clear' ) ) {
+					Setting::set( 'kuma_api_key', '' );
+				} elseif ( '' !== $schluessel ) {
+					Setting::set( 'kuma_api_key', Crypto::encrypt( $schluessel ) );
+				}
 				break;
 
 			case 'reports':

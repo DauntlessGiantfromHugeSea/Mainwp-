@@ -9,7 +9,7 @@ namespace NorthLab\Core;
  */
 final class Migrator {
 
-	public const SCHEMA_VERSION = 11;
+	public const SCHEMA_VERSION = 12;
 
 	/**
 	 * Alle Tabellen anlegen (idempotent).
@@ -49,6 +49,12 @@ final class Migrator {
 				'backup_enabled'    => 'TINYINT(1) NOT NULL DEFAULT 1',
 				// Schema 10: von Hand angestossen, vom Zeitplaner abzuarbeiten.
 				'backup_requested_at' => 'DATETIME NULL DEFAULT NULL',
+				// Schema 12: Restlaufzeit des Zertifikats. Gemeldet von Uptime
+				// Kuma, das das ohnehin schon prueft — kein zweiter Prueflauf.
+				'ssl_days_left'  => 'INT NULL DEFAULT NULL',
+				'ssl_checked_at' => 'DATETIME NULL DEFAULT NULL',
+				'ssl_source'     => "VARCHAR(20) NOT NULL DEFAULT ''",
+				'ssl_subject'    => "VARCHAR(191) NOT NULL DEFAULT ''",
 			),
 
 			// Schema 11: woran ein laufender Sicherungslauf gerade ist.

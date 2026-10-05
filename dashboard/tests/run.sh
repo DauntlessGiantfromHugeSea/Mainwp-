@@ -97,7 +97,7 @@ fi
 
 # --- Laeufe ohne alles -------------------------------------------------------
 gruen "== Ohne Datenbank =="
-for datei in compat childlock child branding connect selfupdate hardening kundenseite feature childversion icon render render-backup backup router asset; do
+for datei in compat childlock child branding connect selfupdate hardening kundenseite zertifikat feature childversion icon render render-backup backup router asset; do
 	lauf "$datei" "php '$HIER/$datei.php'"
 done
 

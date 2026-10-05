@@ -10,6 +10,7 @@ use NorthLab\Core\Setting;
 use NorthLab\Repository\ClientRepository;
 use NorthLab\Repository\SiteRepository;
 use NorthLab\Repository\UpdateRepository;
+use NorthLab\Service\CertificateService;
 use NorthLab\Service\ReportService;
 use NorthLab\Service\Scheduler;
 use NorthLab\Service\UptimeService;
@@ -63,6 +64,51 @@ final class ApiController {
 					'message' => $isGlobal
 						? 'Testzustellung angekommen. Die Verbindung steht. Bei echten Meldungen ordnet das Panel die Seite anhand der überwachten Adresse zu.'
 						: sprintf( 'Testzustellung angekommen. Die Verbindung zu "%s" steht.', $site['name'] ),
+				)
+			);
+			return;
+		}
+
+		// Zertifikatsmeldung von Uptime Kuma. Die traegt keinen Status und
+		// faellt deshalb durch die Erkennung unten — bisher wurde sie mit
+		// "Format nicht erkannt" abgewiesen, obwohl genau darin die
+		// Restlaufzeit steht, die wir wissen wollen.
+		$zertifikat = CertificateService::fromMessage( (string) ( $body['msg'] ?? $body['message'] ?? '' ) );
+
+		if ( null !== $zertifikat ) {
+			$ziel = $site;
+
+			if ( null === $ziel && '' !== $zertifikat['url'] ) {
+				$ziel = SiteRepository::findByLooseUrl( $zertifikat['url'] );
+			}
+
+			if ( null === $ziel ) {
+				Response::json(
+					array(
+						'ok'    => false,
+						'error' => 'Zertifikatsmeldung erkannt, aber keine passende Seite gefunden.',
+						'hint'  => 'Die Zuordnung läuft über den Hostnamen aus der Meldung. '
+							. 'Alternativ die seitenspezifische Monitoring-Adresse verwenden.',
+					),
+					404
+				);
+				return;
+			}
+
+			$gewarnt = CertificateService::record(
+				(int) $ziel['id'],
+				$zertifikat['days'],
+				'kuma-hook',
+				$zertifikat['subject']
+			);
+
+			Response::json(
+				array(
+					'ok'          => true,
+					'certificate' => true,
+					'site'        => array( 'id' => (int) $ziel['id'], 'name' => (string) $ziel['name'] ),
+					'days_left'   => $zertifikat['days'],
+					'warned'      => $gewarnt,
 				)
 			);
 			return;

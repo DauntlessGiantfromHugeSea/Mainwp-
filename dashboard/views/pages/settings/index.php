@@ -687,6 +687,53 @@ $get = static fn( string $key, string $default = '' ): string => $settings[ $key
 				</div>
 				<button class="btn primary">Speichern</button>
 			</form>
+
+			<h3 class="mt">Zertifikatslaufzeiten aus Uptime Kuma</h3>
+			<p class="muted small" style="max-width:720px">
+				Kuma prüft das Zertifikat bei jedem Abruf ohnehin. Schickt es eine Ablaufwarnung an den
+				Webhook oben, übernimmt das Panel sie automatisch — dafür ist hier nichts nötig.
+				Kuma meldet aber nur an seinen Schwellen und je Schwelle einmal. Für einen laufenden Wert
+				zu <em>jeder</em> Seite holt das Panel die Kennzahlen direkt ab; dafür braucht es die
+				Adresse und einen API-Schlüssel.
+			</p>
+			<form method="post" action="<?= e( url( '/settings' ) ) ?>">
+				<?= csrf_field() ?>
+				<input type="hidden" name="section" value="certificates">
+				<div class="form-grid">
+					<div class="field">
+						<label for="kuma_url">Adresse von Uptime Kuma</label>
+						<input type="url" id="kuma_url" name="kuma_url" class="mono"
+							placeholder="https://status.example.de" value="<?= e( $get( 'kuma_url' ) ) ?>">
+						<div class="hint">Ohne <code>/metrics</code> — das hängt das Panel selbst an.</div>
+					</div>
+					<div class="field">
+						<label for="kuma_api_key">API-Schlüssel</label>
+						<input type="password" id="kuma_api_key" name="kuma_api_key" class="mono"
+							autocomplete="new-password"
+							placeholder="<?= '' !== $get( 'kuma_api_key' ) ? 'hinterlegt — leer lassen, um ihn zu behalten' : 'uk1_…' ?>">
+						<div class="hint">
+							In Kuma unter Profil → API-Schlüssel. Wird verschlüsselt gespeichert und nie wieder angezeigt.
+						</div>
+					</div>
+					<div class="field">
+						<label for="ssl_warn_days">Warnen ab</label>
+						<input type="number" id="ssl_warn_days" name="ssl_warn_days" min="1" max="180"
+							value="<?= e( $get( 'ssl_warn_days', '21' ) ) ?>">
+						<div class="hint">Tagen Restlaufzeit.</div>
+					</div>
+					<?php if ( '' !== $get( 'kuma_api_key' ) ) : ?>
+						<div class="field inline">
+							<input type="checkbox" id="kuma_api_key_clear" name="kuma_api_key_clear" value="1">
+							<label for="kuma_api_key_clear">Hinterlegten Schlüssel entfernen</label>
+						</div>
+					<?php endif; ?>
+				</div>
+				<p class="small muted">
+					Sobald in Kuma der erste API-Schlüssel existiert, schaltet Kuma die gewöhnliche
+					Passwortanmeldung für <code>/metrics</code> dauerhaft ab. Ohne Schlüssel geht es dann nicht mehr.
+				</p>
+				<button class="btn primary">Speichern</button>
+			</form>
 		</div>
 	</div>
 </div>

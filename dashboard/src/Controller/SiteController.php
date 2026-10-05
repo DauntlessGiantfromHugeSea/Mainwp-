@@ -16,6 +16,7 @@ use NorthLab\Repository\UptimeRepository;
 use NorthLab\Service\ChildPackager;
 use NorthLab\Service\BrandingService;
 use NorthLab\Service\ChildFeature;
+use NorthLab\Service\CertificateService;
 use NorthLab\Service\ChildPluginService;
 use NorthLab\Service\MaintenanceModeService;
 use NorthLab\Service\LinkService;
@@ -135,6 +136,7 @@ final class SiteController extends BaseController {
 				'branding'      => BrandingService::design(),
 				'brandingState' => BrandingService::stored( $siteId ),
 				'childShipped' => ChildPluginService::shipped(),
+				'sslWarnDays'  => CertificateService::warnDays(),
 				'childOutdated' => ChildPluginService::isOutdated( $site ),
 				'mmodeDesign' => MaintenanceModeService::design(),
 				'mmodeTimes'  => MaintenanceModeService::DURATIONS,

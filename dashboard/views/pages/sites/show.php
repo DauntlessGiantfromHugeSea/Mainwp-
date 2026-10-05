@@ -129,6 +129,31 @@ $links    = (array) ( $payload['links'] ?? array() );
 			<div class="sub">Ohne Child-Plugin — keine Updates, keine Backups</div>
 		</div>
 	<?php endif; ?>
+	<?php
+	// Die Spalte kam erst mit Schema 12 dazu, und eine Ansicht fragt nichts
+	// selbst bei der Datenbank nach — die Schwelle reicht der Controller durch.
+	$sslTage   = isset( $site['ssl_days_left'] ) && null !== $site['ssl_days_left'] ? (int) $site['ssl_days_left'] : null;
+	$sslWarn   = (int) ( $sslWarnDays ?? 21 );
+	$sslKlasse = null === $sslTage ? '' : ( $sslTage <= 7 ? 'bad' : ( $sslTage <= $sslWarn ? 'warn' : 'ok' ) );
+	?>
+	<div class="stat <?= e( $sslKlasse ) ?>">
+		<div class="label">Zertifikat</div>
+		<?php if ( null === $sslTage ) : ?>
+			<div class="value" style="font-size:18px;margin-top:6px"><span class="badge">unbekannt</span></div>
+			<div class="sub">Noch keine Meldung von Uptime Kuma</div>
+		<?php elseif ( $sslTage < 0 ) : ?>
+			<div class="value"><?= e( (string) abs( $sslTage ) ) ?></div>
+			<div class="sub">Tage <strong>abgelaufen</strong><?= '' !== (string) ( $site['ssl_subject'] ?? '' ) ? ' · ' . e( (string) $site['ssl_subject'] ) : '' ?></div>
+		<?php else : ?>
+			<div class="value"><?= e( (string) $sslTage ) ?></div>
+			<div class="sub">
+				Tage Restlaufzeit<?= '' !== (string) ( $site['ssl_subject'] ?? '' ) ? ' · ' . e( (string) $site['ssl_subject'] ) : '' ?>
+				<?php if ( ! empty( $site['ssl_checked_at'] ) ) : ?>
+					· gemeldet <?= e( nl_ago( (string) $site['ssl_checked_at'] ) ) ?>
+				<?php endif; ?>
+			</div>
+		<?php endif; ?>
+	</div>
 </div>
 
 <div class="tabs">

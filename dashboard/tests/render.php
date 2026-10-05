@@ -198,6 +198,45 @@ check(
 	str_contains( $sicher, 'value="db_prefix"' )
 );
 
+/* ------------------------------------------------------------- Zertifikat */
+
+$sslData = static function ( $tage ) use ( $showData ) {
+	$d = $showData( 'wordpress' );
+	$d['site']['ssl_days_left']  = $tage;
+	$d['site']['ssl_subject']    = null === $tage ? '' : 'kunde.de';
+	$d['site']['ssl_checked_at'] = null === $tage ? null : gmdate( 'Y-m-d H:i:s' );
+	$d['sslWarnDays']            = 21;
+	return $d;
+};
+
+$sslUnbekannt = render( 'sites/show', $sslData( null ) );
+check( 'Ohne Meldung steht "unbekannt"', str_contains( $sslUnbekannt, 'unbekannt' ) );
+check( 'Und woher es kommen soll', str_contains( $sslUnbekannt, 'Uptime Kuma' ) );
+check( 'Keine erfundene Zahl', ! str_contains( $sslUnbekannt, 'Tage Restlaufzeit' ) );
+
+$sslGut = render( 'sites/show', $sslData( 67 ) );
+check( 'Eine lange Laufzeit wird gezeigt', str_contains( $sslGut, '>67<' ) );
+check( 'Und gilt als in Ordnung', str_contains( $sslGut, 'stat ok' ) );
+check( 'Der Zertifikatsname steht dabei', str_contains( $sslGut, 'kunde.de' ) );
+
+$sslKnapp = render( 'sites/show', $sslData( 14 ) );
+check( 'Knappe Laufzeit wird gewarnt', str_contains( $sslKnapp, 'stat warn' ) );
+
+$sslDringend = render( 'sites/show', $sslData( 5 ) );
+check( 'Unter einer Woche wird es rot', str_contains( $sslDringend, 'stat bad' ) );
+
+// Abgelaufen darf nicht als "-3 Tage Restlaufzeit" dastehen.
+$sslWeg = render( 'sites/show', $sslData( -3 ) );
+check( 'Abgelaufen wird als abgelaufen benannt', str_contains( $sslWeg, 'abgelaufen' ) );
+check( 'Ohne Minuszeichen in der Zahl', ! str_contains( $sslWeg, '>-3<' ) );
+check( 'Und rot', str_contains( $sslWeg, 'stat bad' ) );
+
+// Eine Seite aus der Zeit vor Schema 12 hat die Spalte gar nicht.
+$ohneSpalte = $showData( 'wordpress' );
+unset( $ohneSpalte['site']['ssl_days_left'], $ohneSpalte['site']['ssl_subject'], $ohneSpalte['site']['ssl_checked_at'] );
+$alt = render( 'sites/show', $ohneSpalte );
+check( 'Ohne die Spalte bricht nichts', str_contains( $alt, 'Zertifikat' ) && ! str_contains( $alt, 'Warning' ) );
+
 /* ------------------------------------------------------------- Link-Pruefung */
 
 $ohneLinks = render( 'sites/show', $showData( 'wordpress' ) );

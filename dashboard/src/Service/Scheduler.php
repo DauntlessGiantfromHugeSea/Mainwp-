@@ -26,6 +26,7 @@ final class Scheduler {
 		'sync'         => array( 'label' => 'Seiten synchronisieren', 'interval' => 900 ),
 		'auto_updates' => array( 'label' => 'Automatische Updates', 'interval' => 3600 ),
 		'reports'      => array( 'label' => 'Fällige Berichte', 'interval' => 3600 ),
+		'certificates' => array( 'label' => 'Zertifikatslaufzeiten', 'interval' => 21600 ),
 		// Jede Minute nachsehen. Der Durchgang ist billig, wenn nichts ansteht,
 		// und eine von Hand angestossene Sicherung soll nicht erst in fuenf
 		// Minuten loslaufen.
@@ -123,6 +124,25 @@ final class Scheduler {
 
 			case 'reports':
 				return sprintf( '%d Bericht(e) erstellt', ReportService::runScheduled() );
+
+			case 'certificates':
+				if ( ! CertificateService::pullConfigured() ) {
+					// Ohne Zugangsdaten bleibt der Weg ueber die Meldungen, die
+					// Kuma von selbst schickt. Das ist kein Fehler.
+					return 'kein Abruf eingerichtet';
+				}
+
+				$zert = CertificateService::pullFromKuma();
+
+				if ( ! $zert['ok'] ) {
+					return $zert['error'];
+				}
+
+				return sprintf(
+					'%d Seite(n) aktualisiert%s',
+					$zert['updated'],
+					$zert['unmatched'] ? sprintf( ', %d Monitor(e) ohne Zuordnung', count( $zert['unmatched'] ) ) : ''
+				);
 
 			case 'backups':
 				return BackupService::runWindow();
