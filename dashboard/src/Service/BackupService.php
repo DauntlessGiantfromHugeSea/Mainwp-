@@ -287,6 +287,9 @@ final class BackupService {
 		self::tellSite( $site, array( 'action' => 'report', 'data' => $daten ) );
 	}
 
+	/** Ab dieser Child-Fassung gibt es die Sicherungsuebersicht dort. */
+	public const HISTORY_MIN_CHILD = '1.6.0';
+
 	/**
 	 * Die Vorgeschichte an die Kundenseite nachreichen.
 	 *
@@ -343,6 +346,84 @@ final class BackupService {
 		}
 
 		return $eintraege;
+	}
+
+	/**
+	 * Warum auf einer Kundenseite (k)eine Sicherung steht.
+	 *
+	 * Drei Ursachen sehen von aussen gleich aus — das Panel hat selbst nichts,
+	 * die Kundenseite ist zu alt, oder es wurde nur noch nicht uebertragen.
+	 * Hier werden sie auseinandergehalten. Ohne das bleibt nur Raten.
+	 *
+	 * @param array<string,mixed> $site
+	 * @param int|null            $dortBekannt Wie viele Laeufe die Kundenseite kennt; null = nicht gefragt.
+	 * @return array{managed:bool,ok:int,failed:int,version:string,too_old:bool,known:int|null,verdict:string}
+	 */
+	public static function historyReport( array $site, ?int $dortBekannt = null ): array {
+		$siteId  = (int) $site['id'];
+		$fassung = trim( (string) ( $site['child_version'] ?? '' ) );
+
+		$bericht = array(
+			'managed' => SiteRepository::isManaged( $site ),
+			'ok'      => 0,
+			'failed'  => 0,
+			'version' => $fassung,
+			'too_old' => false,
+			'known'   => $dortBekannt,
+			'verdict' => '',
+		);
+
+		if ( ! $bericht['managed'] ) {
+			$bericht['verdict'] = 'wird nur überwacht — dort läuft kein Child-Plugin';
+			return $bericht;
+		}
+
+		$bericht['ok'] = (int) Database::scalar(
+			'SELECT COUNT(*) FROM `' . Database::table( 'backups' ) . '` WHERE `site_id` = :id AND `status` = :s',
+			array( 'id' => $siteId, 's' => 'success' )
+		);
+		$bericht['failed'] = (int) Database::scalar(
+			'SELECT COUNT(*) FROM `' . Database::table( 'backups' ) . '` WHERE `site_id` = :id AND `status` = :s',
+			array( 'id' => $siteId, 's' => 'failed' )
+		);
+
+		// Eine unbekannte Fassung gilt nicht als zu alt: die Seite wurde
+		// vielleicht nur noch nie synchronisiert.
+		$bericht['too_old'] = '' !== $fassung
+			&& version_compare( $fassung, self::HISTORY_MIN_CHILD, '<' );
+
+		if ( 0 === $bericht['ok'] && 0 === $bericht['failed'] ) {
+			$bericht['verdict'] = 'das Panel hat selbst noch keinen Lauf — es fehlt die Sicherung, nicht die Anzeige';
+			return $bericht;
+		}
+
+		if ( 0 === $bericht['ok'] ) {
+			$bericht['verdict'] = sprintf(
+				'%d Lauf/Läufe, alle gescheitert — es gibt nichts anzuzeigen',
+				$bericht['failed']
+			);
+			return $bericht;
+		}
+
+		if ( $bericht['too_old'] ) {
+			$bericht['verdict'] = sprintf(
+				'Child-Plugin %s ist zu alt, die Übersicht gibt es ab %s',
+				$fassung,
+				self::HISTORY_MIN_CHILD
+			);
+			return $bericht;
+		}
+
+		if ( null === $dortBekannt ) {
+			$bericht['verdict'] = 'nicht nachgesehen';
+			return $bericht;
+		}
+
+		$bericht['verdict'] = 0 === $dortBekannt
+			? 'noch nicht übertragen'
+			: 'passt';
+
+		return $bericht;
 	}
 
 	/**

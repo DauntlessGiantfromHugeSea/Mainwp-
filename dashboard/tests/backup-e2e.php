@@ -38,6 +38,7 @@ use NorthLab\Core\Config;
 use NorthLab\Core\Database;
 use NorthLab\Core\Migrator;
 use NorthLab\Core\Setting;
+use NorthLab\Repository\SiteRepository;
 use NorthLab\Service\BackupService;
 use NorthLab\Service\Restic;
 
@@ -536,6 +537,74 @@ check( 'Ist sie auf demselben Stand, passiert nichts',
 	! BackupService::historyStale( $histId, array( 'backups' => array( 'last' => array( 'at' => gmdate( 'c', time() - 7200 ) ) ) ) ) );
 check( 'Eine Minute Abweichung ist kein Grund',
 	! BackupService::historyStale( $histId, array( 'backups' => array( 'last' => array( 'at' => gmdate( 'c', time() - 7230 ) ) ) ) ) );
+
+/* ------------------------- Warum steht dort nichts? Die drei Ursachen */
+
+// Diese drei sehen von aussen gleich aus. Sie zu verwechseln kostet eine
+// Stunde Suche an der falschen Stelle.
+
+$leerId = Database::insert( 'sites', array(
+	'name' => 'Noch nie', 'url' => 'https://leer.example', 'status' => 'connected',
+	'child_version' => '1.6.0', 'created_at' => nl_utc(), 'updated_at' => nl_utc(),
+) );
+$leer = SiteRepository::find( $leerId );
+
+$b = BackupService::historyReport( $leer, 0 );
+check( 'Ohne jeden Lauf wird die Sicherung selbst benannt',
+	false !== strpos( $b['verdict'], 'fehlt die Sicherung' ), $b['verdict'] );
+check( 'Und nicht faelschlich "noch nicht uebertragen"',
+	false === strpos( $b['verdict'], 'übertragen' ) );
+
+// Nur gescheiterte Laeufe: es gibt wirklich nichts anzuzeigen.
+Database::insert( 'backups', array(
+	'site_id' => $leerId, 'status' => 'failed',
+	'started_at' => gmdate( 'Y-m-d H:i:s', time() - 3600 ), 'message' => 'Speicher weg',
+) );
+$b = BackupService::historyReport( SiteRepository::find( $leerId ), 0 );
+check( 'Nur Fehlschlaege werden als solche benannt',
+	false !== strpos( $b['verdict'], 'alle gescheitert' ), $b['verdict'] );
+check( 'Mit Anzahl', 1 === $b['failed'] && 0 === $b['ok'] );
+
+// Zu altes Child.
+$altId = Database::insert( 'sites', array(
+	'name' => 'Alt', 'url' => 'https://alt.example', 'status' => 'connected',
+	'child_version' => '1.5.0', 'created_at' => nl_utc(), 'updated_at' => nl_utc(),
+) );
+Database::insert( 'backups', array(
+	'site_id' => $altId, 'status' => 'success',
+	'started_at' => gmdate( 'Y-m-d H:i:s', time() - 3600 ),
+	'finished_at' => gmdate( 'Y-m-d H:i:s', time() - 3500 ),
+) );
+$b = BackupService::historyReport( SiteRepository::find( $altId ), 0 );
+check( 'Ein zu altes Child wird erkannt', $b['too_old'] );
+check( 'Und die noetige Fassung genannt',
+	false !== strpos( $b['verdict'], BackupService::HISTORY_MIN_CHILD ), $b['verdict'] );
+
+// Eine unbekannte Fassung ist nicht "zu alt" - die Seite wurde vielleicht
+// nur noch nie synchronisiert. Das darf nicht als Ursache durchgehen.
+Database::update( 'sites', array( 'child_version' => '' ), array( 'id' => $altId ) );
+$b = BackupService::historyReport( SiteRepository::find( $altId ), 0 );
+check( 'Eine unbekannte Fassung gilt nicht als zu alt', ! $b['too_old'] );
+
+// Der eigentliche Fall: alles da, nur noch nicht uebertragen.
+Database::update( 'sites', array( 'child_version' => '1.6.0' ), array( 'id' => $altId ) );
+$b = BackupService::historyReport( SiteRepository::find( $altId ), 0 );
+check( 'Alles da, nur nicht uebertragen', 'noch nicht übertragen' === $b['verdict'], $b['verdict'] );
+
+$b = BackupService::historyReport( SiteRepository::find( $altId ), 3 );
+check( 'Kennt die Seite Laeufe, passt es', 'passt' === $b['verdict'], $b['verdict'] );
+
+$b = BackupService::historyReport( SiteRepository::find( $altId ) );
+check( 'Ohne Nachsehen wird nichts behauptet', 'nicht nachgesehen' === $b['verdict'], $b['verdict'] );
+
+// Eine nur ueberwachte Seite hat gar kein Child.
+$nurId = Database::insert( 'sites', array(
+	'name' => 'Nur Blick', 'url' => 'https://blick.example', 'status' => 'connected',
+	'site_type' => 'monitor', 'created_at' => nl_utc(), 'updated_at' => nl_utc(),
+) );
+$b = BackupService::historyReport( SiteRepository::find( $nurId ), null );
+check( 'Eine nur ueberwachte Seite wird als solche benannt',
+	! $b['managed'] && false !== strpos( $b['verdict'], 'nur überwacht' ), $b['verdict'] );
 
 printf( "%d Prüfungen, %d Fehler\n", $n, $fails );
 exit( $fails ? 1 : 0 );

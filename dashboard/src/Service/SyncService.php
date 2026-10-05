@@ -124,7 +124,15 @@ final class SyncService {
 		// dort. Weicht ihr Stand ab, wird die Vorgeschichte nachgereicht.
 		// Nur dann: sonst ginge bei jedem Sync jeder Seite eine zweite
 		// Anfrage raus, fuer nichts.
-		if ( SiteRepository::isManaged( $site ) && BackupService::historyStale( $siteId, $payload ) ) {
+		// Die gerade gemeldete Fassung zaehlt, nicht die gespeicherte: die ist
+		// in dieser Zeile schon eine Runde alt. Eine zu alte Kundenseite kennt
+		// die Uebersicht gar nicht; ihr die Vorgeschichte zu schicken erzeugte
+		// nur eine abgewiesene Anfrage je Sync.
+		$gemeldeteFassung = (string) ( $payload['child_version'] ?? '' );
+		$kannUebersicht   = '' !== $gemeldeteFassung
+			&& version_compare( $gemeldeteFassung, BackupService::HISTORY_MIN_CHILD, '>=' );
+
+		if ( SiteRepository::isManaged( $site ) && $kannUebersicht && BackupService::historyStale( $siteId, $payload ) ) {
 			try {
 				BackupService::pushHistory( $site );
 			} catch ( Throwable $e ) {

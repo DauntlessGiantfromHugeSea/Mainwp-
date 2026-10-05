@@ -112,7 +112,7 @@ $blockedFor = static function ( array $site, array $caps ): array {
 check( 'Bei aktueller Version ist alles frei', array() === $blockedFor( site(), $allOn ) );
 check(
 	'Bei 1.0.0 fehlen genau die spaeter dazugekommenen Funktionen',
-	array( 'autologin', 'branding', 'links', 'mmode', 'selfupdate' ) === $blockedFor( site( array( 'child_version' => '1.0.0' ) ), $allOn ),
+	array( 'autologin', 'backuplog', 'branding', 'links', 'mmode', 'selfupdate' ) === $blockedFor( site( array( 'child_version' => '1.0.0' ) ), $allOn ),
 	implode( ', ', $blockedFor( site( array( 'child_version' => '1.0.0' ) ), $allOn ) )
 );
 
