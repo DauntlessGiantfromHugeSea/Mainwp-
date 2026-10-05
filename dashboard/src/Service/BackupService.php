@@ -87,13 +87,19 @@ final class BackupService {
 				throw new \RuntimeException( 'Spiegelverzeichnis nicht anlegbar: ' . $mirror );
 			}
 
+			self::progress( $runId, 'Datenbank wird exportiert', 0, 0, true );
 			$stats['db_bytes'] = self::pullDatabase( $site, $mirror );
-			$fileStats         = self::pullFiles( $site, $mirror );
+
+			self::progress( $runId, 'Dateiliste wird geholt', 0, 0, true );
+			$fileStats = self::pullFiles( $site, $mirror, $runId );
 
 			$stats = array_merge( $stats, $fileStats );
 
 			// Zwischenstände auf der Kundenseite wieder entfernen.
+			self::progress( $runId, 'Kundenseite aufräumen', 0, 0, true );
 			ChildClient::post( $site, '/backup', array( 'action' => 'cleanup' ), 60 );
+
+			self::progress( $runId, 'Übertragung zum Speicher', 0, 0, true );
 
 			$backup = Restic::backup(
 				$mirror,
@@ -125,6 +131,9 @@ final class BackupService {
 					'files_changed' => $stats['files_changed'],
 					'bytes'         => $stats['bytes'],
 					'db_bytes'      => $stats['db_bytes'],
+					'phase'         => '',
+					'phase_done'    => 0,
+					'phase_total'   => 0,
 					'snapshot_id'   => $backup['snapshot'],
 					'message'       => sprintf(
 						'%d Datei(en), davon %d neu oder geändert, Datenbank %s.',
@@ -162,6 +171,7 @@ final class BackupService {
 				array(
 					'status'      => 'failed',
 					'finished_at' => nl_utc(),
+					'phase'       => '',
 					'message'     => substr( $e->getMessage(), 0, 1000 ),
 				),
 				array( 'id' => $runId )
@@ -178,6 +188,36 @@ final class BackupService {
 
 			return array( 'ok' => false, 'error' => $e->getMessage(), 'stats' => $stats );
 		}
+	}
+
+	/**
+	 * Woran der Lauf gerade ist — in die Zeile schreiben, die gerade läuft.
+	 *
+	 * Der Lauf geschieht im Hintergrund; die Oberfläche sieht nur, was hier
+	 * landet. Geschrieben wird gedrosselt, sonst erzeugt das Zählen von
+	 * Dateien mehr Datenbankverkehr als die Sicherung selbst.
+	 */
+	private static function progress( int $runId, string $phase, int $done = 0, int $total = 0, bool $force = false ): void {
+		static $zuletzt = 0.0;
+
+		$jetzt = microtime( true );
+
+		if ( ! $force && $jetzt - $zuletzt < 2.0 ) {
+			return;
+		}
+
+		$zuletzt = $jetzt;
+
+		Database::update(
+			'backups',
+			array(
+				'phase'        => $phase,
+				'phase_done'   => $done,
+				'phase_total'  => $total,
+				'heartbeat_at' => nl_utc(),
+			),
+			array( 'id' => $runId )
+		);
 	}
 
 	/**
@@ -233,7 +273,7 @@ final class BackupService {
 	 * @param array<string,mixed> $site
 	 * @return array<string,int>
 	 */
-	private static function pullFiles( array $site, string $mirror ): array {
+	private static function pullFiles( array $site, string $mirror, int $runId = 0 ): array {
 		$root     = Setting::get( 'backup_root', 'content' );
 		$excludes = self::excludes();
 
@@ -286,6 +326,10 @@ final class BackupService {
 					@touch( $target, $mtime );
 					$changed++;
 					$bytes += $size;
+				}
+
+				if ( $runId > 0 ) {
+					self::progress( $runId, 'Dateien werden geholt', $total, (int) ( $response['data']['total'] ?? 0 ) );
 				}
 			}
 
@@ -554,6 +598,64 @@ final class BackupService {
 			$site['name'],
 			$result['ok'] ? 'gesichert' : 'fehlgeschlagen',
 			count( $offen ) - 1
+		);
+	}
+
+	/**
+	 * Stand des Sicherungslaufs, wie ihn die Oberfläche anzeigt.
+	 *
+	 * @return array<string,mixed>
+	 */
+	public static function status(): array {
+		$laufend = Database::selectOne(
+			'SELECT b.*, s.name AS site_name FROM `' . Database::table( 'backups' ) . '` b
+			 INNER JOIN `' . Database::table( 'sites' ) . "` s ON s.id = b.site_id
+			 WHERE b.status = 'running' ORDER BY b.id DESC LIMIT 1"
+		);
+
+		// Ein Lauf, von dem seit zehn Minuten kein Lebenszeichen kam, laeuft
+		// nicht mehr — der Prozess ist gestorben, ohne die Zeile zu schliessen.
+		if ( null !== $laufend ) {
+			$puls = $laufend['heartbeat_at'] ?? $laufend['started_at'];
+
+			if ( time() - (int) strtotime( (string) $puls . ' UTC' ) > 600 ) {
+				$laufend['phase'] = 'ohne Lebenszeichen';
+			}
+		}
+
+		$start    = self::windowStart();
+		$erledigt = self::handledSince( $start );
+		$offen    = array();
+
+		foreach ( SiteRepository::active() as $site ) {
+			if ( ! self::scheduled( $site ) || isset( $erledigt[ (int) $site['id'] ] ) ) {
+				continue;
+			}
+			if ( null !== $laufend && (int) $laufend['site_id'] === (int) $site['id'] ) {
+				continue;
+			}
+
+			$offen[] = array(
+				'id'         => (int) $site['id'],
+				'name'       => (string) $site['name'],
+				'vorgemerkt' => self::isRequested( $site ),
+			);
+		}
+
+		return array(
+			'enabled'   => Setting::getBool( 'backup_enabled', false ),
+			'cron'      => Scheduler::isCronHealthy(),
+			'laufend'   => null === $laufend ? null : array(
+				'site'    => (string) $laufend['site_name'],
+				'seit'    => (string) $laufend['started_at'],
+				'phase'   => (string) ( $laufend['phase'] ?? '' ),
+				'done'    => (int) ( $laufend['phase_done'] ?? 0 ),
+				'total'   => (int) ( $laufend['phase_total'] ?? 0 ),
+			),
+			'offen'     => $offen,
+			'wartet'    => self::waitFor( $start, self::spacing() ),
+			'abstand'   => (int) ( self::spacing() / 60 ),
+			'fenster'   => $start,
 		);
 	}
 

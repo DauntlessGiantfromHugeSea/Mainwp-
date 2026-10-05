@@ -168,6 +168,51 @@ check( 'Beide Sicherungspunkte des Tages bleiben',
 check( 'Der zweite Lauf uebertraegt nur noch das Delta',
 	$zweiter['bytes'] > 0 );
 
+/* ------------------------------ Stand des Laufs ------------------------- */
+
+Setting::setMany( array( 'backup_enabled' => '1', 'backup_panel' => '0', 'backup_spacing' => '30' ) );
+Database::run( 'DELETE FROM `' . Database::table( 'backups' ) . '`' );
+Database::run( 'UPDATE `' . Database::table( 'sites' ) . "` SET `status` = 'connected', `backup_enabled` = 1, `backup_requested_at` = NULL" );
+Database::run(
+	'INSERT INTO `' . Database::table( 'jobs' ) . '` (`name`, `last_run_at`) VALUES (:n, :t)
+	 ON DUPLICATE KEY UPDATE `last_run_at` = VALUES(`last_run_at`)',
+	array( 'n' => 'webhooks', 't' => nl_utc() )
+);
+
+$stand = BackupService::status();
+
+check( 'Ohne laufende Sicherung ist nichts im Gange', null === $stand['laufend'] );
+check( 'Die wartenden Seiten werden aufgezaehlt', count( $stand['offen'] ) >= 1, (string) count( $stand['offen'] ) );
+check( 'Der Zeitplaner gilt als lebendig', $stand['cron'] );
+check( 'Der Abstand wird mitgeteilt', 30 === $stand['abstand'] );
+
+// Einen laufenden Lauf vortaeuschen, wie ihn die Sicherung selbst anlegt.
+$laufId = Database::insert( 'backups', array(
+	'site_id' => 1, 'status' => 'running', 'started_at' => nl_utc(),
+	'phase' => 'Dateien werden geholt', 'phase_done' => 240, 'phase_total' => 1200,
+	'heartbeat_at' => nl_utc(),
+) );
+
+$stand = BackupService::status();
+
+check( 'Ein laufender Lauf wird gemeldet', null !== $stand['laufend'] );
+check( 'Mit der Seite', 'Kunde Grün & Söhne' === ( $stand['laufend']['site'] ?? '' ), (string) ( $stand['laufend']['site'] ?? '' ) );
+check( 'Mit der Phase', 'Dateien werden geholt' === ( $stand['laufend']['phase'] ?? '' ) );
+check( 'Und mit dem Zaehlerstand',
+	240 === ( $stand['laufend']['done'] ?? 0 ) && 1200 === ( $stand['laufend']['total'] ?? 0 ) );
+check( 'Die laufende Seite steht nicht zugleich unter den wartenden',
+	! in_array( 1, array_column( $stand['offen'], 'id' ), true ) );
+
+// Ein Lauf ohne Lebenszeichen ist kein laufender Lauf.
+Database::update( 'backups', array( 'heartbeat_at' => gmdate( 'Y-m-d H:i:s', time() - 1800 ) ), array( 'id' => $laufId ) );
+
+$stand = BackupService::status();
+
+check( 'Ein Lauf ohne Lebenszeichen wird als solcher benannt',
+	'ohne Lebenszeichen' === ( $stand['laufend']['phase'] ?? '' ), (string) ( $stand['laufend']['phase'] ?? '' ) );
+
+Database::run( 'DELETE FROM `' . Database::table( 'backups' ) . '` WHERE `id` = :i', array( 'i' => $laufId ) );
+
 /* ------------- Von Hand angestossen: vormerken statt durchziehen -------- */
 
 // Eine Sicherung im Webaufruf durchzuziehen laesst den Browser minutenlang

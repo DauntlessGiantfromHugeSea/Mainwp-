@@ -144,6 +144,9 @@ check( 'Frisch: ohne Schluessel verweist der Kasten aufs Erzeugen',
 check( 'Frisch: die Bereitschaft meldet offene Punkte', str_contains( $html, 'offen' ) );
 check( 'Frisch: kein Wirtsschluessel-Block ohne Ziel', ! str_contains( $html, 'Wirtsschlüssel abrufen' ) );
 check( 'Frisch: das Panel selbst wird angeboten', str_contains( $html, 'Das Panel selbst' ) );
+check( 'Frisch: der Stand des Laufs hat einen Platz', str_contains( $html, 'id="backup-status"' ) );
+check( 'Mit der Adresse zum Abfragen', str_contains( $html, '/backups/status' ) );
+check( 'Und die Anzeige wird geladen', str_contains( $html, 'backup-status.js' ) );
 check( 'Frisch: die Einrichtung in einem Rutsch wird angeboten',
 	str_contains( $html, 'Jetzt einrichten' ) );
 check( 'Frisch: dafuer wird das Passwort des Speichers erfragt',

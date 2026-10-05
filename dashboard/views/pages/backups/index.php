@@ -107,6 +107,13 @@ $needsSsh = in_array( $targetType, array( 'storagebox', 'sftp' ), true );
 	</div>
 </div>
 
+<div class="card" id="backup-status" data-status-url="<?= e( url( '/backups/status' ) ) ?>">
+	<div class="card-head"><h2>Stand des Laufs</h2></div>
+	<div class="card-body">
+		<div data-status-out><p class="small muted">Wird abgefragt…</p></div>
+	</div>
+</div>
+
 <div class="card">
 	<div class="card-head"><h2>Seiten</h2></div>
 	<div class="card-body tight">
@@ -808,3 +815,5 @@ restic<?= e( $verbindung ) ?> dump &lt;ID&gt; /_datenbank/datenbank.sql.gz &gt; 
 		<?php endif; ?>
 	</div>
 </div>
+
+<script src="<?= e( nl_asset( '/assets/js/backup-status.js' ) ) ?>" defer></script>

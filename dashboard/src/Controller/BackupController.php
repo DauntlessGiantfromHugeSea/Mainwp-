@@ -101,6 +101,15 @@ final class BackupController extends BaseController {
 	}
 
 	/**
+	 * Stand des Sicherungslaufs, für die laufende Anzeige.
+	 */
+	public function status( Request $request ): void {
+		Auth::requireLogin();
+
+		Response::json( array( 'ok' => true ) + BackupService::status() );
+	}
+
+	/**
 	 * Eine Seite in den nächtlichen Lauf nehmen oder herausnehmen.
 	 */
 	public function schedule( Request $request ): void {

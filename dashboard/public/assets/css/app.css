@@ -616,3 +616,19 @@ body.bare {
 	.grid.cols-4 { grid-template-columns: minmax(0, 1fr); }
 	.topbar .btn-row .btn { flex: 1 1 100%; }
 }
+
+/* Fortschritt eines laufenden Sicherungslaufs. */
+.fortschritt {
+	height: 8px;
+	border-radius: 999px;
+	background: var(--line);
+	overflow: hidden;
+	margin: 10px 0 6px;
+}
+
+.fortschritt-fuellung {
+	height: 100%;
+	border-radius: 999px;
+	background: var(--brand);
+	transition: width .4s ease;
+}

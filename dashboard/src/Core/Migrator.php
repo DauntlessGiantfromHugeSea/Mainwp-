@@ -9,7 +9,7 @@ namespace NorthLab\Core;
  */
 final class Migrator {
 
-	public const SCHEMA_VERSION = 10;
+	public const SCHEMA_VERSION = 11;
 
 	/**
 	 * Alle Tabellen anlegen (idempotent).
@@ -49,6 +49,14 @@ final class Migrator {
 				'backup_enabled'    => 'TINYINT(1) NOT NULL DEFAULT 1',
 				// Schema 10: von Hand angestossen, vom Zeitplaner abzuarbeiten.
 				'backup_requested_at' => 'DATETIME NULL DEFAULT NULL',
+			),
+
+			// Schema 11: woran ein laufender Sicherungslauf gerade ist.
+			'backups' => array(
+				'phase'         => "VARCHAR(40) NOT NULL DEFAULT ''",
+				'phase_done'    => 'INT UNSIGNED NOT NULL DEFAULT 0',
+				'phase_total'   => 'INT UNSIGNED NOT NULL DEFAULT 0',
+				'heartbeat_at'  => 'DATETIME NULL DEFAULT NULL',
 			),
 
 			// Schema 2: Zwei-Faktor-Anmeldung und Seitenzuordnung.
