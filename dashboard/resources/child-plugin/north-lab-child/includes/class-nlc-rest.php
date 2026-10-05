@@ -56,6 +56,7 @@ class NLC_REST {
 			'/branding'    => array( 'POST', 'branding' ),
 			'/security'    => array( 'POST', 'security' ),
 			'/backup'      => array( 'POST', 'backup' ),
+			'/links'       => array( 'POST', 'links' ),
 			'/disconnect'  => array( 'POST', 'disconnect' ),
 		);
 
@@ -361,11 +362,54 @@ class NLC_REST {
 
 	public function security( WP_REST_Request $request ) {
 		$action = sanitize_key( (string) $request->get_param( 'action' ) );
+		$checks = array_map( 'sanitize_key', (array) $request->get_param( 'checks' ) );
 
 		if ( 'harden' === $action ) {
+			// Standard ist dauerhaft: eine Haertung, die das naechste
+			// Core-Update wegraeumt, ist keine.
+			$permanent = null === $request->get_param( 'permanent' )
+				? true
+				: rest_sanitize_boolean( $request->get_param( 'permanent' ) );
+
 			return rest_ensure_response(
 				array(
-					'results' => NLC_Security::harden( (array) $request->get_param( 'checks' ) ),
+					'results' => NLC_Security::harden( $checks, $permanent ),
+					'scan'    => NLC_Security::scan(),
+				)
+			);
+		}
+
+		if ( 'relax' === $action ) {
+			return rest_ensure_response(
+				array(
+					'enforced' => NLC_Security::relax( $checks ),
+					'scan'     => NLC_Security::scan(),
+				)
+			);
+		}
+
+		if ( 'acknowledge' === $action ) {
+			return rest_ensure_response(
+				array(
+					'acknowledged' => NLC_Security::acknowledge( $checks, (string) $request->get_param( 'reason' ) ),
+					'scan'         => NLC_Security::scan(),
+				)
+			);
+		}
+
+		if ( 'unacknowledge' === $action ) {
+			return rest_ensure_response(
+				array(
+					'acknowledged' => NLC_Security::unacknowledge( $checks ),
+					'scan'         => NLC_Security::scan(),
+				)
+			);
+		}
+
+		if ( 'enforce' === $action ) {
+			return rest_ensure_response(
+				array(
+					'results' => NLC_Security::enforce(),
 					'scan'    => NLC_Security::scan(),
 				)
 			);
@@ -385,9 +429,57 @@ class NLC_REST {
 			return new WP_Error( 'nlc_backup_disabled', 'Sicherungen sind auf dieser Seite deaktiviert.', array( 'status' => 403 ) );
 		}
 
-		self::raise_limits();
-
 		$action = sanitize_key( (string) $request->get_param( 'action' ) );
+
+		// Die leichten Faelle zuerst — sie brauchen kein hochgesetztes Zeitlimit.
+		switch ( $action ) {
+			case 'report':
+				return rest_ensure_response(
+					array( 'log' => NLC_Backuplog::record( (array) $request->get_param( 'data' ) ) )
+				);
+
+			case 'running':
+				// Das Panel reicht seine Einstellungen fuer den Hinweis gleich
+				// mit durch. So gilt immer, was dort eingestellt ist, ohne
+				// einen zweiten Weg, der aus dem Takt geraten kann.
+				$banner = $request->get_param( 'banner' );
+
+				if ( null !== $banner ) {
+					NLC_Banner::save( (array) $banner );
+				}
+
+				return rest_ensure_response(
+					array(
+						'running' => NLC_Backuplog::start(
+							(int) $request->get_param( 'seconds' ),
+							(string) $request->get_param( 'label' )
+						),
+						'banner'  => NLC_Banner::state(),
+					)
+				);
+
+			case 'done':
+				NLC_Backuplog::stop();
+				return rest_ensure_response( array( 'running' => null ) );
+
+			case 'log':
+				return rest_ensure_response(
+					array( 'log' => NLC_Backuplog::entries(), 'running' => NLC_Backuplog::running() )
+				);
+
+			case 'banner':
+				$settings = $request->get_param( 'settings' );
+
+				return rest_ensure_response(
+					array(
+						'banner' => null === $settings
+							? NLC_Banner::state()
+							: NLC_Banner::save( (array) $settings ),
+					)
+				);
+		}
+
+		self::raise_limits();
 
 		switch ( $action ) {
 			case 'estimate':
@@ -434,6 +526,57 @@ class NLC_REST {
 		}
 
 		return new WP_Error( 'nlc_bad_action', 'Unbekannte Aktion.', array( 'status' => 400 ) );
+	}
+
+	/**
+	 * Link-Pruefung: Stand abfragen, Durchgang anstossen, Einstellungen setzen.
+	 *
+	 * @param WP_REST_Request $request
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function links( WP_REST_Request $request ) {
+		if ( ! NLC_Options::setting( 'allow_links' ) ) {
+			return new WP_Error( 'nlc_links_disabled', 'Die Link-Prüfung ist auf dieser Seite deaktiviert.', array( 'status' => 403 ) );
+		}
+
+		$action = sanitize_key( (string) $request->get_param( 'action' ) );
+
+		if ( 'scan' === $action ) {
+			return rest_ensure_response(
+				array( 'state' => NLC_Links::begin(), 'progress' => NLC_Links::progress() )
+			);
+		}
+
+		if ( 'step' === $action ) {
+			// Fuer den Fall, dass auf der Kundenseite kein WP-Cron laeuft:
+			// dann treibt das Panel die Etappen selbst an.
+			self::raise_limits();
+			NLC_Links::step();
+
+			return rest_ensure_response(
+				array( 'progress' => NLC_Links::progress(), 'result' => NLC_Links::result_last() )
+			);
+		}
+
+		if ( 'config' === $action ) {
+			$settings = $request->get_param( 'settings' );
+
+			return rest_ensure_response(
+				array(
+					'config' => null === $settings
+						? NLC_Links::config()
+						: NLC_Links::save_config( (array) $settings ),
+				)
+			);
+		}
+
+		return rest_ensure_response(
+			array(
+				'progress' => NLC_Links::progress(),
+				'result'   => NLC_Links::result_last(),
+				'config'   => NLC_Links::config(),
+			)
+		);
 	}
 
 	/**

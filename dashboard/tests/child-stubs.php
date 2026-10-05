@@ -130,5 +130,10 @@ class WP_Session_Tokens {
 	public function destroy_all() { $GLOBALS['sessions_destroyed'][] = true; }
 }
 
+function has_action( $tag, $cb = false ) { return ! empty( $GLOBALS['actions'][ $tag ] ); }
+function wp_cache_flush() { $GLOBALS['cache_flushed'] = ( $GLOBALS['cache_flushed'] ?? 0 ) + 1; return true; }
+function is_admin_bar_showing() { return ! empty( $GLOBALS['admin_bar'] ); }
+function date_i18n( $f, $ts = null ) { return gmdate( $f, null === $ts ? time() : $ts ); }
+
 class ExitSignal extends RuntimeException {}
 

@@ -31,6 +31,11 @@ class NLC_Info {
 			'content'       => self::content_summary(),
 			'health'        => self::health(),
 			'security'      => NLC_Security::scan(),
+			'links'         => NLC_Options::setting( 'allow_links' ) ? NLC_Links::summary() : array( 'enabled' => false ),
+			'backups'       => array(
+				'running' => NLC_Backuplog::running(),
+				'last'    => NLC_Backuplog::latest(),
+			),
 		);
 	}
 

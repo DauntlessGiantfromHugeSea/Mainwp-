@@ -8,6 +8,219 @@ defined( 'ABSPATH' ) || exit;
  */
 class NLC_Security {
 
+	/** Welche Punkte dauerhaft gelten sollen, nicht nur einmal behoben wurden. */
+	const OPT_HARDENING = 'nlc_hardening';
+
+	/** Welche Punkte bewusst so bleiben duerfen. */
+	const OPT_ACK = 'nlc_hardening_ack';
+
+	/** Was beim letzten Durchsetzen herauskam — fuer ehrliche Anzeige im Panel. */
+	const OPT_LAST_ENFORCE = 'nlc_hardening_last';
+
+	/**
+	 * Punkte, die sich dauerhaft halten lassen.
+	 *
+	 * "permanent" heisst: wird nach jedem Core-Update und taeglich erneut
+	 * angewendet. readme.html legt WordPress bei jedem Core-Update wieder an —
+	 * einmal loeschen reicht da nicht.
+	 *
+	 * @return array<int,string>
+	 */
+	public static function enforceable() {
+		return array( 'file_editor', 'readme_exposed', 'wp_version_exposed', 'xmlrpc_enabled' );
+	}
+
+	/**
+	 * Punkte, die sich nicht gefahrlos automatisch beheben lassen und darum
+	 * nur quittiert werden koennen.
+	 *
+	 * Das Tabellen-Praefix nachtraeglich zu aendern heisst: alle Tabellen
+	 * umbenennen, die wp-config.php anfassen und in options und usermeta die
+	 * Schluessel mitziehen. Geht das auf halbem Weg schief, steht die Seite.
+	 * Der Gewinn ist blosse Verschleierung. Darum: benennen, nicht anfassen.
+	 *
+	 * @return array<int,string>
+	 */
+	public static function acknowledgeable() {
+		return array( 'db_prefix', 'admin_username', 'directory_listing', 'php_version', 'inactive_plugins' );
+	}
+
+	/**
+	 * @return array<int,string>
+	 */
+	public static function enforced() {
+		$stored = get_option( self::OPT_HARDENING, array() );
+
+		return is_array( $stored ) ? array_values( array_intersect( $stored, self::enforceable() ) ) : array();
+	}
+
+	/**
+	 * @param string $id
+	 * @return bool
+	 */
+	public static function is_enforced( $id ) {
+		return in_array( $id, self::enforced(), true );
+	}
+
+	/**
+	 * @return array<string,string> Kennung => Begruendung.
+	 */
+	public static function acknowledged() {
+		$stored = get_option( self::OPT_ACK, array() );
+
+		if ( ! is_array( $stored ) ) {
+			return array();
+		}
+
+		$erlaubt = self::acknowledgeable();
+		$sauber  = array();
+
+		foreach ( $stored as $id => $grund ) {
+			if ( in_array( $id, $erlaubt, true ) ) {
+				$sauber[ $id ] = (string) $grund;
+			}
+		}
+
+		return $sauber;
+	}
+
+	/**
+	 * Punkte bewusst stehen lassen — mit Begruendung, damit spaeter noch
+	 * nachvollziehbar ist, warum.
+	 *
+	 * @param array<int,string> $ids
+	 * @param string            $grund
+	 * @return array<string,string>
+	 */
+	public static function acknowledge( array $ids, $grund = '' ) {
+		$aktuell = self::acknowledged();
+		$grund   = sanitize_text_field( (string) $grund );
+
+		foreach ( $ids as $id ) {
+			$id = sanitize_key( (string) $id );
+			if ( in_array( $id, self::acknowledgeable(), true ) ) {
+				$aktuell[ $id ] = '' !== $grund ? $grund : 'Bewusst so gelassen.';
+			}
+		}
+
+		update_option( self::OPT_ACK, $aktuell, true );
+
+		return $aktuell;
+	}
+
+	/**
+	 * @param array<int,string> $ids
+	 * @return array<string,string>
+	 */
+	public static function unacknowledge( array $ids ) {
+		$aktuell = self::acknowledged();
+
+		foreach ( $ids as $id ) {
+			unset( $aktuell[ sanitize_key( (string) $id ) ] );
+		}
+
+		update_option( self::OPT_ACK, $aktuell, true );
+
+		return $aktuell;
+	}
+
+	/**
+	 * Eine Haertung wieder aufgeben.
+	 *
+	 * @param array<int,string> $ids
+	 * @return array<int,string>
+	 */
+	public static function relax( array $ids ) {
+		$bleibt = array_values( array_diff( self::enforced(), array_map( 'sanitize_key', $ids ) ) );
+
+		update_option( self::OPT_HARDENING, $bleibt, true );
+
+		// Die Optionen-Schalter zurueckdrehen; die geloeschte readme.html
+		// kommt beim naechsten Core-Update von selbst wieder.
+		if ( ! in_array( 'wp_version_exposed', $bleibt, true ) ) {
+			update_option( 'nlc_hide_generator', 0 );
+		}
+		if ( ! in_array( 'xmlrpc_enabled', $bleibt, true ) ) {
+			update_option( 'nlc_disable_xmlrpc', 0 );
+		}
+
+		return $bleibt;
+	}
+
+	/**
+	 * Billiger Teil, laeuft bei jedem Request.
+	 *
+	 * DISALLOW_FILE_EDIT wird erst beim Aufbau des Admin-Menues geprueft, also
+	 * lange nach "plugins_loaded". Hier gesetzt bleibt es nach jedem Core-Update
+	 * bestehen, ohne dass jemand die wp-config.php anfassen muss.
+	 */
+	public static function apply_early() {
+		if ( self::is_enforced( 'file_editor' ) && ! defined( 'DISALLOW_FILE_EDIT' ) ) {
+			define( 'DISALLOW_FILE_EDIT', true );
+		}
+	}
+
+	/**
+	 * Teurer Teil: nach jedem Core-Update und einmal taeglich.
+	 *
+	 * @return array<int,array<string,mixed>>
+	 */
+	public static function enforce() {
+		$results = array();
+
+		foreach ( self::enforced() as $id ) {
+			switch ( $id ) {
+				case 'readme_exposed':
+					$readme = ABSPATH . 'readme.html';
+					if ( ! file_exists( $readme ) ) {
+						break; // Nichts zu tun ist keine Meldung wert.
+					}
+					$ok        = (bool) @unlink( $readme );
+					$results[] = self::fix_result(
+						$id,
+						$ok,
+						$ok
+							? 'readme.html war nach einem Update wieder da und wurde erneut entfernt.'
+							: 'readme.html ist wieder da, laesst sich aber nicht entfernen (Schreibrechte im WordPress-Verzeichnis).'
+					);
+					break;
+
+				case 'wp_version_exposed':
+					if ( ! get_option( 'nlc_hide_generator', 0 ) ) {
+						update_option( 'nlc_hide_generator', 1 );
+						$results[] = self::fix_result( $id, true, 'Generator-Tag wieder ausgeblendet.' );
+					}
+					break;
+
+				case 'xmlrpc_enabled':
+					if ( ! get_option( 'nlc_disable_xmlrpc', 0 ) ) {
+						update_option( 'nlc_disable_xmlrpc', 1 );
+						$results[] = self::fix_result( $id, true, 'XML-RPC wieder blockiert.' );
+					}
+					break;
+
+				case 'file_editor':
+					// Greift ueber apply_early() beim naechsten Request. Hier
+					// nur melden, wenn die wp-config.php ausdruecklich das
+					// Gegenteil festlegt — dann kommen wir nicht dagegen an.
+					if ( defined( 'DISALLOW_FILE_EDIT' ) && ! DISALLOW_FILE_EDIT ) {
+						$results[] = self::fix_result(
+							$id,
+							false,
+							'In der wp-config.php steht DISALLOW_FILE_EDIT auf false. Das schlaegt jede Einstellung von hier.'
+						);
+					}
+					break;
+			}
+		}
+
+		if ( $results ) {
+			update_option( self::OPT_LAST_ENFORCE, array( 'at' => gmdate( 'c' ), 'results' => $results ), false );
+		}
+
+		return $results;
+	}
+
 	/**
 	 * @return array{score:int,checks:array<int,array<string,mixed>>}
 	 */
@@ -29,19 +242,47 @@ class NLC_Security {
 			self::check_inactive_extensions(),
 		);
 
+		$dauerhaft   = self::enforced();
+		$quittiert   = self::acknowledged();
+		$erzwingbar  = self::enforceable();
+		$quittierbar = self::acknowledgeable();
+
+		foreach ( $checks as $i => $check ) {
+			$id = $check['id'];
+
+			$checks[ $i ]['enforced']        = in_array( $id, $dauerhaft, true );
+			$checks[ $i ]['enforceable']     = in_array( $id, $erzwingbar, true );
+			$checks[ $i ]['acknowledgeable'] = in_array( $id, $quittierbar, true );
+			$checks[ $i ]['acknowledged']    = isset( $quittiert[ $id ] ) ? $quittiert[ $id ] : '';
+
+			// Ein bewusst stehengelassener Punkt soll nicht ewig mahnen — aber
+			// auch nicht so aussehen, als waere er behoben. Darum ein eigener
+			// Zustand statt "ok".
+			if ( 'ok' !== $check['status'] && isset( $quittiert[ $id ] ) ) {
+				$checks[ $i ]['status'] = 'ack';
+				$checks[ $i ]['detail'] = $check['detail'] . ' — bewusst so gelassen: ' . $quittiert[ $id ];
+			}
+
+			if ( $checks[ $i ]['enforced'] && 'ok' === $check['status'] ) {
+				$checks[ $i ]['detail'] = $check['detail'] . ' Wird nach jedem Update erneut gesetzt.';
+			}
+		}
+
 		$total  = count( $checks );
 		$passed = 0;
 		foreach ( $checks as $check ) {
-			if ( 'ok' === $check['status'] ) {
+			if ( 'ok' === $check['status'] || 'ack' === $check['status'] ) {
 				$passed++;
 			}
 		}
 
 		return array(
-			'score'  => $total ? (int) round( ( $passed / $total ) * 100 ) : 100,
-			'passed' => $passed,
-			'total'  => $total,
-			'checks' => $checks,
+			'score'      => $total ? (int) round( ( $passed / $total ) * 100 ) : 100,
+			'passed'     => $passed,
+			'total'      => $total,
+			'checks'     => $checks,
+			'enforced'   => $dauerhaft,
+			'last_enforce' => get_option( self::OPT_LAST_ENFORCE, null ),
 		);
 	}
 
@@ -51,8 +292,23 @@ class NLC_Security {
 	 * @param array<int,string> $ids
 	 * @return array<int,array<string,mixed>>
 	 */
-	public static function harden( array $ids ) {
+	public static function harden( array $ids, $permanent = true ) {
 		$results = array();
+
+		// Erst vormerken, dann anwenden. Andersherum stuende die Haertung nach
+		// dem naechsten Core-Update wieder offen, obwohl sie gerade gemeldet
+		// wurde — genau der Fall, der aufgefallen ist.
+		if ( $permanent ) {
+			$merken = array_values(
+				array_unique(
+					array_merge(
+						self::enforced(),
+						array_intersect( array_map( 'sanitize_key', $ids ), self::enforceable() )
+					)
+				)
+			);
+			update_option( self::OPT_HARDENING, $merken, true );
+		}
 
 		foreach ( $ids as $id ) {
 			switch ( $id ) {
@@ -70,6 +326,18 @@ class NLC_Security {
 					$readme = ABSPATH . 'readme.html';
 					$ok     = file_exists( $readme ) ? @unlink( $readme ) : true;
 					$results[] = self::fix_result( $id, (bool) $ok, $ok ? 'readme.html entfernt.' : 'readme.html konnte nicht entfernt werden.' );
+					break;
+
+				case 'file_editor':
+					if ( defined( 'DISALLOW_FILE_EDIT' ) && ! DISALLOW_FILE_EDIT ) {
+						$results[] = self::fix_result( $id, false, 'Die wp-config.php setzt DISALLOW_FILE_EDIT ausdruecklich auf false — dagegen kommt das Plugin nicht an.' );
+						break;
+					}
+					$results[] = self::fix_result(
+						$id,
+						true,
+						'Der Datei-Editor wird vom NorthLab-Plugin gesperrt. Gilt ab dem naechsten Seitenaufruf und ueberlebt Core-Updates.'
+					);
 					break;
 
 				case 'directory_listing':
@@ -110,13 +378,24 @@ class NLC_Security {
 	}
 
 	protected static function check_file_editor() {
-		$disabled = defined( 'DISALLOW_FILE_EDIT' ) && DISALLOW_FILE_EDIT;
+		$disabled   = defined( 'DISALLOW_FILE_EDIT' ) && DISALLOW_FILE_EDIT;
+		$erzwungen  = defined( 'DISALLOW_FILE_EDIT' ) && ! DISALLOW_FILE_EDIT;
+
+		if ( $erzwungen ) {
+			$detail = 'Die wp-config.php setzt DISALLOW_FILE_EDIT ausdruecklich auf false. Das laesst sich nur dort aendern.';
+		} elseif ( $disabled ) {
+			$detail = 'Theme-/Plugin-Editor ist gesperrt.';
+		} else {
+			$detail = 'Der Theme- und Plugin-Editor im Backend ist offen. Laesst sich aus dem Panel dauerhaft sperren.';
+		}
+
 		return self::check(
 			'file_editor',
 			'Datei-Editor deaktiviert',
 			$disabled ? 'ok' : 'warn',
 			'medium',
-			$disabled ? 'Theme-/Plugin-Editor ist gesperrt.' : "Setze define('DISALLOW_FILE_EDIT', true); in der wp-config.php."
+			$detail,
+			! $erzwungen
 		);
 	}
 
@@ -225,7 +504,11 @@ class NLC_Security {
 			'Individuelles Tabellen-Präfix',
 			$default ? 'warn' : 'ok',
 			'low',
-			$default ? 'Es wird das Standard-Präfix "wp_" verwendet.' : 'Eigenes Tabellen-Präfix in Verwendung.'
+			$default
+				? 'Es wird das Standard-Präfix "wp_" verwendet. Nachträglich ändern heißt: alle Tabellen umbenennen, '
+					. 'die wp-config.php anfassen und Schlüssel in options und usermeta mitziehen. Geht das schief, '
+					. 'steht die Seite — und der Gewinn ist bloße Verschleierung. Darum nur von Hand und mit frischer Sicherung.'
+				: 'Eigenes Tabellen-Präfix in Verwendung.'
 		);
 	}
 
@@ -321,6 +604,53 @@ add_action(
 		}
 		if ( get_option( 'nlc_disable_xmlrpc', 0 ) ) {
 			add_filter( 'xmlrpc_enabled', '__return_false' );
+		}
+	}
+);
+
+/**
+ * Den billigen Teil der Haertung frueh anwenden.
+ *
+ * DISALLOW_FILE_EDIT wird erst beim Aufbau des Admin-Menues gelesen; hier
+ * gesetzt ist es rechtzeitig da — und zwar nach jedem Core-Update wieder,
+ * ohne dass jemand die wp-config.php anfassen muss.
+ */
+add_action( 'plugins_loaded', array( 'NLC_Security', 'apply_early' ), 1 );
+
+/**
+ * Nach einem Core-Update erneut durchsetzen.
+ *
+ * WordPress legt readme.html bei jedem Core-Update wieder an. Einmal loeschen
+ * reicht darum nicht — genau das war der Grund, warum die Haertung "nach dem
+ * Update immer weg" war.
+ */
+add_action( '_core_updated_successfully', array( 'NLC_Security', 'enforce' ) );
+
+add_action(
+	'upgrader_process_complete',
+	function ( $upgrader, $hook_extra ) {
+		$typ = is_array( $hook_extra ) && isset( $hook_extra['type'] ) ? $hook_extra['type'] : '';
+
+		if ( 'core' === $typ ) {
+			NLC_Security::enforce();
+		}
+	},
+	10,
+	2
+);
+
+/**
+ * Und taeglich als Netz darunter — ein Core-Update kann auch ueber WP-CLI,
+ * den Hoster oder eine Wiederherstellung kommen, ohne dass einer der Haken
+ * oben feuert.
+ */
+add_action( 'nlc_enforce_hardening', array( 'NLC_Security', 'enforce' ) );
+
+add_action(
+	'init',
+	function () {
+		if ( ! wp_next_scheduled( 'nlc_enforce_hardening' ) ) {
+			wp_schedule_event( time() + HOUR_IN_SECONDS, 'daily', 'nlc_enforce_hardening' );
 		}
 	}
 );

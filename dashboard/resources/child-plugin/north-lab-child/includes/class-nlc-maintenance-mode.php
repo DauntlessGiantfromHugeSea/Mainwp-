@@ -72,7 +72,20 @@ class NLC_Maintenance_Mode {
 			$state['started_at'] = 0;
 		}
 
+		// Nur bekannte Schluessel ablegen. Die Antwort unten traegt zusaetzlich
+		// Diagnosefelder; kaemen die beim naechsten Aufruf zurueck, wuerden sie
+		// sonst als Einstellung mitgespeichert.
+		$state = array_intersect_key( $state, self::defaults() );
+
 		update_option( self::OPTION, $state, true );
+
+		// Ein Seiten-Cache liefert sein fertiges HTML aus, bevor WordPress den
+		// Wartungsmodus ueberhaupt prueft. Ohne Leeren bliebe die Seite beim
+		// Einschalten sichtbar und beim Abschalten gesperrt.
+		$wechsel = ( ! empty( $current['enabled'] ) ) !== ( ! empty( $state['enabled'] ) );
+
+		$state['flushed'] = $wechsel ? NLC_Cache::flush() : array();
+		$state['caches']  = NLC_Cache::detected();
 
 		return $state;
 	}
@@ -98,6 +111,71 @@ class NLC_Maintenance_Mode {
 
 	public function hooks() {
 		add_action( 'template_redirect', array( $this, 'maybe_render' ), 0 );
+
+		// Wer angemeldet ist und Beitraege bearbeiten darf, sieht die Seite
+		// absichtlich weiter. Ohne Hinweis ist das von "der Wartungsmodus
+		// greift nicht" nicht zu unterscheiden — und genau so wurde es gemeldet.
+		add_action( 'admin_bar_menu', array( $this, 'admin_bar_notice' ), 90 );
+		add_action( 'admin_notices', array( $this, 'admin_notice' ) );
+	}
+
+	/**
+	 * Eintrag in der Adminleiste, im Frontend wie im Backend.
+	 *
+	 * @param WP_Admin_Bar $bar
+	 */
+	public function admin_bar_notice( $bar ) {
+		if ( ! is_admin_bar_showing() || ! self::state_is_on() || ! current_user_can( 'edit_posts' ) ) {
+			return;
+		}
+
+		$state = self::state();
+		$bis   = (int) $state['until'] > 0
+			? sprintf( 'bis %s', date_i18n( 'H:i', (int) $state['until'] + (int) ( get_option( 'gmt_offset' ) * HOUR_IN_SECONDS ) ) )
+			: 'bis auf Widerruf';
+
+		$bar->add_node(
+			array(
+				'id'    => 'nlc-mmode',
+				'title' => sprintf( 'Wartungsmodus aktiv (%s)', $bis ),
+				'href'  => admin_url( 'options-general.php?page=north-lab-child' ),
+				'meta'  => array( 'title' => 'Besucher sehen die Wartungsseite. Du siehst die Seite normal, weil du angemeldet bist.' ),
+			)
+		);
+
+		$bar->add_node(
+			array(
+				'parent' => 'nlc-mmode',
+				'id'     => 'nlc-mmode-hint',
+				'title'  => 'Besucher sehen die Wartungsseite — du bist angemeldet.',
+			)
+		);
+	}
+
+	/**
+	 * Derselbe Hinweis als Kasten im Backend, falls die Adminleiste aus ist.
+	 */
+	public function admin_notice() {
+		if ( ! self::state_is_on() || ! current_user_can( 'edit_posts' ) ) {
+			return;
+		}
+
+		printf(
+			'<div class="notice notice-warning"><p><strong>%s</strong> %s</p></div>',
+			esc_html( 'Diese Seite ist im Wartungsmodus.' ),
+			esc_html( 'Besucher bekommen die Wartungsseite mit HTTP 503. Angemeldete Redakteure sehen die Seite weiterhin normal.' )
+		);
+	}
+
+	/**
+	 * Ist der Modus eingeschaltet? Ohne die Ruecksicht auf den aktuellen Benutzer.
+	 *
+	 * @return bool
+	 */
+	public static function state_is_on() {
+		$state = self::state();
+
+		return ! empty( $state['enabled'] );
 	}
 
 	/**
@@ -162,6 +240,7 @@ class NLC_Maintenance_Mode {
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
+<meta name="nlc-maintenance" content="1">
 <title>' . esc_html( $headline ) . ' — ' . esc_html( $name ) . '</title>
 <style>
 	:root { --brand: ' . esc_attr( $color ) . '; }

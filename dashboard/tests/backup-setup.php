@@ -71,6 +71,32 @@ shell_exec( 'mariadb -u root -e ' . escapeshellarg(
 Database::boot( array( 'host' => '127.0.0.1', 'port' => 3306, 'name' => 'nl_setup', 'user' => 'nl', 'pass' => 'nlpass', 'prefix' => 'nl_' ) );
 Migrator::migrate();
 
+/**
+ * Passwort des Testbenutzers setzen.
+ *
+ * Nicht ueber chpasswd: das legt auf neueren Systemen einen yescrypt-Hash
+ * ($y$) an, und den kann sshd mit "UsePAM no" nicht pruefen — die Anmeldung
+ * scheitert dann mit "Failed password", obwohl das Passwort stimmt. Ein
+ * halber Tag Fehlersuche, der niemandem noch einmal passieren soll.
+ */
+function setze_boxpasswort( string $klartext ): void {
+	$hash = trim( (string) shell_exec(
+		'printf %s ' . escapeshellarg( $klartext ) . ' | openssl passwd -6 -stdin 2>/dev/null'
+	) );
+
+	if ( '' === $hash ) {
+		echo "  FEHLT: Das Testpasswort liess sich nicht erzeugen (openssl fehlt?)\n";
+		return;
+	}
+
+	shell_exec( 'usermod -p ' . escapeshellarg( $hash ) . ' boxuser 2>&1' );
+}
+
+// Der Lauf setzt sein Passwort selbst. Frueher stand es in der README und
+// wich vom erwarteten ab — damit war der ganze Lauf rot, ohne dass am Produkt
+// etwas falsch war.
+setze_boxpasswort( 'StorageBoxGeheim123' );
+
 // Auf dem "Speicher" aufraeumen: weder Schluessel noch altes Repository.
 shell_exec( 'rm -rf /home/boxuser/.ssh /home/boxuser/repo' );
 
@@ -232,7 +258,7 @@ $knifflig = 'qZt~wPx8.Lm4K{v$$jhRcS2nB!aQ^p;X7';
 $echterScan = Restic::scanHostKey();
 Restic::trustHostKeys( array_column( $echterScan['keys'], 'line' ) );
 
-shell_exec( 'printf %s ' . escapeshellarg( 'boxuser:' . $knifflig . "\n" ) . ' | chpasswd' );
+setze_boxpasswort( $knifflig );
 shell_exec( 'rm -rf /home/boxuser/.ssh' );
 
 $mitSonderzeichen = Restic::installKey( $knifflig );
@@ -249,7 +275,7 @@ check( 'Ein leeres Passwort wird abgelehnt', ! $leeresPasswort['ok'] );
 check( 'Und legt nichts ab', ! is_file( '/home/boxuser/.ssh/authorized_keys' ) );
 
 // Fuer die folgenden Pruefungen wieder das bekannte Passwort.
-shell_exec( 'printf %s ' . escapeshellarg( "boxuser:StorageBoxGeheim123\n" ) . ' | chpasswd' );
+setze_boxpasswort( 'StorageBoxGeheim123' );
 
 printf( "%d Prüfungen, %d Fehler\n", $n, $fails );
 exit( $fails ? 1 : 0 );

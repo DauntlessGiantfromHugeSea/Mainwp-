@@ -150,6 +150,106 @@ check( 'WP-Seite zeigt den Wartungs-Tab', str_contains( $wp, 'data-tab="maintena
 check( 'WP-Seite zeigt den Sicherheits-Tab', str_contains( $wp, 'data-tab="security"' ) );
 check( 'WP-Seite zeigt "Verbindung erneuern"', str_contains( $wp, 'Verbindung erneuern' ) );
 
+/* ------------------------------------------------- Sicherheit: dauerhaft und quittiert */
+
+$sicher = render( 'sites/show', array_replace(
+	$showData( 'wordpress' ),
+	array(
+		'payload' => array(
+			'security' => array(
+				'score'  => 70,
+				'passed' => 7,
+				'total'  => 10,
+				'checks' => array(
+					array(
+						'id' => 'readme_exposed', 'label' => 'readme.html entfernt', 'status' => 'ok',
+						'severity' => 'low', 'detail' => 'Keine readme.html im Root. Wird nach jedem Update erneut gesetzt.',
+						'fixable' => true, 'enforced' => true, 'enforceable' => true, 'acknowledgeable' => false, 'acknowledged' => '',
+					),
+					array(
+						'id' => 'file_editor', 'label' => 'Datei-Editor deaktiviert', 'status' => 'warn',
+						'severity' => 'medium', 'detail' => 'Der Theme- und Plugin-Editor im Backend ist offen.',
+						'fixable' => true, 'enforced' => false, 'enforceable' => true, 'acknowledgeable' => false, 'acknowledged' => '',
+					),
+					array(
+						'id' => 'db_prefix', 'label' => 'Individuelles Tabellen-Präfix', 'status' => 'ack',
+						'severity' => 'low', 'detail' => 'Standard-Präfix — bewusst so gelassen: Kunde zahlt die Migration nicht.',
+						'fixable' => false, 'enforced' => false, 'enforceable' => false, 'acknowledgeable' => true, 'acknowledged' => 'Kunde zahlt die Migration nicht.',
+					),
+				),
+			),
+		),
+	)
+) );
+
+check( 'Dauerhafte Haertung wird als solche ausgewiesen', str_contains( $sicher, '>dauerhaft<' ) );
+check( 'Ein quittierter Punkt heisst nicht "Bestanden"', str_contains( $sicher, 'Bewusst so' ) );
+check( 'Und traegt die Begruendung', str_contains( $sicher, 'Kunde zahlt die Migration nicht' ) );
+check( 'Es gibt einen Knopf fuers dauerhafte Setzen', str_contains( $sicher, 'Ausgewählte dauerhaft setzen' ) );
+check( 'Und einen zum Aufheben', str_contains( $sicher, 'value="relax"' ) );
+check( 'Und einen zum Quittieren', str_contains( $sicher, 'value="acknowledge"' ) );
+check( 'Das Nachziehen laesst sich anstossen', str_contains( $sicher, 'value="enforce"' ) );
+check( 'Der Grund fuer das Praefix wird erklaert', str_contains( $sicher, 'bewusst so gelassen' ) );
+
+// Ein quittierbarer Punkt muss auch auswaehlbar sein - sonst laesst sich der
+// Vermerk gar nicht setzen.
+check(
+	'Ein quittierbarer Punkt ist auswaehlbar',
+	str_contains( $sicher, 'value="db_prefix"' )
+);
+
+/* ------------------------------------------------------------- Link-Pruefung */
+
+$ohneLinks = render( 'sites/show', $showData( 'wordpress' ) );
+check( 'Die Link-Karte ist da', str_contains( $ohneLinks, 'Link-Prüfung' ) );
+check( 'Ohne Ergebnis steht ein Hinweis', str_contains( $ohneLinks, 'einmal pro Woche' ) );
+
+$mitLinks = render( 'sites/show', array_replace(
+	$showData( 'wordpress' ),
+	array(
+		'payload' => array(
+			'links' => array(
+				'enabled'  => true,
+				'at'       => gmdate( 'c', time() - 7200 ),
+				'checked'  => 412,
+				'broken'   => 2,
+				'unsure'   => 3,
+				'progress' => array( 'running' => false ),
+				'examples' => array(
+					array( 'url' => 'https://weg.de/alt', 'status' => 404, 'title' => 'Über uns' ),
+				),
+			),
+		),
+	)
+) );
+
+check( 'Die Zahl der toten Links steht da', str_contains( $mitLinks, 'Tote Links' ) );
+check( 'Ein Beispiel wird gezeigt', str_contains( $mitLinks, 'https://weg.de/alt' ) );
+check( 'Unklare werden getrennt erklaert', str_contains( $mitLinks, 'automatische Abrufe abweisen' ) );
+check( 'Es gibt einen Knopf zum Pruefen', str_contains( $mitLinks, '/links' ) );
+
+$laufend = render( 'sites/show', array_replace(
+	$showData( 'wordpress' ),
+	array(
+		'payload' => array(
+			'links' => array(
+				'enabled'  => true,
+				'at'       => '',
+				'progress' => array( 'running' => true, 'phase' => 'check', 'done' => 120, 'total' => 400 ),
+			),
+		),
+	)
+) );
+check( 'Ein laufender Durchgang wird angezeigt', str_contains( $laufend, '120 von 400 geprüft' ) );
+check( 'Und gesagt, wo die Last liegt', str_contains( $laufend, 'dieser Server hat damit keine Arbeit' ) );
+
+$aus = render( 'sites/show', array_replace(
+	$showData( 'wordpress' ),
+	array( 'payload' => array( 'links' => array( 'enabled' => false ) ) )
+) );
+check( 'Abgeschaltet wird das auch gesagt', str_contains( $aus, 'abgeschaltet' ) );
+
+
 check( 'WP-Seite zeigt den Sicherungs-Tab', str_contains( $wp, 'data-tab="backup"' ) );
 check( 'Ohne Ziel wird darauf hingewiesen', str_contains( $wp, 'kein Sicherungsziel eingerichtet' ) );
 check( 'Ohne Ziel kein Abruf-Knopf', ! str_contains( $wp, 'data-snapshot-load' ) );

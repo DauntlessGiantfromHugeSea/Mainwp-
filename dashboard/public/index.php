@@ -116,6 +116,7 @@ $router->post( '/sites/{id:\d+}/token', array( SiteController::class, 'rotateTok
 $router->post( '/sites/{id:\d+}/maintenance-mode', array( SiteController::class, 'maintenanceMode' ) );
 $router->post( '/sites/{id:\d+}/child-update', array( SiteController::class, 'childUpdate' ) );
 $router->post( '/sites/{id:\d+}/branding', array( SiteController::class, 'branding' ) );
+$router->post( '/sites/{id:\d+}/links', array( SiteController::class, 'links' ) );
 $router->get( '/sites/{id:\d+}/users', array( SiteUserController::class, 'index' ) );
 $router->post( '/sites/{id:\d+}/users', array( SiteUserController::class, 'store' ) );
 $router->post( '/sites/{id:\d+}/login', array( SiteUserController::class, 'login' ) );

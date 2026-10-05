@@ -64,6 +64,10 @@ function add_action( ...$a ) {}
 function wp_set_current_user( $id ) { $GLOBALS['current'] = $id; }
 function wp_set_auth_cookie( $id, $remember ) { $GLOBALS['cookies'][] = array( 'id' => $id, 'remember' => $remember ); }
 function do_action( ...$a ) {}
+function has_action( $tag, $cb = false ) { return ! empty( $GLOBALS['actions'][ $tag ] ); }
+function wp_cache_flush() { $GLOBALS['cache_flushed'] = ( $GLOBALS['cache_flushed'] ?? 0 ) + 1; return true; }
+function is_admin_bar_showing() { return ! empty( $GLOBALS['admin_bar'] ); }
+function date_i18n( $f, $ts = null ) { return gmdate( $f, null === $ts ? time() : $ts ); }
 function update_user_meta( $id, $k, $v ) { $GLOBALS['users'][ $id ]['meta'][ $k ] = $v; return true; }
 function get_user_meta( $id, $k, $single = false ) { return $GLOBALS['users'][ $id ]['meta'][ $k ] ?? ''; }
 function delete_user_meta( $id, $k ) { unset( $GLOBALS['users'][ $id ]['meta'][ $k ] ); return true; }
@@ -133,6 +137,7 @@ class WP_Session_Tokens {
 class ExitSignal extends RuntimeException {}
 
 require_once dirname( __DIR__ ) . '/resources/child-plugin/north-lab-child/includes/class-nlc-options.php';
+require_once dirname( __DIR__ ) . '/resources/child-plugin/north-lab-child/includes/class-nlc-cache.php';
 require_once dirname( __DIR__ ) . '/resources/child-plugin/north-lab-child/includes/class-nlc-maintenance-mode.php';
 require_once dirname( __DIR__ ) . '/resources/child-plugin/north-lab-child/includes/class-nlc-login.php';
 require_once dirname( __DIR__ ) . '/resources/child-plugin/north-lab-child/includes/class-nlc-actions.php';
@@ -169,6 +174,40 @@ check( 'Und der Zustand ist auch gespeichert', empty( get_option( 'nlc_maintenan
 NLC_Maintenance_Mode::save( array( 'enabled' => true, 'until' => time() + 600 ) );
 check( 'Laufendes Fenster bleibt an', NLC_Maintenance_Mode::state()['enabled'] );
 
+// Caches: nur beim Wechsel leeren. Ein Seiten-Cache liefert sein HTML aus,
+// bevor WordPress den Wartungsmodus prueft - ohne Leeren bliebe die Seite
+// sichtbar. Bei jedem Speichern zu leeren waere aber unnoetige Last.
+NLC_Maintenance_Mode::save( array( 'enabled' => false ) );
+$GLOBALS['cache_flushed'] = 0;
+
+$an = NLC_Maintenance_Mode::save( array( 'enabled' => true, 'until' => 0 ) );
+check( 'Einschalten leert die Caches', 1 === $GLOBALS['cache_flushed'] );
+check( 'Und sagt, was geleert wurde', in_array( 'Object-Cache', $an['flushed'], true ) );
+
+$nochmal = NLC_Maintenance_Mode::save( array( 'enabled' => true, 'headline' => 'Anderer Text' ) );
+check( 'Erneutes Speichern ohne Wechsel leert nichts', 1 === $GLOBALS['cache_flushed'] );
+check( 'Und meldet auch nichts geleert', array() === $nochmal['flushed'] );
+
+$aus = NLC_Maintenance_Mode::save( array( 'enabled' => false ) );
+check( 'Abschalten leert die Caches wieder', 2 === $GLOBALS['cache_flushed'] );
+
+// Die Antwort traegt Diagnosefelder. Schickt das Panel sie beim naechsten
+// Mal zurueck - und genau das tut es, wenn es den Zustand durchreicht -,
+// duerfen sie nicht als Einstellung haengenbleiben.
+NLC_Maintenance_Mode::save( $aus );
+$gespeichert = (array) $GLOBALS['options']['nlc_maintenance_mode'];
+check( 'flushed landet nicht in der Option', ! array_key_exists( 'flushed', $gespeichert ) );
+check( 'caches landet nicht in der Option', ! array_key_exists( 'caches', $gespeichert ) );
+check( 'Auch sonst nichts Fremdes', array() === array_diff_key( $gespeichert, NLC_Maintenance_Mode::defaults() ) );
+
+// Zustandsfrage ohne Ruecksicht auf den angemeldeten Benutzer.
+NLC_Maintenance_Mode::save( array( 'enabled' => true, 'until' => 0 ) );
+$GLOBALS['current'] = 7;
+$GLOBALS['users'][7] = array( 'login' => 'redakteur', 'roles' => array( 'editor' ), 'can' => true );
+check( 'Redakteur sieht die Seite weiter', ! NLC_Maintenance_Mode::should_hide() );
+check( 'Der Modus gilt trotzdem als an', NLC_Maintenance_Mode::state_is_on() );
+$GLOBALS['current'] = 0;
+
 // Farben
 check( 'Hex mit sechs Stellen bleibt', '#ff33aa' === NLC_Maintenance_Mode::sanitize_color( '#FF33AA' ) );
 check( 'Kurzform wird ausgeschrieben', '#ff33aa' === NLC_Maintenance_Mode::sanitize_color( '#f3a' ) );
@@ -191,6 +230,7 @@ check( 'Seite bindet das Logo ein', str_contains( $page, 'src="https://north-flo
 check( 'Seite nennt keine Uhrzeit', ! str_contains( $page, 'Voraussichtlich' ) );
 check( 'Auch sonst keine Uhrzeit im Text', ! preg_match( '/\d{1,2}:\d{2}/', strip_tags( $page ) ) );
 check( 'Seite bleibt aus dem Index', str_contains( $page, 'noindex, nofollow' ) );
+check( 'Seite traegt den Marker fuer die Gegenprobe', str_contains( $page, '<meta name="nlc-maintenance" content="1">' ) );
 check( 'Seite laedt nichts von aussen ausser dem Logo', 1 === substr_count( $page, 'https://' ) );
 
 // Kein Logo: Name statt Bild

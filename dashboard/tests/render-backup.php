@@ -391,6 +391,24 @@ check( 'Es ist aufgeklappt, wenn etwas drinsteht', str_contains( $html, '<detail
 check( 'Und warnt davor, die Speicheradresse einzutragen',
 	str_contains( $html, 'Nicht</strong> die Adresse des' ) );
 
+/* ------------------------------------- Hinweis auf der Kundenseite */
+
+check( 'Der Wortlaut des Hinweises laesst sich setzen', str_contains( $html, 'name="backup_banner_text"' ) );
+check( 'Der voreingestellte Wortlaut steht drin',
+	str_contains( $html, 'Sie kann kurzzeitig etwas langsamer reagieren' ) );
+check( 'Die Zielgruppe laesst sich waehlen', str_contains( $html, 'name="backup_banner_audience"' ) );
+check( 'Angemeldete sind die Voreinstellung',
+	(bool) preg_match( '/value="loggedin"[^>]*selected/', $html ) );
+check( 'Der Hinweis laesst sich abschalten', str_contains( $html, 'name="backup_banner"' ) );
+check( 'Und ist zunaechst eingeschaltet',
+	(bool) preg_match( '/<input[^>]*id="banneran"[^>]*\bchecked\b/s', $html ) );
+check( 'Die Folge von "alle Besucher" wird benannt',
+	str_contains( $html, 'das ist selten gewollt' ) );
+check( 'Es wird gesagt, woher das Logo kommt',
+	str_contains( $html, 'Agenturlogo aus dem Branding' ) );
+check( 'Nur vorhandene Formklassen verwenden',
+	! str_contains( $html, 'class="switch"' ) && ! str_contains( $html, 'class="field wide"' ) );
+
 printf( "%d Prüfungen, %d Fehler\n", $n, $fails );
 exit( $fails ? 1 : 0 );
 

@@ -152,14 +152,74 @@ final class MaintenanceService {
 	 * @param array<int,string> $checks
 	 * @return array{ok:bool,error:string,results:array<int,array<string,mixed>>,scan:array<string,mixed>}
 	 */
-	public static function harden( int $siteId, array $checks ): array {
+	public static function harden( int $siteId, array $checks, bool $permanent = true ): array {
+		return self::securityAction(
+			$siteId,
+			array(
+				'action'    => 'harden',
+				'checks'    => array_values( $checks ),
+				'permanent' => $permanent,
+			)
+		);
+	}
+
+	/**
+	 * Eine dauerhafte Haertung wieder aufgeben.
+	 *
+	 * @param array<int,string> $checks
+	 * @return array{ok:bool,error:string,results:array<int,mixed>,scan:array<string,mixed>}
+	 */
+	public static function relax( int $siteId, array $checks ): array {
+		return self::securityAction( $siteId, array( 'action' => 'relax', 'checks' => array_values( $checks ) ) );
+	}
+
+	/**
+	 * Punkte bewusst stehen lassen, mit Begruendung.
+	 *
+	 * Fuer alles, was sich nicht gefahrlos aus der Ferne beheben laesst — sonst
+	 * mahnt die Liste ewig dasselbe und man sieht die echten Funde nicht mehr.
+	 *
+	 * @param array<int,string> $checks
+	 * @return array{ok:bool,error:string,results:array<int,mixed>,scan:array<string,mixed>}
+	 */
+	public static function acknowledge( int $siteId, array $checks, string $reason ): array {
+		return self::securityAction(
+			$siteId,
+			array( 'action' => 'acknowledge', 'checks' => array_values( $checks ), 'reason' => $reason )
+		);
+	}
+
+	/**
+	 * @param array<int,string> $checks
+	 * @return array{ok:bool,error:string,results:array<int,mixed>,scan:array<string,mixed>}
+	 */
+	public static function unacknowledge( int $siteId, array $checks ): array {
+		return self::securityAction( $siteId, array( 'action' => 'unacknowledge', 'checks' => array_values( $checks ) ) );
+	}
+
+	/**
+	 * Alle vorgemerkten Haertungen jetzt erneut durchsetzen.
+	 *
+	 * @return array{ok:bool,error:string,results:array<int,mixed>,scan:array<string,mixed>}
+	 */
+	public static function enforce( int $siteId ): array {
+		return self::securityAction( $siteId, array( 'action' => 'enforce' ) );
+	}
+
+	/**
+	 * Gemeinsamer Weg fuer alles, was an /security geht und einen Scan zurueckgibt.
+	 *
+	 * @param array<string,mixed> $body
+	 * @return array{ok:bool,error:string,results:array<int,mixed>,scan:array<string,mixed>}
+	 */
+	private static function securityAction( int $siteId, array $body ): array {
 		$site = SiteRepository::find( $siteId );
 
 		if ( null === $site ) {
 			return array( 'ok' => false, 'error' => 'Seite nicht gefunden.', 'results' => array(), 'scan' => array() );
 		}
 
-		$response = ChildClient::post( $site, '/security', array( 'action' => 'harden', 'checks' => array_values( $checks ) ) );
+		$response = ChildClient::post( $site, '/security', $body );
 
 		if ( ! $response['ok'] ) {
 			return array( 'ok' => false, 'error' => $response['error'], 'results' => array(), 'scan' => array() );

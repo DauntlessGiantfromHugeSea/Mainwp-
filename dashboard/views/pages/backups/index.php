@@ -679,6 +679,34 @@ $needsSsh = in_array( $targetType, array( 'storagebox', 'sftp' ), true );
 								</div>
 							</div>
 							<div class="field">
+								<label for="bannertext">Hinweis auf der Kundenseite</label>
+								<input type="text" id="bannertext" name="backup_banner_text" maxlength="200"
+									value="<?= e( $get( 'backup_banner_text', \NorthLab\Service\BackupService::BANNER_TEXT ) ) ?>">
+								<div class="hint">
+									Erscheint unten in der Ecke, solange die Sicherung dieser Seite läuft,
+									mit dem Agenturlogo aus dem Branding. Verschwindet von selbst, auch wenn
+									der Lauf abbricht.
+								</div>
+							</div>
+							<div class="field">
+								<label for="bannerwer">Wer sieht den Hinweis</label>
+								<select id="bannerwer" name="backup_banner_audience">
+									<?php $wer = $get( 'backup_banner_audience', 'loggedin' ); ?>
+									<option value="loggedin" <?= 'loggedin' === $wer ? 'selected' : '' ?>>Angemeldete Benutzer</option>
+									<option value="editors" <?= 'editors' === $wer ? 'selected' : '' ?>>Nur Redakteure und höher</option>
+									<option value="all" <?= 'all' === $wer ? 'selected' : '' ?>>Alle Besucher</option>
+								</select>
+								<div class="hint">
+									„Alle Besucher“ sagt auch jedem Kunden deines Kunden, dass die Seite
+									gerade langsamer ist — das ist selten gewollt.
+								</div>
+							</div>
+							<div class="field inline">
+								<input type="checkbox" id="banneran" name="backup_banner" value="1"
+									<?= '0' !== $get( 'backup_banner', '1' ) ? 'checked' : '' ?>>
+								<label for="banneran">Hinweis während der Sicherung einblenden</label>
+							</div>
+							<div class="field">
 								<label for="root">Umfang</label>
 								<select id="root" name="backup_root">
 									<option value="content" <?= 'root' !== $get( 'backup_root', 'content' ) ? 'selected' : '' ?>>wp-content + Datenbank</option>

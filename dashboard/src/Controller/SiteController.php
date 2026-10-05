@@ -18,6 +18,7 @@ use NorthLab\Service\BrandingService;
 use NorthLab\Service\ChildFeature;
 use NorthLab\Service\ChildPluginService;
 use NorthLab\Service\MaintenanceModeService;
+use NorthLab\Service\LinkService;
 use NorthLab\Service\MaintenanceService;
 use NorthLab\Service\SiteService;
 use NorthLab\Service\SyncService;
@@ -245,16 +246,97 @@ final class SiteController extends BaseController {
 		Auth::requireSite( $siteId );
 
 		$checks = $request->arrayOfStrings( 'checks' );
+		$op     = $request->string( 'op', 'harden' );
 
-		$result = $checks
-			? MaintenanceService::harden( $siteId, $checks )
-			: MaintenanceService::scanSecurity( $siteId );
+		if ( 'relax' === $op && $checks ) {
+			$result  = MaintenanceService::relax( $siteId, $checks );
+			$message = $result['ok'] ? 'Die dauerhafte Härtung wurde aufgegeben.' : $result['error'];
+			$this->respond( $request, $result['ok'], $message, '/sites/' . $siteId );
+		}
 
-		$message = $result['ok']
-			? ( $checks ? 'Härtungsmaßnahmen angewendet.' : 'Sicherheitsprüfung aktualisiert.' )
-			: $result['error'];
+		if ( 'acknowledge' === $op && $checks ) {
+			$result  = MaintenanceService::acknowledge( $siteId, $checks, $request->string( 'reason' ) );
+			$message = $result['ok'] ? 'Als bewusst so gelassen vermerkt.' : $result['error'];
+			$this->respond( $request, $result['ok'], $message, '/sites/' . $siteId );
+		}
 
-		$this->respond( $request, $result['ok'], $message, '/sites/' . $siteId );
+		if ( 'unacknowledge' === $op && $checks ) {
+			$result  = MaintenanceService::unacknowledge( $siteId, $checks );
+			$message = $result['ok'] ? 'Der Vermerk wurde entfernt — der Punkt mahnt wieder.' : $result['error'];
+			$this->respond( $request, $result['ok'], $message, '/sites/' . $siteId );
+		}
+
+		if ( 'enforce' === $op ) {
+			$result  = MaintenanceService::enforce( $siteId );
+			$message = $result['ok']
+				? ( $result['results'] ? self::hardeningReport( $result['results'] ) : 'Alles sass noch — nichts nachzuziehen.' )
+				: $result['error'];
+			$this->respond( $request, $result['ok'], $message, '/sites/' . $siteId );
+		}
+
+		if ( ! $checks ) {
+			$result = MaintenanceService::scanSecurity( $siteId );
+			$this->respond( $request, $result['ok'], $result['ok'] ? 'Sicherheitsprüfung aktualisiert.' : $result['error'], '/sites/' . $siteId );
+		}
+
+		$result = MaintenanceService::harden( $siteId, $checks );
+
+		if ( ! $result['ok'] ) {
+			$this->respond( $request, false, $result['error'], '/sites/' . $siteId );
+		}
+
+		// Die Anfrage kann durchgehen und trotzdem kann jede einzelne Massnahme
+		// gescheitert sein — etwa weil im WordPress-Verzeichnis Schreibrechte
+		// fehlen. "Angewendet" zu melden waere dann schlicht falsch.
+		$bericht   = self::hardeningReport( $result['results'] );
+		$geklappt  = 0;
+		foreach ( $result['results'] as $eintrag ) {
+			if ( ! empty( $eintrag['success'] ) ) {
+				$geklappt++;
+			}
+		}
+
+		$this->respond( $request, $geklappt > 0, $bericht, '/sites/' . $siteId );
+	}
+
+	/**
+	 * Was bei den Härtungsmaßnahmen herauskam, in einem Satz.
+	 *
+	 * @param array<int,mixed> $results
+	 */
+	private static function hardeningReport( array $results ): string {
+		$gut      = array();
+		$schlecht = array();
+
+		foreach ( $results as $eintrag ) {
+			$eintrag = (array) $eintrag;
+			$text    = trim( (string) ( $eintrag['message'] ?? '' ) );
+
+			if ( ! empty( $eintrag['success'] ) ) {
+				$gut[] = $text;
+			} else {
+				$schlecht[] = $text;
+			}
+		}
+
+		if ( ! $gut && ! $schlecht ) {
+			return 'Es gab nichts zu tun.';
+		}
+
+		if ( ! $schlecht ) {
+			return sprintf( '%d Punkt(e) dauerhaft gesetzt. %s', count( $gut ), implode( ' ', $gut ) );
+		}
+
+		if ( ! $gut ) {
+			return 'Nichts konnte gesetzt werden. ' . implode( ' ', $schlecht );
+		}
+
+		return sprintf(
+			'%d von %d Punkten gesetzt. Offen geblieben: %s',
+			count( $gut ),
+			count( $gut ) + count( $schlecht ),
+			implode( ' ', $schlecht )
+		);
 	}
 
 	public function extensions( Request $request ): void {
@@ -330,7 +412,24 @@ final class SiteController extends BaseController {
 
 		if ( $request->bool( 'disable' ) ) {
 			$error = MaintenanceModeService::disable( $siteId );
-			$this->respond( $request, null === $error, $error ?? 'Wartungsmodus beendet.', '/sites/' . $siteId );
+
+			if ( null !== $error ) {
+				$this->respond( $request, false, $error, '/sites/' . $siteId );
+			}
+
+			$pruefung = MaintenanceModeService::verify( $siteId );
+
+			// Beim Abschalten ist das gute Ergebnis das umgekehrte: die Seite
+			// soll wieder da sein. Haengt die Wartungsseite noch im Cache,
+			// merkt es der Kunde sonst vor uns.
+			$this->respond(
+				$request,
+				! $pruefung['geprueft'] || ! $pruefung['versteckt'],
+				$pruefung['geprueft'] && $pruefung['versteckt']
+					? 'Wartungsmodus beendet, aber Besucher bekommen weiterhin die Wartungsseite. Vermutlich haengt sie in einem Cache oder CDN fest.'
+					: 'Wartungsmodus beendet.',
+				'/sites/' . $siteId
+			);
 		}
 
 		$error = MaintenanceModeService::enable(
@@ -342,7 +441,44 @@ final class SiteController extends BaseController {
 			)
 		);
 
-		$this->respond( $request, null === $error, $error ?? 'Wartungsmodus eingeschaltet.', '/sites/' . $siteId );
+		if ( null !== $error ) {
+			$this->respond( $request, false, $error, '/sites/' . $siteId );
+		}
+
+		// Gespeichert ist nicht gewirkt: erst der Abruf von aussen zeigt, was
+		// ein Besucher wirklich bekommt.
+		$pruefung = MaintenanceModeService::verify( $siteId );
+
+		$this->respond(
+			$request,
+			! $pruefung['geprueft'] || $pruefung['versteckt'],
+			'Wartungsmodus eingeschaltet. ' . $pruefung['hinweis'],
+			'/sites/' . $siteId
+		);
+	}
+
+	/**
+	 * Link-Prüfung einer Kundenseite anstoßen oder eine Etappe antreiben.
+	 */
+	public function links( Request $request ): void {
+		Auth::requireWrite();
+
+		$siteId = (int) $request->params['id'];
+		Auth::requireSite( $siteId );
+
+		if ( 'step' === $request->string( 'op' ) ) {
+			$error = LinkService::step( $siteId );
+			$this->respond( $request, null === $error, $error ?? 'Eine Etappe wurde abgearbeitet.', '/sites/' . $siteId );
+		}
+
+		$error = LinkService::scan( $siteId );
+
+		$this->respond(
+			$request,
+			null === $error,
+			$error ?? 'Die Link-Prüfung läuft. Sie arbeitet sich in kleinen Schritten vor, damit die Kundenseite nicht ausgebremst wird.',
+			'/sites/' . $siteId
+		);
 	}
 
 	public function rotateToken( Request $request ): void {

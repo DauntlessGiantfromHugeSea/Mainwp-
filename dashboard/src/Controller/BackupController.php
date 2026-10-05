@@ -229,6 +229,13 @@ final class BackupController extends BaseController {
 						'backup_keep_daily'   => (string) max( 1, $request->int( 'backup_keep_daily', 7 ) ),
 						'backup_keep_weekly'  => (string) max( 0, $request->int( 'backup_keep_weekly', 4 ) ),
 						'backup_keep_monthly' => (string) max( 0, $request->int( 'backup_keep_monthly', 6 ) ),
+
+						// Hinweis auf der Kundenseite waehrend eines Laufs.
+						'backup_banner'          => $request->bool( 'backup_banner' ) ? '1' : '0',
+						'backup_banner_audience' => in_array( $request->string( 'backup_banner_audience' ), array( 'loggedin', 'editors', 'all' ), true )
+							? $request->string( 'backup_banner_audience' )
+							: 'loggedin',
+						'backup_banner_text'     => $request->string( 'backup_banner_text', BackupService::BANNER_TEXT ),
 					)
 				);
 				$this->respond( $request, true, 'Zeitplan gespeichert.', '/backups' );

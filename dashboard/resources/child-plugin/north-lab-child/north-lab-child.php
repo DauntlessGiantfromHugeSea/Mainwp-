@@ -3,7 +3,7 @@
  * Plugin Name:       NorthLab Child
  * Plugin URI:        https://north-lab.de/
  * Description:       Verbindet diese WordPress-Seite mit dem NorthLab Control Panel. Erlaubt zentrale Updates, Status-Abfragen, Wartung, Sicherheitschecks und Reports.
- * Version:           1.4.2
+ * Version:           1.5.0
  * Requires at least: 6.0
  * Requires PHP:      7.4
  * Author:            NorthLab
@@ -14,12 +14,13 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'NLC_VERSION', '1.4.2' );
+define( 'NLC_VERSION', '1.5.0' );
 define( 'NLC_FILE', __FILE__ );
 define( 'NLC_PATH', plugin_dir_path( __FILE__ ) );
 define( 'NLC_URL', plugin_dir_url( __FILE__ ) );
 define( 'NLC_REST_NS', 'northlab-child/v1' );
 
+require_once NLC_PATH . 'includes/class-nlc-cache.php';
 require_once NLC_PATH . 'includes/class-nlc-options.php';
 require_once NLC_PATH . 'includes/class-nlc-auth.php';
 require_once NLC_PATH . 'includes/class-nlc-info.php';
@@ -32,6 +33,10 @@ require_once NLC_PATH . 'includes/class-nlc-login.php';
 require_once NLC_PATH . 'includes/class-nlc-selfupdate.php';
 require_once NLC_PATH . 'includes/class-nlc-branding.php';
 require_once NLC_PATH . 'includes/class-nlc-backup.php';
+require_once NLC_PATH . 'includes/class-nlc-backuplog.php';
+require_once NLC_PATH . 'includes/class-nlc-banner.php';
+require_once NLC_PATH . 'includes/class-nlc-links.php';
+require_once NLC_PATH . 'includes/class-nlc-status.php';
 require_once NLC_PATH . 'includes/class-nlc-rest.php';
 require_once NLC_PATH . 'includes/class-nlc-admin.php';
 
@@ -58,8 +63,22 @@ function nlc_boot() {
 		$selfupdate->hooks();
 	}
 
+	$banner = new NLC_Banner();
+	$banner->hooks();
+
+	if ( NLC_Options::setting( 'allow_links' ) ) {
+		$links = new NLC_Links();
+		$links->hooks();
+	}
+
 	if ( is_admin() ) {
 		NLC_Admin::instance()->hooks();
+
+		// Die Seite fuer den Kunden gibt es nur, wenn die Seite auch betreut
+		// wird — ohne Verbindung haette sie nichts zu zeigen.
+		if ( NLC_Options::is_connected() ) {
+			NLC_Status::instance()->hooks();
+		}
 	}
 }
 add_action( 'plugins_loaded', 'nlc_boot' );
@@ -73,6 +92,7 @@ function nlc_schedule_purge() {
 	}
 }
 add_action( 'init', 'nlc_schedule_purge' );
+add_action( 'init', array( 'NLC_Links', 'schedule' ) );
 add_action( 'nlc_purge_expired_users', array( 'NLC_Actions', 'purge_expired_users' ) );
 
 /**
@@ -81,6 +101,7 @@ add_action( 'nlc_purge_expired_users', array( 'NLC_Actions', 'purge_expired_user
 function nlc_activate() {
 	NLC_Options::bootstrap_defaults();
 	nlc_schedule_purge();
+	NLC_Links::schedule();
 }
 register_activation_hook( __FILE__, 'nlc_activate' );
 
@@ -96,5 +117,12 @@ function nlc_deactivate() {
 		wp_unschedule_event( $timestamp, 'nlc_purge_expired_users' );
 	}
 	NLC_Maintenance_Mode::save( array( 'enabled' => false ) );
+
+	wp_clear_scheduled_hook( 'nlc_enforce_hardening' );
+	NLC_Links::unschedule();
+
+	// Ein haengengebliebenes Banner waere sonst nicht mehr wegzubekommen:
+	// das Plugin, das es wieder abraeumt, laeuft dann ja nicht mehr.
+	NLC_Backuplog::stop();
 }
 register_deactivation_hook( __FILE__, 'nlc_deactivate' );

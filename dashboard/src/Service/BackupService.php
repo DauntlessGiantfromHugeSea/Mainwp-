@@ -80,6 +80,15 @@ final class BackupService {
 			'db_bytes'      => 0,
 		);
 
+		$begonnen = microtime( true );
+
+		// Der Kundenseite sagen, dass es losgeht — sie blendet dann ihren
+		// Hinweis ein. Mit Ablaufzeit, nicht als Dauerzustand: stirbt dieser
+		// Prozess, verschwindet der Hinweis von selbst.
+		self::$bannerSite = $site;
+		self::$bannerAt   = 0;
+		self::announce();
+
 		try {
 			$mirror = self::mirrorPath( $siteId );
 
@@ -147,6 +156,18 @@ final class BackupService {
 
 			SiteRepository::update( $siteId, array( 'last_backup_at' => nl_utc() ) );
 
+			self::reportToSite(
+				$site,
+				array(
+					'status'   => 'ok',
+					'bytes'    => $stats['bytes'] + $stats['db_bytes'],
+					'files'    => $stats['files_total'],
+					'seconds'  => (int) round( microtime( true ) - $begonnen ),
+					'snapshot' => (string) $backup['snapshot'],
+					'message'  => sprintf( '%d Datei(en) gesichert.', $stats['files_total'] ),
+				)
+			);
+
 			EventBus::dispatch(
 				'backup.completed',
 				array( 'snapshot' => $backup['snapshot'] ) + $stats,
@@ -177,6 +198,15 @@ final class BackupService {
 				array( 'id' => $runId )
 			);
 
+			self::reportToSite(
+				$site,
+				array(
+					'status'  => 'failed',
+					'seconds' => (int) round( microtime( true ) - $begonnen ),
+					'message' => substr( $e->getMessage(), 0, 200 ),
+				)
+			);
+
 			EventBus::dispatch(
 				'backup.failed',
 				array( 'error' => $e->getMessage() ),
@@ -187,6 +217,82 @@ final class BackupService {
 			);
 
 			return array( 'ok' => false, 'error' => $e->getMessage(), 'stats' => $stats );
+		}
+	}
+
+	/** Seite, deren Hinweis gerade laufen soll — fuer das Lebenszeichen. */
+	private static ?array $bannerSite = null;
+
+	/** Wann zuletzt ein Lebenszeichen rausging. */
+	private static int $bannerAt = 0;
+
+	/** Voreingestellter Wortlaut des Hinweises auf der Kundenseite. */
+	public const BANNER_TEXT = 'Es läuft gerade eine Sicherung dieser Website. Sie kann kurzzeitig etwas langsamer reagieren.';
+
+	/** So lange gilt eine Ankuendigung ohne neues Lebenszeichen. */
+	private const BANNER_LEASE = 900;
+
+	/** Und so oft wird eines geschickt. Deutlich haeufiger als die Frist. */
+	private const BANNER_EVERY = 300;
+
+	/**
+	 * Der Kundenseite sagen, dass gerade gesichert wird.
+	 *
+	 * Mit Frist statt als Dauerzustand: bricht dieser Prozess ab, laeuft die
+	 * Ankuendigung von selbst aus. Ein Hinweis, der nur durch ein "fertig"
+	 * verschwindet, haengt sonst fuer immer auf der Kundenseite.
+	 */
+	private static function announce(): void {
+		if ( null === self::$bannerSite || ( time() - self::$bannerAt ) < self::BANNER_EVERY ) {
+			return;
+		}
+
+		self::$bannerAt = time();
+
+		// Die Einstellungen reisen mit. So gilt auf jeder Kundenseite das, was
+		// hier eingestellt ist, ohne einen zweiten Weg, der aus dem Takt
+		// geraten kann.
+		self::tellSite(
+			self::$bannerSite,
+			array(
+				'action'  => 'running',
+				'seconds' => self::BANNER_LEASE,
+				'label'   => 'Sicherung',
+				'banner'  => array(
+					'enabled'  => Setting::getBool( 'backup_banner', true ),
+					'audience' => (string) Setting::get( 'backup_banner_audience', 'loggedin' ),
+					'text'     => (string) Setting::get( 'backup_banner_text', self::BANNER_TEXT ),
+				),
+			)
+		);
+	}
+
+	/**
+	 * Den Lauf auf der Kundenseite vermerken und den Hinweis beenden.
+	 *
+	 * @param array<string,mixed> $site
+	 * @param array<string,mixed> $daten
+	 */
+	private static function reportToSite( array $site, array $daten ): void {
+		self::$bannerSite = null;
+
+		self::tellSite( $site, array( 'action' => 'report', 'data' => $daten ) );
+	}
+
+	/**
+	 * Eine Nebensache an die Kundenseite schicken.
+	 *
+	 * Schlaegt das fehl, ist das kein Grund, die Sicherung scheitern zu lassen —
+	 * der Hinweis ist Beiwerk, die Sicherung ist die Aufgabe.
+	 *
+	 * @param array<string,mixed> $site
+	 * @param array<string,mixed> $body
+	 */
+	private static function tellSite( array $site, array $body ): void {
+		try {
+			ChildClient::post( $site, '/backup', $body, 15 );
+		} catch ( Throwable $e ) {
+			Logger::exception( $e );
 		}
 	}
 
@@ -218,6 +324,12 @@ final class BackupService {
 			),
 			array( 'id' => $runId )
 		);
+
+		// Gelegenheit fuer ein Lebenszeichen an die Kundenseite. announce()
+		// drosselt selbst, hier faellt also nur alle paar Minuten eine Anfrage
+		// an — eine lange Dateiuebertragung soll den Hinweis nicht mittendrin
+		// auslaufen lassen.
+		self::announce();
 	}
 
 	/**

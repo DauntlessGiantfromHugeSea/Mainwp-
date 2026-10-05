@@ -55,6 +55,7 @@ $security = (array) ( $payload['security'] ?? array() );
 $env      = (array) ( $payload['environment'] ?? array() );
 $content  = (array) ( $payload['content'] ?? array() );
 $users    = (array) ( $payload['users'] ?? array() );
+$links    = (array) ( $payload['links'] ?? array() );
 ?>
 
 <?php if ( ! empty( $site['last_error'] ) ) : ?>
@@ -578,6 +579,11 @@ $outdatedPlugins = array_values(
 			<?php if ( $canWrite ) : ?>
 				<form method="post" action="<?= e( $siteUrl . '/security' ) ?>">
 					<?= csrf_field() ?>
+					<input type="hidden" name="op" value="enforce">
+					<button class="btn sm" data-busy="Ziehe nach…" title="Alle dauerhaften Punkte sofort erneut setzen, ohne auf das nächste Update zu warten.">Dauerhaftes nachziehen</button>
+				</form>
+				<form method="post" action="<?= e( $siteUrl . '/security' ) ?>">
+					<?= csrf_field() ?>
 					<button class="btn sm" data-busy="Prüfe…">Neu prüfen</button>
 				</form>
 			<?php endif; ?>
@@ -591,15 +597,25 @@ $outdatedPlugins = array_values(
 					<?= csrf_field() ?>
 					<div class="table-wrap">
 						<table class="data">
-							<thead><tr><th>Prüfung</th><th>Ergebnis</th><th>Hinweis</th><th class="shrink">Beheben</th></tr></thead>
+							<thead><tr><th>Prüfung</th><th>Ergebnis</th><th>Hinweis</th><th class="shrink">Auswahl</th></tr></thead>
 							<tbody>
 							<?php foreach ( $checks as $check ) : ?>
+								<?php
+								$status    = (string) ( $check['status'] ?? 'ok' );
+								$dauerhaft = ! empty( $check['enforced'] );
+								?>
 								<tr>
-									<td><strong><?= e( (string) ( $check['label'] ?? '' ) ) ?></strong></td>
+									<td>
+										<strong><?= e( (string) ( $check['label'] ?? '' ) ) ?></strong>
+										<?php if ( $dauerhaft ) : ?>
+											<span class="badge sm" title="Wird nach jedem Core-Update automatisch erneut gesetzt.">dauerhaft</span>
+										<?php endif; ?>
+									</td>
 									<td class="nowrap">
-										<?php $status = (string) ( $check['status'] ?? 'ok' ); ?>
 										<?php if ( 'ok' === $status ) : ?>
 											<span class="badge ok"><span class="dot"></span>Bestanden</span>
+										<?php elseif ( 'ack' === $status ) : ?>
+											<span class="badge" title="Bewusst so gelassen — zählt nicht mehr als offener Punkt."><span class="dot"></span>Bewusst so</span>
 										<?php elseif ( 'warn' === $status ) : ?>
 											<span class="badge warn"><span class="dot"></span>Hinweis</span>
 										<?php else : ?>
@@ -608,7 +624,7 @@ $outdatedPlugins = array_values(
 									</td>
 									<td class="small muted"><?= e( (string) ( $check['detail'] ?? '' ) ) ?></td>
 									<td class="shrink">
-										<?php if ( $canWrite && ! empty( $check['fixable'] ) && 'ok' !== $status ) : ?>
+										<?php if ( $canWrite && ( ( ! empty( $check['fixable'] ) && 'ok' !== $status ) || $dauerhaft || ! empty( $check['acknowledgeable'] ) ) ) : ?>
 											<label class="small">
 												<input type="checkbox" name="checks[]" value="<?= e( (string) $check['id'] ) ?>">
 												auswählen
@@ -621,11 +637,89 @@ $outdatedPlugins = array_values(
 						</table>
 					</div>
 					<?php if ( $canWrite ) : ?>
-						<div class="card-foot">
-							<button class="btn primary" data-busy="Wende an…">Ausgewählte Punkte beheben</button>
+						<div class="card-foot" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+							<button class="btn primary" name="op" value="harden" data-busy="Wende an…">Ausgewählte dauerhaft setzen</button>
+							<button class="btn" name="op" value="relax" data-busy="Gebe auf…" title="Die dauerhafte Härtung für die ausgewählten Punkte wieder aufgeben.">Dauerhaft aufheben</button>
+							<div class="spacer"></div>
+							<input type="text" name="reason" class="input sm" style="max-width:280px" placeholder="Grund, z. B. „Kunde will keine Migration“">
+							<button class="btn" name="op" value="acknowledge" data-busy="Vermerke…" title="Punkte, die sich nicht gefahrlos aus der Ferne beheben lassen, bewusst stehen lassen.">Bewusst so lassen</button>
+							<button class="btn" name="op" value="unacknowledge" data-busy="Hebe auf…">Vermerk entfernen</button>
 						</div>
+						<p class="small muted" style="padding:0 16px 14px">
+							„Dauerhaft setzen“ merkt die Punkte vor und wendet sie nach jedem Core-Update erneut an —
+							readme.html etwa legt WordPress bei jedem Update wieder an.
+						</p>
 					<?php endif; ?>
 				</form>
+			<?php endif; ?>
+		</div>
+	</div>
+
+	<!-- ------------------------------------------------------ Link-Prüfung -->
+	<div class="card">
+		<div class="card-head">
+			<h2>Link-Prüfung</h2>
+			<div class="spacer"></div>
+			<?php if ( $canWrite ) : ?>
+				<form method="post" action="<?= e( $siteUrl . '/links' ) ?>">
+					<?= csrf_field() ?>
+					<button class="btn sm" data-busy="Starte…">Jetzt prüfen</button>
+				</form>
+			<?php endif; ?>
+		</div>
+		<div class="card-body">
+			<?php $lauf = (array) ( $links['progress'] ?? array() ); ?>
+
+			<?php if ( isset( $links['enabled'] ) && ! $links['enabled'] ) : ?>
+				<div class="empty">Die Link-Prüfung ist auf dieser Seite abgeschaltet (Einstellungen → NorthLab).</div>
+			<?php elseif ( ! empty( $lauf['running'] ) ) : ?>
+				<p>
+					<strong>Läuft gerade.</strong>
+					<?php if ( 'collect' === ( $lauf['phase'] ?? '' ) ) : ?>
+						Die Adressen werden eingesammelt.
+					<?php else : ?>
+						<?= e( sprintf( '%d von %d geprüft', (int) ( $lauf['done'] ?? 0 ), (int) ( $lauf['total'] ?? 0 ) ) ) ?>.
+					<?php endif; ?>
+				</p>
+				<p class="small muted">
+					Die Prüfung läuft auf der Kundenseite in kleinen Etappen über deren WP-Cron —
+					dieser Server hat damit keine Arbeit.
+				</p>
+			<?php elseif ( empty( $links['at'] ) ) : ?>
+				<div class="empty">Noch kein Ergebnis. Die Prüfung läuft automatisch einmal pro Woche.</div>
+			<?php else : ?>
+				<div class="grid cols-4">
+					<div><div class="muted small">Zuletzt</div><strong><?= e( nl_ago( (string) $links['at'] ) ) ?></strong></div>
+					<div><div class="muted small">Geprüft</div><strong><?= e( (string) (int) ( $links['checked'] ?? 0 ) ) ?></strong></div>
+					<div><div class="muted small">Tote Links</div><strong><?= e( (string) (int) ( $links['broken'] ?? 0 ) ) ?></strong></div>
+					<div><div class="muted small">Unklar</div><strong><?= e( (string) (int) ( $links['unsure'] ?? 0 ) ) ?></strong></div>
+				</div>
+
+				<?php $beispiele = (array) ( $links['examples'] ?? array() ); ?>
+				<?php if ( $beispiele ) : ?>
+					<div class="table-wrap" style="margin-top:14px">
+						<table class="data">
+							<thead><tr><th>Adresse</th><th class="shrink">Antwort</th><th>Steht in</th></tr></thead>
+							<tbody>
+							<?php foreach ( $beispiele as $fund ) : ?>
+								<tr>
+									<td class="small" style="word-break:break-all"><?= e( (string) ( $fund['url'] ?? '' ) ) ?></td>
+									<td class="shrink"><?= e( (string) ( $fund['status'] ?? 0 ) ?: '—' ) ?></td>
+									<td class="small muted"><?= e( (string) ( $fund['title'] ?? '' ) ) ?></td>
+								</tr>
+							<?php endforeach; ?>
+							</tbody>
+						</table>
+					</div>
+				<?php endif; ?>
+
+				<p class="small muted" style="margin-top:12px">
+					Die vollständige Liste steht auf der Kundenseite unter „<?= e( (string) ( $site['name'] ?? '' ) ) ?> → NorthLab“ —
+					dort lässt sich jeder Fund direkt im betroffenen Beitrag öffnen.
+					<?php if ( (int) ( $links['unsure'] ?? 0 ) > 0 ) : ?>
+						„Unklar“ sind Adressen, die automatische Abrufe abweisen; das heißt nicht, dass der Link tot ist.
+					<?php endif; ?>
+				</p>
 			<?php endif; ?>
 		</div>
 	</div>

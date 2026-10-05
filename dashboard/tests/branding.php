@@ -13,6 +13,7 @@ function untrailingslashit( $s ) { return rtrim( (string) $s, '/' ); }
 function str_starts_with_polyfill( $h, $n ) { return 0 === strpos( $h, $n ); }
 
 require_once dirname( __DIR__ ) . '/resources/child-plugin/north-lab-child/includes/class-nlc-options.php';
+require_once dirname( __DIR__ ) . '/resources/child-plugin/north-lab-child/includes/class-nlc-cache.php';
 require_once dirname( __DIR__ ) . '/resources/child-plugin/north-lab-child/includes/class-nlc-maintenance-mode.php';
 require_once dirname( __DIR__ ) . '/resources/child-plugin/north-lab-child/includes/class-nlc-branding.php';
 

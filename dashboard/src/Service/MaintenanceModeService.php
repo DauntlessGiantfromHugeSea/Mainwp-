@@ -4,6 +4,7 @@ declare( strict_types = 1 );
 
 namespace NorthLab\Service;
 
+use NorthLab\Core\Http;
 use NorthLab\Core\Setting;
 use NorthLab\Repository\ActivityRepository;
 use NorthLab\Repository\SiteRepository;
@@ -136,6 +137,103 @@ final class MaintenanceModeService {
 		);
 
 		return null;
+	}
+
+	/**
+	 * Von aussen nachsehen, was ein Besucher wirklich bekommt.
+	 *
+	 * Dass die Kundenseite die Einstellung gespeichert hat, heisst noch nicht,
+	 * dass Besucher die Wartungsseite sehen: ein Seiten-Cache oder ein CDN
+	 * liefert sein fertiges HTML aus, bevor WordPress ueberhaupt gefragt wird.
+	 * Darum wird hier der echte Abruf gemacht — ohne Anmeldung, ohne
+	 * Cache-Umgehung, genau wie ihn ein Besucher macht.
+	 *
+	 * Ein Cache-Buster in der Adresse waere hier falsch: er umgeht genau den
+	 * Cache, den wir aufdecken wollen, und meldete Erfolg, waehrend Besucher
+	 * weiter die alte Seite sehen.
+	 *
+	 * @return array{geprueft:bool,versteckt:bool,status:int,cache:string,hinweis:string}
+	 */
+	public static function verify( int $siteId ): array {
+		$site = SiteRepository::find( $siteId );
+		$url  = null !== $site ? trim( (string) $site['url'] ) : '';
+
+		if ( '' === $url ) {
+			return self::check( false, false, 0, '', 'Zu dieser Seite ist keine Adresse hinterlegt — der Abruf von aussen entfaellt.' );
+		}
+
+		$response = Http::get( $url, array( 'Accept' => 'text/html' ), 15, ! empty( $site['verify_ssl'] ) );
+
+		if ( '' !== $response['error'] ) {
+			return self::check(
+				false,
+				false,
+				(int) $response['status'],
+				'',
+				sprintf( 'Die Gegenprobe von aussen war nicht moeglich (%s). Das sagt nichts darueber, ob der Wartungsmodus greift.', $response['error'] )
+			);
+		}
+
+		$status     = (int) $response['status'];
+		$cache      = self::cacheHit( $response['headers'] );
+		$versteckt  = 503 === $status
+			|| false !== strpos( $response['body'], 'name="nlc-maintenance"' );
+
+		if ( $versteckt ) {
+			return self::check( true, true, $status, $cache, 'Gegenprobe von aussen: Besucher sehen die Wartungsseite.' );
+		}
+
+		$hinweis = sprintf( 'Achtung: die Seite antwortet Besuchern weiterhin mit HTTP %d.', $status );
+
+		if ( '' !== $cache ) {
+			$hinweis .= sprintf( ' Die Antwort kam aus einem Cache (%s) — der liefert fertiges HTML aus, bevor WordPress gefragt wird. Dort den Cache leeren, dann greift es.', $cache );
+		} else {
+			$hinweis .= ' Moeglich sind ein Seiten-Cache oder ein CDN davor; pruefe das zuerst.';
+		}
+
+		return self::check( true, false, $status, $cache, $hinweis );
+	}
+
+	/**
+	 * Verraet eine Antwort, dass sie aus einem Cache kam?
+	 *
+	 * @param array<string,string> $headers
+	 */
+	private static function cacheHit( array $headers ): string {
+		$treffer = array();
+
+		$cf = strtolower( $headers['cf-cache-status'] ?? '' );
+		if ( in_array( $cf, array( 'hit', 'stale', 'updating', 'revalidated' ), true ) ) {
+			$treffer[] = 'Cloudflare: ' . $cf;
+		}
+
+		foreach ( array( 'x-cache', 'x-proxy-cache', 'x-litespeed-cache', 'x-nginx-cache', 'x-kinsta-cache' ) as $name ) {
+			$wert = strtolower( $headers[ $name ] ?? '' );
+			if ( '' !== $wert && false !== strpos( $wert, 'hit' ) ) {
+				$treffer[] = $name . ': ' . $wert;
+			}
+		}
+
+		// "Age" zaehlt nur ueber null — ein frisch erzeugter Treffer meldet 0.
+		$age = (int) ( $headers['age'] ?? 0 );
+		if ( $age > 0 ) {
+			$treffer[] = sprintf( 'Age: %ds', $age );
+		}
+
+		return implode( ', ', $treffer );
+	}
+
+	/**
+	 * @return array{geprueft:bool,versteckt:bool,status:int,cache:string,hinweis:string}
+	 */
+	private static function check( bool $geprueft, bool $versteckt, int $status, string $cache, string $hinweis ): array {
+		return array(
+			'geprueft'  => $geprueft,
+			'versteckt' => $versteckt,
+			'status'    => $status,
+			'cache'     => $cache,
+			'hinweis'   => $hinweis,
+		);
 	}
 
 	/**

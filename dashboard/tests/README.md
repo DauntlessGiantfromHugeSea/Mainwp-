@@ -51,7 +51,7 @@ falsches Passwort, fehlender Schlüssel, untergeschobener Wirtsschlüssel.
 Einen passenden Server einrichten:
 
 ```sh
-sudo useradd -m boxuser && echo 'boxuser:GeheimesTestpasswort' | sudo chpasswd
+sudo useradd -m boxuser
 sudo tee /etc/ssh/sshd_test.conf > /dev/null <<'CONF'
 Port 2223
 ListenAddress 127.0.0.1
@@ -64,7 +64,13 @@ CONF
 sudo mkdir -p /run/sshd && sudo /usr/sbin/sshd -f /etc/ssh/sshd_test.conf
 ```
 
-Das Passwort muss zu dem in `backup-setup.php` passen.
+Das Passwort setzt der Lauf selbst — es steht bewusst nicht hier, damit
+Anleitung und Lauf nicht auseinanderlaufen können.
+
+`UsePAM no` heißt, dass `sshd` die Passwörter selbst prüft. Es kommt mit
+den yescrypt-Hashes (`$y$`) nicht zurecht, die `chpasswd` auf neueren
+Systemen anlegt — darum setzt der Lauf das Passwort über
+`usermod -p "$(openssl passwd -6 …)"`.
 
 **Im Browser.** Playwright gegen Chromium: `check` prüft das Formular zum
 Hinzufügen einer Seite, `mmode-check` die Wartungsseite, `branding-check` die

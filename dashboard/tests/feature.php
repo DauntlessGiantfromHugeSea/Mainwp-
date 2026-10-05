@@ -27,19 +27,29 @@ $allOn = array(
 	'allow_mmode'       => true,
 	'allow_self_update' => true,
 	'allow_branding'    => true,
+	'allow_links'       => true,
 );
+
+// Nicht hart eintragen: eine Zahl, die bei jedem Versionssprung von Hand
+// nachgezogen werden muss, geht genau dann schief, wenn niemand daran denkt.
+$shipped = '0.0.0';
+$kopf    = (string) file_get_contents( $root . '/resources/child-plugin/north-lab-child/north-lab-child.php' );
+if ( preg_match( '/^\s*\*\s*Version:\s*([0-9.]+)/mi', $kopf, $m ) ) {
+	$shipped = trim( $m[1] );
+}
 
 $fails = 0;
 $n     = 0;
-function check( string $label, bool $ok ): void {
+function check( string $label, bool $ok, string $extra = '' ): void {
 	global $fails, $n;
 	$n++;
-	if ( ! $ok ) { $fails++; echo "  FEHLT: $label\n"; }
+	if ( ! $ok ) { $fails++; echo "  FEHLT: $label" . ( '' !== $extra ? " ($extra)" : '' ) . "\n"; }
 }
 
 function site( array $over = array() ): array {
+	// $shipped steht im aeusseren Gueltigkeitsbereich.
 	return array_replace(
-		array( 'id' => 7, 'name' => 'Kunde', 'site_type' => 'wordpress', 'child_version' => '1.4.2' ),
+		array( 'id' => 7, 'name' => 'Kunde', 'site_type' => 'wordpress', 'child_version' => $GLOBALS['shipped'] ),
 		$over
 	);
 }
@@ -101,8 +111,9 @@ $blockedFor = static function ( array $site, array $caps ): array {
 
 check( 'Bei aktueller Version ist alles frei', array() === $blockedFor( site(), $allOn ) );
 check(
-	'Bei 1.0.0 fehlen genau die vier neueren Funktionen',
-	array( 'autologin', 'branding', 'mmode', 'selfupdate' ) === $blockedFor( site( array( 'child_version' => '1.0.0' ) ), $allOn )
+	'Bei 1.0.0 fehlen genau die spaeter dazugekommenen Funktionen',
+	array( 'autologin', 'branding', 'links', 'mmode', 'selfupdate' ) === $blockedFor( site( array( 'child_version' => '1.0.0' ) ), $allOn ),
+	implode( ', ', $blockedFor( site( array( 'child_version' => '1.0.0' ) ), $allOn ) )
 );
 
 /* -------------------------------------------- Abgeschaltete Freigaben */
@@ -127,7 +138,8 @@ check( 'Bei beidem wird die Version genannt', is_string( $bothWrong ) && str_con
 
 /* ------------------------------------------ Jede Funktion hat eine Mindestversion */
 
-$shipped = '1.4.2';
+check( 'Die ausgelieferte Version liess sich lesen', '0.0.0' !== $shipped, $shipped );
+
 foreach ( ChildFeature::FEATURES as $key => $spec ) {
 	check(
 		sprintf( 'Mindestversion von "%s" ist nicht hoeher als die ausgelieferte', $key ),
