@@ -167,6 +167,7 @@ final class SiteController extends BaseController {
 				'client_id'          => $request->int( 'client_id' ),
 				'tags'               => $request->string( 'tags' ),
 				'notes'              => $request->string( 'notes' ),
+				'update_excludes'    => $request->string( 'update_excludes' ),
 				'auto_update_policy' => $request->string( 'auto_update_policy', 'inherit' ),
 				'is_paused'          => $request->bool( 'is_paused' ),
 				'verify_ssl'         => $request->bool( 'verify_ssl' ),

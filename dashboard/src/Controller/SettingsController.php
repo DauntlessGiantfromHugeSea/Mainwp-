@@ -75,6 +75,8 @@ final class SettingsController extends BaseController {
 						'auto_update_policy'   => $this->policy( $request->string( 'auto_update_policy', 'off' ) ),
 						'auto_update_excludes' => $request->string( 'auto_update_excludes' ),
 						'auto_update_window'   => $request->string( 'auto_update_window' ),
+						'backup_before_update' => $request->bool( 'backup_before_update' ) ? '1' : '0',
+						'backup_before_update_age' => (string) max( 5, min( 1440, $request->int( 'backup_before_update_age', 180 ) ) ),
 					)
 				);
 				break;

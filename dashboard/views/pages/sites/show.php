@@ -1073,6 +1073,17 @@ $outdatedPlugins = array_values(
 							</select>
 						</div>
 						<?php endif; ?>
+						<?php if ( $managed ) : ?>
+							<div class="field full">
+								<label for="s_update_excludes">Hier zusätzlich von Auto-Updates ausgenommen</label>
+								<textarea id="s_update_excludes" name="update_excludes" rows="3"
+									placeholder="angepasstes-plugin&#10;mein-theme/functions.php"><?= e( (string) ( $site['update_excludes'] ?? '' ) ) ?></textarea>
+								<div class="hint">
+									Ein Eintrag pro Zeile, zusätzlich zur globalen Liste aus den Einstellungen.
+									Für den Fall, dass genau hier ein Plugin angepasst wurde.
+								</div>
+							</div>
+						<?php endif; ?>
 						<div class="field full">
 							<label for="s_notes">Notizen</label>
 							<textarea id="s_notes" name="notes"><?= e( (string) $site['notes'] ) ?></textarea>

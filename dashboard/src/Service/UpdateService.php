@@ -5,6 +5,7 @@ declare( strict_types = 1 );
 namespace NorthLab\Service;
 
 use NorthLab\Core\Config;
+use NorthLab\Core\Database;
 use NorthLab\Core\Setting;
 use NorthLab\Repository\ActivityRepository;
 use NorthLab\Repository\SiteRepository;
@@ -33,6 +34,15 @@ final class UpdateService {
 		}
 		if ( ! SiteRepository::isManaged( $site ) ) {
 			return self::failure( 'Diese Seite wird nur überwacht — Updates laufen dort nicht über das Panel.' );
+		}
+
+		// Erst sichern, dann einspielen. Das ist der Moment, in dem man eine
+		// Sicherung wirklich braucht — und der einzige, in dem man sicher
+		// weiss, dass gleich etwas veraendert wird.
+		$schutz = self::backupFirst( $site );
+
+		if ( null !== $schutz ) {
+			return self::failure( $schutz );
 		}
 
 		$body = $items ? array( 'items' => array_values( $items ) ) : array( 'all' => true );
@@ -190,7 +200,6 @@ final class UpdateService {
 		}
 
 		$globalPolicy = Setting::get( 'auto_update_policy', 'off' );
-		$excludes     = self::excludes();
 
 		$touched = 0;
 		$applied = 0;
@@ -201,7 +210,9 @@ final class UpdateService {
 				continue;
 			}
 
-			$items = self::itemsForPolicy( (int) $site['id'], $policy, $excludes );
+			// Die Ausnahmen je Seite dazunehmen — darum erst hier und nicht
+			// einmal vorab fuer alle.
+			$items = self::itemsForPolicy( (int) $site['id'], $policy, self::excludes( $site ) );
 			if ( ! $items ) {
 				continue;
 			}
@@ -250,8 +261,101 @@ final class UpdateService {
 	/**
 	 * @return array<int,string>
 	 */
-	public static function excludes(): array {
-		$raw = Setting::get( 'auto_update_excludes', '' );
+	/**
+	 * Vor dem Update sichern.
+	 *
+	 * @param array<string,mixed> $site
+	 * @return string|null Grund, warum nicht aktualisiert werden darf — oder null.
+	 */
+	public static function backupFirst( array $site ): ?string {
+		if ( ! Setting::getBool( 'backup_before_update', true ) ) {
+			return null;
+		}
+
+		// Ohne eingerichtetes Ziel gibt es nichts zu sichern. Deswegen alle
+		// Updates zu blockieren hiesse, Sicherheitsluecken offen zu lassen,
+		// weil ein Speicher fehlt — das waere der schlechtere Tausch.
+		if ( ! Restic::configured() || ! Restic::available() ) {
+			return null;
+		}
+
+		$siteId = (int) $site['id'];
+
+		// Eine frische Sicherung reicht. Vor jedem einzelnen Plugin-Update
+		// erneut zu sichern dauert laenger als die Updates selbst.
+		$maxAlter = max( 5, min( 1440, Setting::getInt( 'backup_before_update_age', 180 ) ) );
+
+		$letzte = Database::scalar(
+			'SELECT MAX(`finished_at`) FROM `' . Database::table( 'backups' ) . '`
+			 WHERE `site_id` = :id AND `status` = :ok',
+			array( 'id' => $siteId, 'ok' => 'success' )
+		);
+
+		if ( null !== $letzte && '' !== (string) $letzte ) {
+			$alter = time() - (int) strtotime( (string) $letzte . ' UTC' );
+
+			if ( $alter >= 0 && $alter < $maxAlter * 60 ) {
+				return null;
+			}
+		}
+
+		ActivityRepository::log(
+			'site.backup',
+			'Sicherung vor dem Update.',
+			array( 'site_id' => $siteId )
+		);
+
+		$ergebnis = BackupService::run( $site );
+
+		if ( $ergebnis['ok'] ) {
+			return null;
+		}
+
+		EventBus::dispatch(
+			'update.blocked',
+			array( 'error' => $ergebnis['error'] ),
+			array(
+				'site_id' => $siteId,
+				'level'   => 'warning',
+				'message' => sprintf(
+					'Update auf "%s" nicht eingespielt: die Sicherung davor schlug fehl (%s).',
+					(string) $site['name'],
+					$ergebnis['error']
+				),
+			)
+		);
+
+		return sprintf(
+			'Vor dem Update sollte gesichert werden, und das schlug fehl: %s — '
+				. 'darum wurde nichts eingespielt. Abschaltbar unter Einstellungen → Updates.',
+			$ergebnis['error']
+		);
+	}
+
+	/**
+	 * Was von den automatischen Updates ausgenommen ist.
+	 *
+	 * Die globale Liste gilt ueberall. Eine Seite kann weitere Punkte
+	 * dazunehmen — fuer den Fall, dass genau ein Kunde ein angepasstes
+	 * Plugin hat, das ein Update ueberschreiben wuerde.
+	 *
+	 * @param array<string,mixed>|null $site
+	 * @return array<int,string>
+	 */
+	public static function excludes( ?array $site = null ): array {
+		$out = self::parseExcludes( (string) Setting::get( 'auto_update_excludes', '' ) );
+
+		if ( null !== $site && ! empty( $site['update_excludes'] ) ) {
+			$out = array_merge( $out, self::parseExcludes( (string) $site['update_excludes'] ) );
+		}
+
+		return array_values( array_unique( $out ) );
+	}
+
+	/**
+	 * @return array<int,string>
+	 */
+	public static function parseExcludes( string $raw ): array {
 		$out = array();
 
 		foreach ( preg_split( '/[\r\n,]+/', $raw ) ?: array() as $line ) {

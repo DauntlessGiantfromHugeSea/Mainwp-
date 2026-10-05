@@ -147,6 +147,27 @@ $get = static fn( string $key, string $default = '' ): string => $settings[ $key
 						<input type="text" id="auto_update_window" name="auto_update_window" value="<?= e( $get( 'auto_update_window' ) ) ?>" placeholder="02:00-05:00">
 						<div class="hint">Leer = jederzeit. Fenster über Mitternacht sind erlaubt.</div>
 					</div>
+					<div class="field inline full">
+						<input type="checkbox" id="backup_before_update" name="backup_before_update" value="1"
+							<?= '0' !== $get( 'backup_before_update', '1' ) ? 'checked' : '' ?>>
+						<label for="backup_before_update">Vor jedem Update sichern</label>
+					</div>
+					<div class="field">
+						<label for="backup_before_update_age">Frische Sicherung gilt</label>
+						<input type="number" id="backup_before_update_age" name="backup_before_update_age"
+							min="5" max="1440" value="<?= e( $get( 'backup_before_update_age', '180' ) ) ?>">
+						<div class="hint">
+							Minuten. Liegt eine erfolgreiche Sicherung innerhalb dieser Spanne, wird nicht noch
+							einmal gesichert — sonst dauert das Sichern länger als die Updates.
+						</div>
+					</div>
+					<div class="field full">
+						<p class="small muted" style="margin:0">
+							Schlägt die Sicherung fehl, wird das Update <strong>nicht</strong> eingespielt.
+							Ist gar kein Sicherungsziel eingerichtet, läuft das Update trotzdem — sonst blieben
+							Sicherheitslücken offen, bloß weil ein Speicher fehlt.
+						</p>
+					</div>
 					<div class="field full">
 						<label for="auto_update_excludes">Von Auto-Updates ausgenommen</label>
 						<textarea id="auto_update_excludes" name="auto_update_excludes" placeholder="woocommerce&#10;elementor*&#10;advanced-custom-fields-pro/acf.php"><?= e( $get( 'auto_update_excludes' ) ) ?></textarea>

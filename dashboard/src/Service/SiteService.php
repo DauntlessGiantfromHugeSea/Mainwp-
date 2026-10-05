@@ -291,6 +291,15 @@ final class SiteService {
 		if ( isset( $data['notes'] ) ) {
 			$fields['notes'] = trim( (string) $data['notes'] );
 		}
+		if ( isset( $data['update_excludes'] ) ) {
+			// Normiert ablegen: eine Zeile je Eintrag. Sonst stehen hier
+			// Kommalisten und Zeilen wild gemischt, und beim Lesen faellt
+			// irgendwann einer durch.
+			$fields['update_excludes'] = implode(
+				"\n",
+				\NorthLab\Service\UpdateService::parseExcludes( (string) $data['update_excludes'] )
+			);
+		}
 		if ( isset( $data['auto_update_policy'] ) ) {
 			$allowed                      = array( 'inherit', 'off', 'security', 'minor', 'all' );
 			$policy                       = (string) $data['auto_update_policy'];

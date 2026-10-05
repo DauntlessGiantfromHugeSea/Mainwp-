@@ -755,5 +755,95 @@ check( 'Anfuehrungszeichen fliegen raus', false === strpos( RestoreService::file
 check( 'Zeilenumbrueche auch', false === strpos( RestoreService::filename( "a\nb.txt", false ), "\n" ) );
 check( 'Umlaute bleiben', 'Grüße.txt' === RestoreService::filename( 'Grüße.txt', false ), RestoreService::filename( 'Grüße.txt', false ) );
 
+/* ================================= Sicherung vor dem Update */
+
+use NorthLab\Service\UpdateService;
+
+$vuId = Database::insert( 'sites', array(
+	// Ein geschlossener Port statt eines erfundenen Namens: die Verbindung
+	// wird sofort abgelehnt, waehrend eine Namensaufloesung in die
+	// Zeitueberschreitung laeuft und den Lauf unnoetig lange haelt.
+	'name' => 'Vor-Update', 'url' => 'http://127.0.0.1:9/', 'status' => 'connected',
+	'connection_id' => 'vu-1', 'created_at' => nl_utc(), 'updated_at' => nl_utc(),
+) );
+$vuSite = SiteRepository::find( $vuId );
+
+/** Wie viele Sicherungslaeufe fuer diese Seite vermerkt sind. */
+$laeufe = static function () use ( $vuId ): int {
+	return (int) Database::scalar(
+		'SELECT COUNT(*) FROM `' . Database::table( 'backups' ) . '` WHERE `site_id` = :id',
+		array( 'id' => $vuId )
+	);
+};
+
+// Abgeschaltet: es passiert nichts, und es wird nichts blockiert.
+Setting::set( 'backup_before_update', '0' );
+$vorher = $laeufe();
+check( 'Abgeschaltet blockiert nichts', null === UpdateService::backupFirst( $vuSite ) );
+check( 'Und sichert nichts', $vorher === $laeufe() );
+
+Setting::set( 'backup_before_update', '1' );
+
+// Eine frische erfolgreiche Sicherung reicht - dann wird nicht noch einmal
+// gesichert, sonst dauert das Sichern laenger als die Updates.
+Setting::set( 'backup_before_update_age', '180' );
+Database::insert( 'backups', array(
+	'site_id' => $vuId, 'status' => 'success',
+	'started_at'  => gmdate( 'Y-m-d H:i:s', time() - 600 ),
+	'finished_at' => gmdate( 'Y-m-d H:i:s', time() - 540 ),
+) );
+
+$vorher = $laeufe();
+check( 'Mit frischer Sicherung wird nichts blockiert', null === UpdateService::backupFirst( $vuSite ) );
+check( 'Und keine zweite angelegt', $vorher === $laeufe() );
+
+// Dieselbe Sicherung, aber zu alt: dann wird gesichert — und weil die Seite
+// nicht erreichbar ist, schlaegt das fehl und das Update wird verhindert.
+Setting::set( 'backup_before_update_age', '5' );
+
+$grund = UpdateService::backupFirst( $vuSite );
+
+check( 'Eine zu alte Sicherung fuehrt zu einem neuen Lauf', $laeufe() > $vorher, sprintf( '%d -> %d', $vorher, $laeufe() ) );
+check( 'Scheitert die Sicherung, wird das Update verhindert', null !== $grund );
+check( 'Und der Grund ist verstaendlich',
+	is_string( $grund ) && false !== strpos( $grund, 'nichts eingespielt' ), (string) $grund );
+check( 'Mit Hinweis, wo man es abschaltet',
+	is_string( $grund ) && false !== strpos( $grund, 'Einstellungen' ), (string) $grund );
+
+// Ohne eingerichtetes Ziel darf nicht blockiert werden: sonst blieben
+// Sicherheitsluecken offen, bloss weil ein Speicher fehlt.
+$gemerkt = Setting::get( 'restic_repository', '' );
+Setting::setMany( array( 'restic_repository' => '', 'sftp_repository' => '', 'backup_target_type' => '' ) );
+$vorher = $laeufe();
+
+check( 'Ohne Sicherungsziel wird nicht blockiert', null === UpdateService::backupFirst( $vuSite ) );
+check( 'Und nichts versucht', $vorher === $laeufe() );
+
+Setting::setMany( array( 'restic_repository' => $gemerkt, 'backup_target_type' => 'local' ) );
+
+/* ----------------------------------------- Ausnahmen je Seite */
+
+Setting::set( 'auto_update_excludes', "woocommerce\nelementor*" );
+
+$global = UpdateService::excludes();
+check( 'Die globale Liste wird gelesen', array( 'woocommerce', 'elementor*' ) === $global, implode( ', ', $global ) );
+
+Database::update( 'sites', array( 'update_excludes' => "mein-plugin\nakismet" ), array( 'id' => $vuId ) );
+$beides = UpdateService::excludes( SiteRepository::find( $vuId ) );
+
+check( 'Die Liste der Seite kommt dazu', in_array( 'mein-plugin', $beides, true ) && in_array( 'akismet', $beides, true ) );
+check( 'Die globale bleibt erhalten', in_array( 'woocommerce', $beides, true ) );
+check( 'Ohne Doppelte', count( $beides ) === count( array_unique( $beides ) ) );
+
+// Eine andere Seite darf die Ausnahme nicht erben.
+$andere = UpdateService::excludes( $rsSite );
+check( 'Eine andere Seite erbt sie nicht', ! in_array( 'mein-plugin', $andere, true ), implode( ', ', $andere ) );
+
+check( 'Kommas und Zeilen werden beide gelesen',
+	array( 'a', 'b', 'c' ) === UpdateService::parseExcludes( "a, b\nc" ),
+	implode( '|', UpdateService::parseExcludes( "a, b\nc" ) ) );
+check( 'Leerzeilen fallen raus', array( 'a' ) === UpdateService::parseExcludes( "\n a \n\n" ) );
+check( 'Leer bleibt leer', array() === UpdateService::parseExcludes( '   ' ) );
+
 printf( "%d Prüfungen, %d Fehler\n", $n, $fails );
 exit( $fails ? 1 : 0 );
