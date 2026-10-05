@@ -193,6 +193,7 @@ dashboard/
   bin/cron.php                Zeitplaner-Einstiegspunkt
   bin/setup-backup.sh         Bereitet den Server für die Sicherung vor
   bin/check-storagebox.sh     Sagt, warum eine Storage Box nicht hereinlässt
+  bin/watch-backup.sh         Misst mit, was eine Sicherung mit dem Server macht
   bin/deploy-and-setup.sh     Update einspielen und Sicherung vorbereiten
   tests/                      Prüfläufe — `sh dashboard/tests/run.sh`
   resources/tools/            Wegwerf-Diagnose für Kundenseiten
