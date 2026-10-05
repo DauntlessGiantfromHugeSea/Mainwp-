@@ -22,6 +22,7 @@ use NorthLab\Service\MaintenanceModeService;
 use NorthLab\Service\LinkService;
 use NorthLab\Service\MaintenanceService;
 use NorthLab\Service\SiteService;
+use NorthLab\Service\VulnerabilityService;
 use NorthLab\Service\SyncService;
 use NorthLab\Service\UpdateService;
 
@@ -137,6 +138,7 @@ final class SiteController extends BaseController {
 				'brandingState' => BrandingService::stored( $siteId ),
 				'childShipped' => ChildPluginService::shipped(),
 				'sslWarnDays'  => CertificateService::warnDays(),
+				'vulnReady'    => VulnerabilityService::configured(),
 				'childOutdated' => ChildPluginService::isOutdated( $site ),
 				'mmodeDesign' => MaintenanceModeService::design(),
 				'mmodeTimes'  => MaintenanceModeService::DURATIONS,
@@ -480,6 +482,40 @@ final class SiteController extends BaseController {
 			$request,
 			null === $error,
 			$error ?? 'Die Link-Prüfung läuft. Sie arbeitet sich in kleinen Schritten vor, damit die Kundenseite nicht ausgebremst wird.',
+			'/sites/' . $siteId
+		);
+	}
+
+	/**
+	 * Jetzt gegen die Lücken-Datenbank abgleichen.
+	 */
+	public function vulnerabilities( Request $request ): void {
+		Auth::requireWrite();
+
+		$siteId = (int) $request->params['id'];
+		Auth::requireSite( $siteId );
+
+		$ergebnis = VulnerabilityService::check( $siteId );
+
+		if ( ! $ergebnis['ok'] ) {
+			$this->respond( $request, false, $ergebnis['error'], '/sites/' . $siteId );
+		}
+
+		$this->respond(
+			$request,
+			true,
+			$ergebnis['findings']
+				? sprintf(
+					'%d bekannte Lücke(n) gefunden. %d Plugin(s) geprüft, %d Abfragen heute noch frei.',
+					count( $ergebnis['findings'] ),
+					$ergebnis['checked'],
+					$ergebnis['budget_left']
+				)
+				: sprintf(
+					'Keine bekannten Lücken. %d Plugin(s) geprüft%s.',
+					$ergebnis['checked'],
+					$ergebnis['skipped'] > 0 ? sprintf( ', %d nicht prüfbar', $ergebnis['skipped'] ) : ''
+				),
 			'/sites/' . $siteId
 		);
 	}

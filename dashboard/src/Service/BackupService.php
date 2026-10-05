@@ -291,6 +291,95 @@ final class BackupService {
 	public const HISTORY_MIN_CHILD = '1.6.0';
 
 	/**
+	 * Alle Sicherungen einer Seite endgueltig entfernen.
+	 *
+	 * Fuer den Fall, dass ein Kunde geht und seine Daten verschwinden sollen.
+	 * Das ist nicht rueckholbar — darum verlangt die Oberflaeche davor, dass
+	 * der Name der Seite getippt wird.
+	 *
+	 * Entfernt wird ausdruecklich ueber die Kennungen der Sicherungspunkte
+	 * dieses Wirts, nicht ueber eine Regel. Eine Regel, die "alles" bedeutet,
+	 * ist genau die Art Befehl, die eines Tages zu viel loescht.
+	 *
+	 * @return array{ok:bool,error:string,snapshots:int,rows:int}
+	 */
+	public static function purge( int $siteId, bool $prune = true ): array {
+		$site = SiteRepository::find( $siteId );
+
+		if ( null === $site ) {
+			return array( 'ok' => false, 'error' => 'Seite nicht gefunden.', 'snapshots' => 0, 'rows' => 0 );
+		}
+
+		$host      = self::hostFor( $site );
+		$entfernt  = 0;
+
+		if ( Restic::configured() && Restic::available() ) {
+			$punkte = Restic::snapshots( $host );
+			$ids    = array();
+
+			foreach ( $punkte as $punkt ) {
+				$id = (string) ( $punkt['id'] ?? '' );
+
+				// Nur, was wirklich zu diesem Wirt gehoert. snapshots() filtert
+				// bereits, aber bei einem Loeschlauf wird nichts angenommen.
+				if ( '' !== $id && $host === (string) ( $punkt['hostname'] ?? '' ) ) {
+					$ids[] = $id;
+				}
+			}
+
+			if ( $ids ) {
+				$args = array_merge( array( 'forget' ), $ids );
+
+				if ( $prune ) {
+					$args[] = '--prune';
+				}
+
+				$result = Restic::run( $args, true, 7200 );
+
+				if ( ! $result['ok'] ) {
+					return array(
+						'ok'        => false,
+						'error'     => Restic::hinweis( $result['output'] ) ?? Restic::lastLines( $result['output'] ),
+						'snapshots' => 0,
+						'rows'      => 0,
+					);
+				}
+
+				$entfernt = count( $ids );
+			}
+		}
+
+		// Der Spiegel auf diesem Server gehoert mit dazu — sonst liegen die
+		// Dateien des Kunden weiter auf der Platte.
+		self::discardMirror( $siteId );
+
+		$zeilen = Database::delete( 'backups', array( 'site_id' => $siteId ) );
+
+		SiteRepository::update( $siteId, array( 'last_backup_at' => null ) );
+
+		// Und die Liste im Backend der Kundenseite leeren.
+		self::tellSite( $site, array( 'action' => 'history', 'entries' => array() ) );
+
+		ActivityRepository::log(
+			'site.purge',
+			sprintf( 'Alle Sicherungen entfernt: %d Sicherungspunkt(e), %d Protokollzeile(n).', $entfernt, $zeilen ),
+			array( 'site_id' => $siteId, 'level' => 'warning' )
+		);
+
+		EventBus::dispatch(
+			'backup.purged',
+			array( 'snapshots' => $entfernt, 'rows' => $zeilen ),
+			array(
+				'site_id' => $siteId,
+				'level'   => 'warning',
+				'message' => sprintf( 'Alle Sicherungen von "%s" wurden endgültig entfernt.', (string) $site['name'] ),
+			)
+		);
+
+		return array( 'ok' => true, 'error' => '', 'snapshots' => $entfernt, 'rows' => $zeilen );
+	}
+
+	/**
 	 * Die Vorgeschichte an die Kundenseite nachreichen.
 	 *
 	 * Die Kundenseite kennt nur, was ihr seit dem Einbau gemeldet wurde. Ohne

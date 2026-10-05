@@ -16,6 +16,7 @@ use NorthLab\Service\EventBus;
 use NorthLab\Service\IconService;
 use NorthLab\Service\PushService;
 use NorthLab\Service\Scheduler;
+use NorthLab\Service\VulnerabilityService;
 
 final class SettingsController extends BaseController {
 
@@ -181,6 +182,21 @@ final class SettingsController extends BaseController {
 
 			case 'monitoring':
 				Setting::set( 'uptime_secret', $request->string( 'uptime_secret' ) );
+				break;
+
+			case 'vulnerabilities':
+				Setting::set(
+					'wpscan_budget',
+					(string) max( 1, min( 500, $request->int( 'wpscan_budget', VulnerabilityService::DEFAULT_BUDGET ) ) )
+				);
+
+				$wpscan = $request->string( 'wpscan_api_key' );
+
+				if ( $request->bool( 'wpscan_api_key_clear' ) ) {
+					Setting::set( 'wpscan_api_key', '' );
+				} elseif ( '' !== $wpscan ) {
+					Setting::set( 'wpscan_api_key', Crypto::encrypt( $wpscan ) );
+				}
 				break;
 
 			case 'certificates':

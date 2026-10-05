@@ -9,7 +9,7 @@ namespace NorthLab\Core;
  */
 final class Migrator {
 
-	public const SCHEMA_VERSION = 14;
+	public const SCHEMA_VERSION = 16;
 
 	/**
 	 * Alle Tabellen anlegen (idempotent).
@@ -58,6 +58,12 @@ final class Migrator {
 				// Schema 14: Ausnahmen von den automatischen Updates, nur fuer
 				// diese eine Seite — zusaetzlich zur globalen Liste.
 				'update_excludes' => 'TEXT NULL',
+				// Schema 15: wurde aus dieser Sicherung schon einmal wirklich
+				// etwas zurueckgeholt? Eine ungepruefte Sicherung ist eine
+				// Vermutung.
+				'restore_test_at'   => 'DATETIME NULL DEFAULT NULL',
+				'restore_test_ok'   => 'TINYINT(1) NULL DEFAULT NULL',
+				'restore_test_note' => "VARCHAR(255) NOT NULL DEFAULT ''",
 			),
 
 			// Schema 13: ein Bericht kann sich auf eine einzelne Seite beziehen.
@@ -276,6 +282,19 @@ final class Migrator {
 				PRIMARY KEY (`id`),
 				KEY `site_time` (`site_id`, `created_at`),
 				KEY `action_time` (`action`, `created_at`)
+			) {$charset}",
+
+			// Schema 16: Antworten der Luecken-Datenbank zwischenspeichern.
+			// Das freie Kontingent ist klein, und dieselbe Kennung bei jedem
+			// Durchgang erneut abzufragen waere es nach wenigen Seiten weg.
+			"CREATE TABLE IF NOT EXISTS `{$p}vuln_cache` (
+				`slug` VARCHAR(191) NOT NULL,
+				`kind` VARCHAR(10) NOT NULL DEFAULT 'plugin',
+				`payload` LONGTEXT NULL,
+				`found` SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+				`fetched_at` DATETIME NOT NULL,
+				PRIMARY KEY (`slug`, `kind`),
+				KEY `fetched_at` (`fetched_at`)
 			) {$charset}",
 
 			"CREATE TABLE IF NOT EXISTS `{$p}reports` (

@@ -27,6 +27,8 @@ final class Scheduler {
 		'auto_updates' => array( 'label' => 'Automatische Updates', 'interval' => 3600 ),
 		'reports'      => array( 'label' => 'Fällige Berichte', 'interval' => 3600 ),
 		'certificates' => array( 'label' => 'Zertifikatslaufzeiten', 'interval' => 21600 ),
+		'restore_test' => array( 'label' => 'Wiederherstellung prüfen', 'interval' => 86400 ),
+		'vulnerabilities' => array( 'label' => 'Sicherheitslücken abgleichen', 'interval' => 86400 ),
 		// Jede Minute nachsehen. Der Durchgang ist billig, wenn nichts ansteht,
 		// und eine von Hand angestossene Sicherung soll nicht erst in fuenf
 		// Minuten loslaufen.
@@ -124,6 +126,47 @@ final class Scheduler {
 
 			case 'reports':
 				return sprintf( '%d Bericht(e) erstellt', ReportService::runScheduled() );
+
+			case 'vulnerabilities':
+				if ( ! VulnerabilityService::configured() ) {
+					return 'kein Schlüssel hinterlegt';
+				}
+
+				$betroffen = 0;
+				$seiten    = 0;
+
+				foreach ( SiteRepository::active() as $vSite ) {
+					if ( ! SiteRepository::isManaged( $vSite ) ) {
+						continue;
+					}
+
+					// Ist das Tagesbudget weg, hoert es hier auf statt
+					// weiterzulaufen und fuer den Rest "nichts gefunden" zu
+					// melden.
+					if ( VulnerabilityService::budgetLeft() <= 0 ) {
+						break;
+					}
+
+					$vErg = VulnerabilityService::check( (int) $vSite['id'] );
+					$seiten++;
+
+					if ( $vErg['ok'] && $vErg['findings'] ) {
+						$betroffen++;
+					}
+				}
+
+				return sprintf(
+					'%d Seite(n) geprüft, %d betroffen, %d Abfragen heute noch frei',
+					$seiten,
+					$betroffen,
+					VulnerabilityService::budgetLeft()
+				);
+
+			case 'restore_test':
+				// Taeglich, aber je Durchgang nur die am laengsten
+				// ungepruefte Seite. Alle auf einmal hiesse, dass der Server
+				// einmal im Monat einen halben Tag beschaeftigt ist.
+				return RestoreTestService::runDue();
 
 			case 'certificates':
 				if ( ! CertificateService::pullConfigured() ) {

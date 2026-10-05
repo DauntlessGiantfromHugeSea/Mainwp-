@@ -118,6 +118,7 @@ $router->post( '/sites/{id:\d+}/maintenance-mode', array( SiteController::class,
 $router->post( '/sites/{id:\d+}/child-update', array( SiteController::class, 'childUpdate' ) );
 $router->post( '/sites/{id:\d+}/branding', array( SiteController::class, 'branding' ) );
 $router->post( '/sites/{id:\d+}/links', array( SiteController::class, 'links' ) );
+$router->post( '/sites/{id:\d+}/vulnerabilities', array( SiteController::class, 'vulnerabilities' ) );
 $router->get( '/sites/{id:\d+}/users', array( SiteUserController::class, 'index' ) );
 $router->post( '/sites/{id:\d+}/users', array( SiteUserController::class, 'store' ) );
 $router->post( '/sites/{id:\d+}/login', array( SiteUserController::class, 'login' ) );
@@ -133,6 +134,8 @@ $router->get( '/backups/status', array( BackupController::class, 'status' ) );
 $router->post( '/backups/panel', array( BackupController::class, 'runPanel' ) );
 $router->post( '/backups/{id:\d+}/run', array( BackupController::class, 'run' ) );
 $router->post( '/backups/{id:\d+}/schedule', array( BackupController::class, 'schedule' ) );
+$router->post( '/backups/{id:\d+}/purge', array( BackupController::class, 'purge' ) );
+$router->post( '/backups/{id:\d+}/restore-test', array( BackupController::class, 'restoreTest' ) );
 $router->get( '/backups/{id:\d+}/snapshots', array( BackupController::class, 'snapshots' ) );
 $router->get( '/sites/{id:\d+}/restore', array( RestoreController::class, 'index' ) );
 $router->get( '/sites/{id:\d+}/restore/download', array( RestoreController::class, 'download' ) );

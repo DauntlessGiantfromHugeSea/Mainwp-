@@ -593,6 +593,68 @@ $outdatedPlugins = array_values(
 			<?php endif; ?>
 		</div>
 	</div>
+
+	<?php if ( $managed ) : ?>
+		<div class="card">
+			<div class="card-head">
+				<h2>Ist die Sicherung lesbar?</h2>
+				<div class="spacer"></div>
+				<?php if ( $canWrite ) : ?>
+					<form method="post" action="<?= e( url( '/backups/' . $site['id'] . '/restore-test' ) ) ?>">
+						<?= csrf_field() ?>
+						<button class="btn sm" data-busy="Prüfe…">Jetzt prüfen</button>
+					</form>
+				<?php endif; ?>
+			</div>
+			<div class="card-body">
+				<?php $rtAt = $site['restore_test_at'] ?? null; ?>
+				<?php if ( empty( $rtAt ) ) : ?>
+					<div class="empty">Noch nie geprüft. Das läuft automatisch, eine Seite pro Tag.</div>
+				<?php else : ?>
+					<p>
+						<?php if ( ! empty( $site['restore_test_ok'] ) ) : ?>
+							<span class="badge ok"><span class="dot"></span>Lesbar</span>
+						<?php else : ?>
+							<span class="badge bad"><span class="dot"></span>Nicht lesbar</span>
+						<?php endif; ?>
+						<span class="muted small">· geprüft <?= e( nl_ago( (string) $rtAt ) ) ?></span>
+					</p>
+					<p class="small muted" style="margin:0"><?= e( (string) ( $site['restore_test_note'] ?? '' ) ) ?></p>
+				<?php endif; ?>
+				<p class="small muted" style="margin-top:10px">
+					Geholt wird eine echte Datei und mit der Größe verglichen, die im Sicherungspunkt steht.
+					Eine Datei, die halb ankommt, ist schlimmer als eine, die fehlt — sie fällt nicht auf.
+				</p>
+			</div>
+		</div>
+	<?php endif; ?>
+
+	<?php if ( $canWrite && $managed ) : ?>
+		<div class="card">
+			<div class="card-head"><h2>Sicherungen endgültig löschen</h2></div>
+			<div class="card-body">
+				<p class="small muted" style="max-width:720px">
+					Entfernt <strong>alle</strong> Sicherungspunkte dieser Seite vom Speicher, den Spiegel
+					auf diesem Server und den Verlauf — auch den im Backend der Kundenseite.
+					Für den Fall, dass ein Kunde geht und seine Daten verschwinden sollen.
+					<strong>Das lässt sich nicht rückgängig machen.</strong>
+				</p>
+				<form method="post" action="<?= e( url( '/backups/' . $site['id'] . '/purge' ) ) ?>"
+					data-confirm="Wirklich alle Sicherungen dieser Seite endgültig entfernen?">
+					<?= csrf_field() ?>
+					<div class="field" style="max-width:420px">
+						<label for="purge_confirm">Zum Bestätigen den Namen der Seite eintippen</label>
+						<input type="text" id="purge_confirm" name="confirm" autocomplete="off"
+							placeholder="<?= e( (string) $site['name'] ) ?>">
+						<div class="hint">
+							Ein Dialog wird weggeklickt. Etwas abzutippen verlangt, dass man hinsieht.
+						</div>
+					</div>
+					<button class="btn danger">Alle Sicherungen löschen</button>
+				</form>
+			</div>
+		</div>
+	<?php endif; ?>
 </div>
 
 <!-- ----------------------------------------------------------- Sicherheit -->
@@ -676,6 +738,74 @@ $outdatedPlugins = array_values(
 						</p>
 					<?php endif; ?>
 				</form>
+			<?php endif; ?>
+		</div>
+	</div>
+
+	<!-- --------------------------------------------- Bekannte Sicherheitslücken -->
+	<div class="card">
+		<div class="card-head">
+			<h2>Bekannte Sicherheitslücken</h2>
+			<div class="spacer"></div>
+			<?php if ( $canWrite && ( $vulnReady ?? false ) ) : ?>
+				<form method="post" action="<?= e( $siteUrl . '/vulnerabilities' ) ?>">
+					<?= csrf_field() ?>
+					<button class="btn sm" data-busy="Gleiche ab…">Jetzt abgleichen</button>
+				</form>
+			<?php endif; ?>
+		</div>
+		<div class="card-body">
+			<?php $vuln = (array) ( $payload['vulnerabilities'] ?? array() ); ?>
+
+			<?php if ( ! ( $vulnReady ?? false ) ) : ?>
+				<div class="empty">
+					Dafür fehlt eine Quelle. Unter Einstellungen → Sicherheit einen WPScan-Schlüssel
+					hinterlegen — ohne den wird hier nichts behauptet.
+				</div>
+			<?php elseif ( empty( $vuln['at'] ) ) : ?>
+				<div class="empty">Noch nicht abgeglichen. Das läuft einmal täglich automatisch.</div>
+			<?php elseif ( empty( $vuln['items'] ) ) : ?>
+				<p>
+					<span class="badge ok"><span class="dot"></span>Keine bekannten Lücken</span>
+					<span class="muted small">· geprüft <?= e( nl_ago( (string) $vuln['at'] ) ) ?></span>
+				</p>
+				<?php if ( ! empty( $vuln['skipped'] ) ) : ?>
+					<p class="small muted" style="margin:8px 0 0">
+						<?= e( (string) (int) $vuln['skipped'] ) ?> Plugin(s) konnten nicht geprüft werden —
+						das heißt nicht, dass sie sauber sind.
+					</p>
+				<?php endif; ?>
+			<?php else : ?>
+				<p>
+					<span class="badge bad"><span class="dot"></span><?= e( (string) count( (array) $vuln['items'] ) ) ?> Lücke(n)</span>
+					<span class="muted small">· geprüft <?= e( nl_ago( (string) $vuln['at'] ) ) ?></span>
+				</p>
+				<div class="table-wrap" style="margin-top:12px">
+					<table class="data">
+						<thead><tr><th>Plugin</th><th class="shrink">Installiert</th><th class="shrink">Behoben in</th><th>Lücke</th></tr></thead>
+						<tbody>
+						<?php foreach ( (array) $vuln['items'] as $fund ) : ?>
+							<tr>
+								<td><strong><?= e( (string) ( $fund['name'] ?? '' ) ) ?></strong></td>
+								<td class="shrink mono small"><?= e( (string) ( $fund['version'] ?? '?' ) ) ?></td>
+								<td class="shrink mono small">
+									<?= '' !== (string) ( $fund['fixed_in'] ?? '' ) ? e( (string) $fund['fixed_in'] ) : '<span class="badge bad">kein Fix</span>' ?>
+								</td>
+								<td class="small">
+									<?= e( (string) ( $fund['title'] ?? '' ) ) ?>
+									<?php if ( ! empty( $fund['severity'] ) ) : ?>
+										<span class="muted">· <?= e( (string) $fund['severity'] ) ?></span>
+									<?php endif; ?>
+								</td>
+							</tr>
+						<?php endforeach; ?>
+						</tbody>
+					</table>
+				</div>
+				<p class="small muted" style="margin-top:12px">
+					„Behoben in" nennt die Fassung, ab der die Lücke zu ist. Steht dort <em>kein Fix</em>,
+					gibt es noch keine — dann hilft nur abschalten oder ersetzen.
+				</p>
 			<?php endif; ?>
 		</div>
 	</div>

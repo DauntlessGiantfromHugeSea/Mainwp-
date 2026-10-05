@@ -13,6 +13,7 @@ use NorthLab\Core\Setting;
 use NorthLab\Repository\SiteRepository;
 use NorthLab\Service\BackupService;
 use NorthLab\Service\Restic;
+use NorthLab\Service\RestoreTestService;
 
 final class BackupController extends BaseController {
 
@@ -200,6 +201,70 @@ final class BackupController extends BaseController {
 			true,
 			'Sicherung des Panels vorgemerkt — sie startet innerhalb einer Minute.',
 			'/backups'
+		);
+	}
+
+	/**
+	 * Jetzt prüfen, ob sich aus der Sicherung etwas zurückholen lässt.
+	 */
+	public function restoreTest( Request $request ): void {
+		Auth::requireWrite();
+
+		$siteId = (int) $request->params['id'];
+		Auth::requireSite( $siteId );
+
+		$ergebnis = RestoreTestService::check( $siteId );
+
+		$this->respond(
+			$request,
+			$ergebnis['ok'],
+			( $ergebnis['ok'] ? 'Die Sicherung ist lesbar: ' : 'Die Prüfung schlug fehl: ' ) . $ergebnis['note'],
+			'/sites/' . $siteId
+		);
+	}
+
+	/**
+	 * Alle Sicherungen einer Seite endgültig entfernen.
+	 *
+	 * Der Name der Seite muss getippt werden. Ein Bestätigungsdialog allein
+	 * wird weggeklickt; etwas abzutippen verlangt, dass man hinsieht.
+	 */
+	public function purge( Request $request ): void {
+		Auth::requireAdmin();
+
+		$siteId = (int) $request->params['id'];
+		Auth::requireSite( $siteId );
+
+		$site = SiteRepository::find( $siteId );
+
+		if ( null === $site ) {
+			$this->respond( $request, false, 'Seite nicht gefunden.', '/backups' );
+		}
+
+		$getippt = trim( $request->string( 'confirm' ) );
+
+		if ( 0 !== strcasecmp( $getippt, trim( (string) $site['name'] ) ) ) {
+			$this->respond(
+				$request,
+				false,
+				sprintf( 'Zum Löschen muss der Name der Seite genau eingetippt werden: "%s".', (string) $site['name'] ),
+				'/sites/' . $siteId
+			);
+		}
+
+		$ergebnis = BackupService::purge( $siteId );
+
+		$this->respond(
+			$request,
+			$ergebnis['ok'],
+			$ergebnis['ok']
+				? sprintf(
+					'%d Sicherungspunkt(e) von "%s" endgültig entfernt. Das lässt sich nicht rückgängig machen.',
+					$ergebnis['snapshots'],
+					(string) $site['name']
+				)
+				: $ergebnis['error'],
+			'/sites/' . $siteId
 		);
 	}
 

@@ -845,5 +845,163 @@ check( 'Kommas und Zeilen werden beide gelesen',
 check( 'Leerzeilen fallen raus', array( 'a' ) === UpdateService::parseExcludes( "\n a \n\n" ) );
 check( 'Leer bleibt leer', array() === UpdateService::parseExcludes( '   ' ) );
 
+/* ======================================== Sicherungen endgueltig loeschen */
+
+// Zwei Seiten mit je einer echten Sicherung. Entscheidend ist, dass der
+// Loeschlauf genau eine trifft.
+$pA = Database::insert( 'sites', array(
+	'name' => 'Geht weg', 'url' => 'https://geht-weg.example', 'status' => 'connected',
+	'created_at' => nl_utc(), 'updated_at' => nl_utc(),
+) );
+$pB = Database::insert( 'sites', array(
+	'name' => 'Bleibt', 'url' => 'https://bleibt.example', 'status' => 'connected',
+	'created_at' => nl_utc(), 'updated_at' => nl_utc(),
+) );
+
+$siteA = SiteRepository::find( $pA );
+$siteB = SiteRepository::find( $pB );
+
+$ordnerA = $tmp . '/spiegel-a';
+$ordnerB = $tmp . '/spiegel-b';
+@mkdir( $ordnerA, 0700, true );
+@mkdir( $ordnerB, 0700, true );
+file_put_contents( $ordnerA . '/a.txt', 'Daten von A' );
+file_put_contents( $ordnerB . '/b.txt', 'Daten von B' );
+
+Restic::backup( $ordnerA, BackupService::hostFor( $siteA ), array( 'northlab' ) );
+Restic::backup( $ordnerA, BackupService::hostFor( $siteA ), array( 'northlab' ) );
+Restic::backup( $ordnerB, BackupService::hostFor( $siteB ), array( 'northlab' ) );
+
+Database::insert( 'backups', array(
+	'site_id' => $pA, 'status' => 'success', 'started_at' => nl_utc(), 'finished_at' => nl_utc(),
+) );
+Database::insert( 'backups', array(
+	'site_id' => $pB, 'status' => 'success', 'started_at' => nl_utc(), 'finished_at' => nl_utc(),
+) );
+SiteRepository::update( $pA, array( 'last_backup_at' => nl_utc() ) );
+
+// Einen Spiegel anlegen, damit sich pruefen laesst, dass er mitgeht.
+$spiegelA = BackupService::mirrorPath( $pA );
+@mkdir( $spiegelA, 0750, true );
+file_put_contents( $spiegelA . '/kundendatei.txt', 'liegt auf der Platte' );
+
+// Der Loeschlauf verlaesst sich darauf, dass snapshots() nach Wirt filtert.
+// Er prueft es zwar noch einmal selbst, aber diese Zusage ist die
+// eigentliche Absicherung — und die gehoert geprueft.
+$nurA = Restic::snapshots( BackupService::hostFor( $siteA ) );
+$wirte = array_unique( array_column( $nurA, 'hostname' ) );
+check( 'snapshots() liefert nur den gefragten Wirt',
+	array( BackupService::hostFor( $siteA ) ) === array_values( $wirte ), implode( ', ', $wirte ) );
+check( 'Obwohl es andere Wirte im Speicher gibt',
+	count( Restic::snapshots( '' ) ) > count( $nurA ),
+	sprintf( '%d gesamt, %d fuer A', count( Restic::snapshots( '' ) ), count( $nurA ) ) );
+
+check( 'Vorher hat A zwei Sicherungspunkte', 2 === count( Restic::snapshots( BackupService::hostFor( $siteA ) ) ) );
+check( 'Und B einen', 1 === count( Restic::snapshots( BackupService::hostFor( $siteB ) ) ) );
+check( 'Der Spiegel von A liegt da', is_file( $spiegelA . '/kundendatei.txt' ) );
+
+$weg = BackupService::purge( $pA );
+
+check( 'Der Loeschlauf meldet Erfolg', $weg['ok'], $weg['error'] );
+check( 'Zwei Sicherungspunkte entfernt', 2 === $weg['snapshots'], (string) $weg['snapshots'] );
+check( 'Auf dem Speicher ist von A nichts mehr', array() === Restic::snapshots( BackupService::hostFor( $siteA ) ) );
+
+// Das Wichtigste: die andere Seite bleibt unberuehrt.
+check( 'B ist unberuehrt', 1 === count( Restic::snapshots( BackupService::hostFor( $siteB ) ) ) );
+
+check( 'Der Spiegel ist weg', ! is_file( $spiegelA . '/kundendatei.txt' ) );
+check( 'Die Protokollzeilen sind weg',
+	0 === (int) Database::scalar( 'SELECT COUNT(*) FROM `' . Database::table( 'backups' ) . '` WHERE `site_id` = :i', array( 'i' => $pA ) ) );
+check( 'Die von B nicht',
+	1 === (int) Database::scalar( 'SELECT COUNT(*) FROM `' . Database::table( 'backups' ) . '` WHERE `site_id` = :i', array( 'i' => $pB ) ) );
+check( 'Der Zeitpunkt der letzten Sicherung ist geleert', null === SiteRepository::find( $pA )['last_backup_at'] );
+
+check( 'Es steht im Protokoll',
+	0 < (int) Database::scalar( 'SELECT COUNT(*) FROM `' . Database::table( 'activity' ) . "` WHERE `action` = 'site.purge'" ) );
+
+// Noch einmal auf dieselbe Seite: darf nicht scheitern, nur nichts tun.
+$nochmal = BackupService::purge( $pA );
+check( 'Ein zweiter Lauf scheitert nicht', $nochmal['ok'], $nochmal['error'] );
+check( 'Und entfernt nichts mehr', 0 === $nochmal['snapshots'] );
+
+$erfunden = BackupService::purge( 999999 );
+check( 'Eine erfundene Seite wird abgewiesen', ! $erfunden['ok'] );
+
+/* ============================ Laesst sich wirklich etwas zurueckholen? */
+
+use NorthLab\Service\RestoreTestService;
+
+// Die Seite zum Bloettern hat eine echte Sicherung mit bekanntem Inhalt.
+$pruefung = RestoreTestService::check( $rsId );
+
+check( 'Die Pruefung gelingt', $pruefung['ok'], $pruefung['note'] );
+check( 'Es wurde eine echte Datei geholt', $pruefung['bytes'] > 0, (string) $pruefung['bytes'] );
+check( 'Und benannt', '' !== $pruefung['file'], $pruefung['file'] );
+check( 'Der Vermerk nennt die Groesse', false !== strpos( $pruefung['note'], 'zurückgeholt' ), $pruefung['note'] );
+
+$geprueft = SiteRepository::find( $rsId );
+check( 'Das Ergebnis steht an der Seite', ! empty( $geprueft['restore_test_ok'] ) );
+check( 'Mit Zeitpunkt', ! empty( $geprueft['restore_test_at'] ) );
+check( 'Und Vermerk', '' !== (string) $geprueft['restore_test_note'] );
+
+// Eine Seite ohne Sicherung: das ist ein Fehlschlag und muss als solcher
+// dastehen, nicht als "noch nie geprueft".
+$ohneId = Database::insert( 'sites', array(
+	'name' => 'Ohne Sicherung', 'url' => 'https://ohne.example', 'status' => 'connected',
+	'created_at' => nl_utc(), 'updated_at' => nl_utc(),
+) );
+$ohne = RestoreTestService::check( $ohneId );
+
+check( 'Ohne Sicherungspunkt gilt die Pruefung als gescheitert', ! $ohne['ok'] );
+check( 'Und sagt warum', false !== strpos( $ohne['note'], 'kein' ), $ohne['note'] );
+check( 'Das steht auch an der Seite', 0 === (int) SiteRepository::find( $ohneId )['restore_test_ok'] );
+check( 'Und im Protokoll als Fehler',
+	0 < (int) Database::scalar(
+		'SELECT COUNT(*) FROM `' . Database::table( 'activity' ) . "` WHERE `action` = 'site.restoretest' AND `level` = 'error'"
+	) );
+
+/* ------------------------- Der Groessenvergleich, einzeln geprueft */
+
+// Eine halb angekommene Datei laesst sich mit echtem restic kaum
+// herstellen. Ungeprueft waere das aber genau die Stelle, die
+// stillschweigend verschwinden koennte — und dann meldete die Pruefung
+// "lesbar" fuer eine Sicherung, aus der nur die Haelfte kommt.
+check( 'Gleiche Groesse ist in Ordnung', null === RestoreTestService::verdict( 4096, 4096 ) );
+check( 'Null gegen null auch', null === RestoreTestService::verdict( 0, 0 ) );
+
+$zuWenig = RestoreTestService::verdict( 2000, 4096 );
+check( 'Zu wenig wird beanstandet', null !== $zuWenig );
+check( 'Mit beiden Zahlen', is_string( $zuWenig ) && false !== strpos( $zuWenig, '2000' ) && false !== strpos( $zuWenig, '4096' ), (string) $zuWenig );
+check( 'Und dem Wort unvollstaendig', is_string( $zuWenig ) && false !== strpos( $zuWenig, 'unvollständig' ) );
+
+$zuViel = RestoreTestService::verdict( 5000, 4096 );
+check( 'Zu viel wird auch beanstandet', null !== $zuViel );
+check( 'Und anders benannt', is_string( $zuViel ) && false !== strpos( $zuViel, 'mehr zurück' ), (string) $zuViel );
+
+/* ------------------------------------------ Die Auswahl der faelligen Seite */
+
+Setting::set( 'restore_test_enabled', '1' );
+Setting::set( 'restore_test_days', '30' );
+
+// Alles frisch geprueft: dann ist nichts faellig.
+Database::run( 'UPDATE `' . Database::table( 'sites' ) . '` SET `restore_test_at` = :jetzt', array( 'jetzt' => nl_utc() ) );
+check( 'Frisch geprueft heisst nichts faellig', 'nichts fällig' === RestoreTestService::runDue(), RestoreTestService::runDue() );
+
+// Eine zurueckdatieren — aber nur Seiten mit Sicherung kommen dran.
+Database::update( 'sites', array( 'restore_test_at' => gmdate( 'Y-m-d H:i:s', time() - 40 * 86400 ) ), array( 'id' => $rsId ) );
+Database::update( 'sites', array( 'last_backup_at' => nl_utc() ), array( 'id' => $rsId ) );
+
+$bericht = RestoreTestService::runDue();
+check( 'Die faellige Seite wird geprueft', false !== strpos( $bericht, 'Blaetterkunde' ), $bericht );
+
+// Eine Seite ohne jede Sicherung darf gar nicht erst drankommen: sie
+// erzeugte jeden Tag denselben Fehlschlag.
+Database::run( 'UPDATE `' . Database::table( 'sites' ) . '` SET `restore_test_at` = NULL, `last_backup_at` = NULL' );
+check( 'Seiten ohne Sicherung kommen nicht dran', 'nichts fällig' === RestoreTestService::runDue(), RestoreTestService::runDue() );
+
+Setting::set( 'restore_test_enabled', '0' );
+check( 'Abgeschaltet laeuft nichts', 'abgeschaltet' === RestoreTestService::runDue() );
+Setting::set( 'restore_test_enabled', '1' );
+
 printf( "%d Prüfungen, %d Fehler\n", $n, $fails );
 exit( $fails ? 1 : 0 );

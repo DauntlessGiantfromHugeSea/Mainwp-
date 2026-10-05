@@ -709,6 +709,44 @@ $get = static fn( string $key, string $default = '' ): string => $settings[ $key
 				<button class="btn primary">Speichern</button>
 			</form>
 
+			<h3 class="mt">Bekannte Sicherheitslücken</h3>
+			<p class="muted small" style="max-width:720px">
+				Das Panel sieht, <em>dass</em> ein Update bereitsteht — nicht, dass eines davon brennt.
+				Dafür braucht es eine Quelle von außen. Ohne hinterlegten Schlüssel wird nichts behauptet:
+				eine leere Liste läse sich wie „keine Lücken“, und das wäre die gefährlichste Antwort.
+			</p>
+			<form method="post" action="<?= e( url( '/settings' ) ) ?>">
+				<?= csrf_field() ?>
+				<input type="hidden" name="section" value="vulnerabilities">
+				<div class="form-grid">
+					<div class="field">
+						<label for="wpscan_api_key">WPScan-API-Schlüssel</label>
+						<input type="password" id="wpscan_api_key" name="wpscan_api_key" class="mono"
+							autocomplete="new-password"
+							placeholder="<?= '' !== $get( 'wpscan_api_key' ) ? 'hinterlegt — leer lassen, um ihn zu behalten' : 'uk1_…' ?>">
+						<div class="hint">
+							Kostenloses Konto auf wpscan.com, dort unter Profil. Wird verschlüsselt gespeichert.
+						</div>
+					</div>
+					<div class="field">
+						<label for="wpscan_budget">Abfragen pro Tag</label>
+						<input type="number" id="wpscan_budget" name="wpscan_budget" min="1" max="500"
+							value="<?= e( $get( 'wpscan_budget', '20' ) ) ?>">
+						<div class="hint">
+							Das freie Kontingent ist klein. Antworten werden eine Woche lang gemerkt,
+							es wird also nur nach neuen Plugins gefragt.
+						</div>
+					</div>
+					<?php if ( '' !== $get( 'wpscan_api_key' ) ) : ?>
+						<div class="field inline">
+							<input type="checkbox" id="wpscan_api_key_clear" name="wpscan_api_key_clear" value="1">
+							<label for="wpscan_api_key_clear">Hinterlegten Schlüssel entfernen</label>
+						</div>
+					<?php endif; ?>
+				</div>
+				<button class="btn primary">Speichern</button>
+			</form>
+
 			<h3 class="mt">Zertifikatslaufzeiten aus Uptime Kuma</h3>
 			<p class="muted small" style="max-width:720px">
 				Kuma prüft das Zertifikat bei jedem Abruf ohnehin. Schickt es eine Ablaufwarnung an den

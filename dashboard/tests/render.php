@@ -314,6 +314,49 @@ check( 'Fehlt der Erzeuger, wird es gesagt', str_contains( $ohnePdf, 'PDF ist au
 check( 'Mit dem Weg dorthin', str_contains( $ohnePdf, 'apt install chromium' ) );
 check( 'Und kein PDF-Knopf, der ins Leere fuehrt', ! str_contains( $ohnePdf, '/reports/5/pdf' ) );
 
+/* ------------------------------------------------------ Sicherheitslücken */
+
+$vulnData = static function ( array $over = array() ) use ( $showData ): array {
+	return array_replace( $showData( 'wordpress' ), $over );
+};
+
+$vOhneKey = render( 'sites/show', $vulnData( array( 'vulnReady' => false ) ) );
+check( 'Ohne Schluessel wird die Quelle verlangt', str_contains( $vOhneKey, 'WPScan-Schlüssel' ) );
+check( 'Und ausdruecklich nichts behauptet', str_contains( $vOhneKey, 'nichts behauptet' ) );
+check( 'Kein Abgleich-Knopf ohne Quelle', ! str_contains( $vOhneKey, '/vulnerabilities' ) );
+
+$vOhneLauf = render( 'sites/show', $vulnData( array( 'vulnReady' => true ) ) );
+check( 'Mit Schluessel, aber ohne Lauf', str_contains( $vOhneLauf, 'Noch nicht abgeglichen' ) );
+check( 'Und ein Knopf dafuer', str_contains( $vOhneLauf, '/vulnerabilities' ) );
+
+$vSauber = render( 'sites/show', $vulnData( array(
+	'vulnReady' => true,
+	'payload'   => array( 'vulnerabilities' => array( 'at' => gmdate( 'c' ), 'items' => array(), 'skipped' => 2 ) ),
+) ) );
+check( 'Ohne Fund steht das da', str_contains( $vSauber, 'Keine bekannten Lücken' ) );
+// Wichtig: "nichts gefunden" bei 2 ungeprueften Plugins ist nicht dasselbe
+// wie "sauber". Das muss dabeistehen.
+check( 'Ungeprueftes wird nicht als sauber verkauft',
+	str_contains( $vSauber, 'heißt nicht, dass sie sauber sind' ) );
+
+$vFund = render( 'sites/show', $vulnData( array(
+	'vulnReady' => true,
+	'payload'   => array( 'vulnerabilities' => array(
+		'at'    => gmdate( 'c' ),
+		'items' => array(
+			array( 'name' => 'Löchrig', 'version' => '2.0.0', 'fixed_in' => '2.5.0', 'title' => 'SQL Injection', 'severity' => 'high' ),
+			array( 'name' => 'Ohne Fix', 'version' => '1.0.0', 'fixed_in' => '', 'title' => 'Offene Lücke', 'severity' => 'critical' ),
+		),
+	) ),
+) ) );
+
+check( 'Die Luecke wird gezeigt', str_contains( $vFund, 'SQL Injection' ) );
+check( 'Mit installierter Fassung', str_contains( $vFund, '2.0.0' ) );
+check( 'Und der behebenden', str_contains( $vFund, '2.5.0' ) );
+check( 'Ohne Fix wird als solches benannt', str_contains( $vFund, 'kein Fix' ) );
+check( 'Die Schwere steht dabei', str_contains( $vFund, 'critical' ) );
+check( 'Und was "behoben in" heisst', str_contains( $vFund, 'ab der die Lücke zu ist' ) );
+
 /* ------------------------------------------------------------- Zertifikat */
 
 $sslData = static function ( $tage ) use ( $showData ) {
