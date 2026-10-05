@@ -159,6 +159,7 @@ $router->get( '/reports', array( ReportController::class, 'index' ) );
 $router->post( '/reports', array( ReportController::class, 'generate' ) );
 $router->get( '/reports/{id:\d+}', array( ReportController::class, 'show' ) );
 $router->get( '/reports/{id:\d+}/download', array( ReportController::class, 'download' ) );
+$router->get( '/reports/{id:\d+}/pdf', array( ReportController::class, 'pdf' ) );
 $router->post( '/reports/{id:\d+}/delete', array( ReportController::class, 'destroy' ) );
 
 // Protokoll

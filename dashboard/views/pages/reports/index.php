@@ -15,6 +15,12 @@ $canWrite = Auth::canWrite();
 <div class="grid side">
 	<div class="card">
 		<div class="card-head"><h2>Erstellte Berichte</h2></div>
+		<?php if ( ! ( $pdfReady ?? false ) ) : ?>
+			<div class="notice warn" style="margin:0 16px 12px">
+				<strong>PDF ist auf diesem Server nicht möglich.</strong>
+				<?= e( $pdfHint ?? '' ) ?>
+			</div>
+		<?php endif; ?>
 		<div class="card-body tight">
 			<?php if ( ! $reports ) : ?>
 				<div class="empty"><strong>Noch keine Berichte</strong>Erstelle rechts einen Bericht oder hinterlege je Kunde einen Rhythmus.</div>
@@ -26,7 +32,13 @@ $canWrite = Auth::canWrite();
 						<?php foreach ( $reports as $report ) : ?>
 							<tr>
 								<td><a href="<?= e( url( '/reports/' . $report['id'] ) ) ?>" target="_blank" rel="noopener"><strong><?= e( (string) $report['title'] ) ?></strong></a></td>
-								<td class="small"><?= e( (string) ( $report['client_name'] ?? 'Alle Seiten' ) ) ?></td>
+								<td class="small">
+									<?php if ( ! empty( $report['site_name'] ) ) : ?>
+										<?= e( (string) $report['site_name'] ) ?> <span class="badge sm">eine Seite</span>
+									<?php else : ?>
+										<?= e( (string) ( $report['client_name'] ?? 'Alle Seiten' ) ) ?>
+									<?php endif; ?>
+								</td>
 								<td class="small muted nowrap">
 									<?= e( nl_date( (string) $report['period_start'], 'd.m.Y' ) ) ?> – <?= e( nl_date( (string) $report['period_end'], 'd.m.Y' ) ) ?>
 								</td>
@@ -34,7 +46,10 @@ $canWrite = Auth::canWrite();
 								<td class="shrink">
 									<div class="btn-row">
 										<a class="btn sm" href="<?= e( url( '/reports/' . $report['id'] ) ) ?>" target="_blank" rel="noopener">Ansehen</a>
-										<a class="btn sm" href="<?= e( url( '/reports/' . $report['id'] . '/download' ) ) ?>">Download</a>
+										<?php if ( $pdfReady ?? false ) : ?>
+											<a class="btn sm" href="<?= e( url( '/reports/' . $report['id'] . '/pdf' ) ) ?>">PDF</a>
+										<?php endif; ?>
+										<a class="btn sm" href="<?= e( url( '/reports/' . $report['id'] . '/download' ) ) ?>">HTML</a>
 										<?php if ( $canWrite ) : ?>
 											<form method="post" action="<?= e( url( '/reports/' . $report['id'] . '/delete' ) ) ?>" data-confirm="Bericht löschen?">
 												<?= csrf_field() ?>
@@ -67,6 +82,19 @@ $canWrite = Auth::canWrite();
 									<option value="<?= e( (string) $client['id'] ) ?>"><?= e( (string) $client['name'] ) ?> (<?= e( (string) $client['site_count'] ) ?>)</option>
 								<?php endforeach; ?>
 							</select>
+						</div>
+						<div class="field">
+							<label for="site_id">Einzelne Seite</label>
+							<select id="site_id" name="site_id">
+								<option value="">— ganzer Kunde —</option>
+								<?php foreach ( ( $sites ?? array() ) as $s ) : ?>
+									<option value="<?= e( (string) $s['id'] ) ?>"><?= e( (string) $s['name'] ) ?></option>
+								<?php endforeach; ?>
+							</select>
+							<div class="hint">
+								Ist hier eine Seite gewählt, gilt nur sie — der Kunde darüber wird dann
+								nicht beachtet, und es geht keine E-Mail raus.
+							</div>
 						</div>
 						<div class="field">
 							<label for="days">Zeitraum</label>

@@ -9,7 +9,7 @@ namespace NorthLab\Core;
  */
 final class Migrator {
 
-	public const SCHEMA_VERSION = 12;
+	public const SCHEMA_VERSION = 13;
 
 	/**
 	 * Alle Tabellen anlegen (idempotent).
@@ -55,6 +55,11 @@ final class Migrator {
 				'ssl_checked_at' => 'DATETIME NULL DEFAULT NULL',
 				'ssl_source'     => "VARCHAR(20) NOT NULL DEFAULT ''",
 				'ssl_subject'    => "VARCHAR(191) NOT NULL DEFAULT ''",
+			),
+
+			// Schema 13: ein Bericht kann sich auf eine einzelne Seite beziehen.
+			'reports' => array(
+				'site_id' => 'BIGINT UNSIGNED NULL DEFAULT NULL',
 			),
 
 			// Schema 11: woran ein laufender Sicherungslauf gerade ist.

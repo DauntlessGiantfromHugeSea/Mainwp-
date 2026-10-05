@@ -198,6 +198,54 @@ check(
 	str_contains( $sicher, 'value="db_prefix"' )
 );
 
+/* --------------------------------------------------------------- Berichte */
+
+$berichtData = static function ( bool $pdf ): array {
+	return array(
+		'reports' => array(
+			array(
+				'id' => 4, 'client_id' => 2, 'site_id' => null, 'title' => 'Kunde GmbH — 01.09. bis 30.09.',
+				'period_start' => '2026-09-01 00:00:00', 'period_end' => '2026-09-30 00:00:00',
+				'status' => 'generated', 'created_at' => '2026-10-01 08:00:00',
+				'client_name' => 'Kunde GmbH', 'site_name' => null,
+			),
+			array(
+				'id' => 5, 'client_id' => null, 'site_id' => 7, 'title' => 'raum32.de — 01.09. bis 30.09.',
+				'period_start' => '2026-09-01 00:00:00', 'period_end' => '2026-09-30 00:00:00',
+				'status' => 'generated', 'created_at' => '2026-10-01 08:05:00',
+				'client_name' => null, 'site_name' => 'raum32.de',
+			),
+		),
+		'clients'  => array(
+			array(
+				'id' => 2, 'name' => 'Kunde GmbH', 'site_count' => 3,
+				'report_frequency' => 'monthly', 'report_email_enabled' => 1,
+				'last_report_at' => '2026-09-01 08:00:00',
+			),
+		),
+		'sites'    => array( array( 'id' => 7, 'name' => 'raum32.de' ), array( 'id' => 8, 'name' => 'essen-bc.de' ) ),
+		'pdfReady' => $pdf,
+		'pdfHint'  => 'sudo apt install chromium',
+	);
+};
+
+$mitPdf = render( 'reports/index', $berichtData( true ) );
+
+check( 'Eine einzelne Seite laesst sich waehlen', str_contains( $mitPdf, 'name="site_id"' ) );
+check( 'Die Seiten stehen zur Auswahl', str_contains( $mitPdf, 'raum32.de' ) && str_contains( $mitPdf, 'essen-bc.de' ) );
+check( 'Es wird gesagt, dass dann keine Mail rausgeht', str_contains( $mitPdf, 'keine E-Mail' ) );
+check( 'Der PDF-Knopf ist da', str_contains( $mitPdf, '/reports/5/pdf' ) );
+check( 'Der HTML-Knopf heisst jetzt HTML', str_contains( $mitPdf, '>HTML</a>' ) );
+check( 'Ein Seitenbericht wird als solcher erkannt', str_contains( $mitPdf, 'eine Seite' ) );
+check( 'Beim Kundenbericht steht der Kunde', str_contains( $mitPdf, 'Kunde GmbH' ) );
+check( 'Ohne PDF-Mangel keine Warnung', ! str_contains( $mitPdf, 'nicht möglich' ) );
+
+$ohnePdf = render( 'reports/index', $berichtData( false ) );
+
+check( 'Fehlt der Erzeuger, wird es gesagt', str_contains( $ohnePdf, 'PDF ist auf diesem Server nicht möglich' ) );
+check( 'Mit dem Weg dorthin', str_contains( $ohnePdf, 'apt install chromium' ) );
+check( 'Und kein PDF-Knopf, der ins Leere fuehrt', ! str_contains( $ohnePdf, '/reports/5/pdf' ) );
+
 /* ------------------------------------------------------------- Zertifikat */
 
 $sslData = static function ( $tage ) use ( $showData ) {

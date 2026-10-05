@@ -35,11 +35,24 @@ $uptimeColor = static function ( float $percent ): string {
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Wartungsbericht — <?= e( $client['name'] ?? 'Alle Seiten' ) ?></title>
+<style>
+	/* Fuer den Druck und fuer die PDF-Erzeugung: der graue Hintergrund
+	   kostet nur Toner, und eine Tabelle, die mitten in einer Zeile
+	   umbricht, liest sich schlecht. Mailprogramme ignorieren das. */
+	@page { margin: 14mm; }
+	@media print {
+		body { background: #fff !important; padding: 0 !important; }
+		.nl-karte { break-inside: avoid; page-break-inside: avoid; box-shadow: none !important; }
+		tr { break-inside: avoid; page-break-inside: avoid; }
+		thead { display: table-header-group; }
+		.nl-nodruck { display: none !important; }
+	}
+</style>
 </head>
 <body style="margin:0;padding:24px;background:#f5f6f8;font:14px/1.55 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#101828">
 <div style="max-width:860px;margin:0 auto">
 
-	<div style="<?= e( $box ) ?>;border-top:4px solid <?= e( $color ) ?>">
+	<div class="nl-karte" style="<?= e( $box ) ?>;border-top:4px solid <?= e( $color ) ?>">
 		<table width="100%" cellpadding="0" cellspacing="0"><tr>
 			<td>
 				<?php if ( ! empty( $agency['logo'] ) ) : ?>
@@ -60,7 +73,7 @@ $uptimeColor = static function ( float $percent ): string {
 		</tr></table>
 	</div>
 
-	<div style="<?= e( $box ) ?>">
+	<div class="nl-karte" style="<?= e( $box ) ?>">
 		<h2 style="margin:0 0 14px;font-size:16px">Auf einen Blick</h2>
 		<table width="100%" cellpadding="0" cellspacing="0" style="text-align:center">
 			<tr>
@@ -100,7 +113,7 @@ $uptimeColor = static function ( float $percent ): string {
 		<?php endif; ?>
 	</div>
 
-	<div style="<?= e( $box ) ?>">
+	<div class="nl-karte" style="<?= e( $box ) ?>">
 		<h2 style="margin:0 0 14px;font-size:16px">Seiten im Überblick</h2>
 		<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse">
 			<tr>
@@ -135,7 +148,7 @@ $uptimeColor = static function ( float $percent ): string {
 	</div>
 
 	<?php foreach ( $sites as $site ) : ?>
-		<div style="<?= e( $box ) ?>">
+		<div class="nl-karte" style="<?= e( $box ) ?>">
 			<h2 style="margin:0 0 2px;font-size:16px"><?= e( (string) $site['name'] ) ?></h2>
 			<div style="<?= e( $muted ) ?>;font-size:12px;margin-bottom:14px"><?= e( (string) $site['url'] ) ?></div>
 

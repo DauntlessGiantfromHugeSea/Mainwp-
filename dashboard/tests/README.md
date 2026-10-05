@@ -17,6 +17,8 @@ Lauf ist kein bestandener.**
 | MariaDB auf `127.0.0.1:3306`, Benutzer `nl`/`nlpass` | `setting`, `update`, `paneldump`, `backup-e2e`, `backup-setup` |
 | `restic` | `backup-e2e`, `backup-setup` |
 | SSH-Server auf `127.0.0.1:2223` | `backup-setup` |
+| `chromium` oder `wkhtmltopdf` | `pdf` (ohne das entfällt der Lauf) |
+| `pdftotext` (poppler-utils) | `pdf` (ohne das entfällt nur der Textvergleich) |
 | `node` mit `playwright` | alle Browser-Läufe |
 
 Zugangsdaten der Datenbank lassen sich über `NL_TEST_DB_USER` und

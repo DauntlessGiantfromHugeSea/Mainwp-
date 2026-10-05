@@ -28,9 +28,11 @@ final class ReportRepository {
 	 * @return array<int,array<string,mixed>>
 	 */
 	public static function recent( int $limit = 50, int $clientId = 0 ): array {
-		$sql = 'SELECT r.id, r.client_id, r.title, r.period_start, r.period_end, r.status, r.created_at, c.name AS client_name
+		$sql = 'SELECT r.id, r.client_id, r.site_id, r.title, r.period_start, r.period_end, r.status, r.created_at,
+				c.name AS client_name, s.name AS site_name
 			FROM `' . Database::table( 'reports' ) . '` r
-			LEFT JOIN `' . Database::table( 'clients' ) . '` c ON c.id = r.client_id';
+			LEFT JOIN `' . Database::table( 'clients' ) . '` c ON c.id = r.client_id
+			LEFT JOIN `' . Database::table( 'sites' ) . '` s ON s.id = r.site_id';
 
 		$params = array();
 		if ( $clientId > 0 ) {

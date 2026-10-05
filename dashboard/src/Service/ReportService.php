@@ -24,16 +24,36 @@ final class ReportService {
 	 * @param array<int,int>|null $siteIds Auf diese Seiten einschränken; null = alle des Kunden.
 	 * @return array{0:int,1:string|null} Bericht-ID und Fehlermeldung.
 	 */
-	public static function generate( ?int $clientId, string $from, string $to, bool $deliver = true, ?array $siteIds = null ): array {
+	public static function generate( ?int $clientId, string $from, string $to, bool $deliver = true, ?array $siteIds = null, ?int $siteId = null ): array {
 		$client = $clientId ? ClientRepository::find( $clientId ) : null;
 
 		if ( $clientId && null === $client ) {
 			return array( 0, 'Kunde nicht gefunden.' );
 		}
 
+		$einzelne = null;
+
+		if ( null !== $siteId ) {
+			$einzelne = SiteRepository::find( $siteId );
+
+			if ( null === $einzelne ) {
+				return array( 0, 'Seite nicht gefunden.' );
+			}
+
+			// Wer nur bestimmte Seiten sehen darf, bekommt auch nur dafuer
+			// einen Bericht. Sonst waere das hier ein Weg daran vorbei.
+			if ( null !== $siteIds && ! in_array( $siteId, array_map( 'intval', $siteIds ), true ) ) {
+				return array( 0, 'Für diese Seite fehlt die Berechtigung.' );
+			}
+
+			$siteIds  = array( $siteId );
+			$clientId = null === $einzelne['client_id'] ? null : (int) $einzelne['client_id'];
+			$client   = $clientId ? ClientRepository::find( $clientId ) : null;
+		}
+
 		$sites = SiteRepository::all(
 			array_filter(
-				array( 'client_id' => $clientId, 'site_ids' => $siteIds ),
+				array( 'client_id' => null !== $siteId ? null : $clientId, 'site_ids' => $siteIds ),
 				static fn( $value ): bool => null !== $value
 			)
 		);
@@ -47,7 +67,7 @@ final class ReportService {
 
 		$title = sprintf(
 			'%s — %s bis %s',
-			$client ? (string) $client['name'] : 'Alle Seiten',
+			null !== $einzelne ? (string) $einzelne['name'] : ( $client ? (string) $client['name'] : 'Alle Seiten' ),
 			nl_date( $from, 'd.m.Y' ),
 			nl_date( $to, 'd.m.Y' )
 		);
@@ -55,6 +75,7 @@ final class ReportService {
 		$reportId = ReportRepository::insert(
 			array(
 				'client_id'    => $clientId ?: null,
+				'site_id'      => $siteId,
 				'title'        => $title,
 				'period_start' => $from,
 				'period_end'   => $to,
@@ -70,7 +91,7 @@ final class ReportService {
 
 		EventBus::dispatch( 'report.generated', $payload, array( 'message' => 'Bericht erstellt: ' . $title ) );
 
-		if ( $deliver && null !== $client ) {
+		if ( $deliver && null !== $client && null === $siteId ) {
 			self::deliverToClient( $client, $payload, $html, $title );
 			ClientRepository::markReported( (int) $client['id'] );
 		}
