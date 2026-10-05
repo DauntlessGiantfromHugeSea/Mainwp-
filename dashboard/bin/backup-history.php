@@ -127,5 +127,8 @@ if ( 0 === $gesehen ) {
 } elseif ( $push ) {
 	printf( "%d Einträge übertragen.\n", $uebertragen );
 } else {
-	echo "Zum Übertragen: php bin/backup-history.php --push\n";
+	// Den eigenen, vollen Pfad nennen und nicht den relativen: aufgerufen wird
+	// das hier aus irgendeinem Verzeichnis, und ein Hinweis, der nur im
+	// Installationsverzeichnis funktioniert, ist keiner.
+	echo "Zum Übertragen: php " . __FILE__ . " --push\n";
 }
