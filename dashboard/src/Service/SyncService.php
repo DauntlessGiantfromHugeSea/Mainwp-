@@ -4,9 +4,11 @@ declare( strict_types = 1 );
 
 namespace NorthLab\Service;
 
+use NorthLab\Core\Logger;
 use NorthLab\Repository\ActivityRepository;
 use NorthLab\Repository\SiteRepository;
 use NorthLab\Repository\UpdateRepository;
+use Throwable;
 
 /**
  * Holt den Zustand der Kundenseiten ab und schreibt ihn in die lokalen Tabellen.
@@ -115,6 +117,21 @@ final class SyncService {
 					),
 				)
 			);
+		}
+
+		// Die Kundenseite zeigt dem Kunden die letzten Sicherungen. Sie kennt
+		// aber nur, was ihr gemeldet wurde — Laeufe von vor dem Einbau fehlen
+		// dort. Weicht ihr Stand ab, wird die Vorgeschichte nachgereicht.
+		// Nur dann: sonst ginge bei jedem Sync jeder Seite eine zweite
+		// Anfrage raus, fuer nichts.
+		if ( SiteRepository::isManaged( $site ) && BackupService::historyStale( $siteId, $payload ) ) {
+			try {
+				BackupService::pushHistory( $site );
+			} catch ( Throwable $e ) {
+				// Ein Sync darf daran nicht scheitern — die Liste auf der
+				// Kundenseite ist Beiwerk, der Statusbericht ist die Aufgabe.
+				Logger::exception( $e );
+			}
 		}
 	}
 

@@ -288,6 +288,91 @@ final class BackupService {
 	}
 
 	/**
+	 * Die Vorgeschichte an die Kundenseite nachreichen.
+	 *
+	 * Die Kundenseite kennt nur, was ihr seit dem Einbau gemeldet wurde. Ohne
+	 * das stuende dort "noch keine Sicherung", obwohl das Panel seit Wochen
+	 * sichert — und der Kunde glaubte, es sei nie etwas gelaufen.
+	 *
+	 * @param array<string,mixed> $site
+	 * @return int Anzahl der uebertragenen Laeufe, -1 bei einem Fehler.
+	 */
+	public static function pushHistory( array $site ): int {
+		$eintraege = self::historyEntries( (int) $site['id'] );
+
+		$response = ChildClient::post( $site, '/backup', array( 'action' => 'history', 'entries' => $eintraege ), 30 );
+
+		return $response['ok'] ? count( $eintraege ) : -1;
+	}
+
+	/**
+	 * Die letzten Laeufe einer Seite, so wie die Kundenseite sie anzeigt.
+	 *
+	 * Getrennt vom Verschicken, damit sich die Umrechnung ohne eine erreichbare
+	 * Kundenseite pruefen laesst.
+	 *
+	 * @return array<int,array<string,mixed>>
+	 */
+	public static function historyEntries( int $siteId ): array {
+		$zeilen = Database::select(
+			'SELECT `status`, `started_at`, `finished_at`, `files_total`, `bytes`, `db_bytes`, `snapshot_id`, `message`
+			 FROM `' . Database::table( 'backups' ) . '`
+			 WHERE `site_id` = :id AND `status` <> :laeuft
+			 ORDER BY `started_at` DESC
+			 LIMIT 20',
+			array( 'id' => $siteId, 'laeuft' => 'running' )
+		);
+
+		$eintraege = array();
+
+		foreach ( $zeilen as $zeile ) {
+			$start = strtotime( (string) $zeile['started_at'] . ' UTC' );
+			$ende  = $zeile['finished_at'] ? strtotime( (string) $zeile['finished_at'] . ' UTC' ) : 0;
+
+			$eintraege[] = array(
+				// Der abgeschlossene Lauf zaehlt ab seinem Ende; steht keines
+				// fest, bleibt der Beginn das Beste, was wir haben.
+				'at'       => gmdate( 'c', $ende ?: ( $start ?: time() ) ),
+				'status'   => 'success' === (string) $zeile['status'] ? 'ok' : 'failed',
+				'bytes'    => (int) $zeile['bytes'] + (int) $zeile['db_bytes'],
+				'files'    => (int) $zeile['files_total'],
+				'seconds'  => ( $ende && $start ) ? max( 0, $ende - $start ) : 0,
+				'snapshot' => (string) $zeile['snapshot_id'],
+				'message'  => (string) $zeile['message'],
+			);
+		}
+
+		return $eintraege;
+	}
+
+	/**
+	 * Hat die Kundenseite einen anderen Stand als das Panel?
+	 *
+	 * @param array<string,mixed> $payload Was die Kundenseite beim Sync meldete.
+	 */
+	public static function historyStale( int $siteId, array $payload ): bool {
+		$neuestes = Database::scalar(
+			'SELECT MAX(`started_at`) FROM `' . Database::table( 'backups' ) . '`
+			 WHERE `site_id` = :id AND `status` <> :laeuft',
+			array( 'id' => $siteId, 'laeuft' => 'running' )
+		);
+
+		if ( null === $neuestes || '' === (string) $neuestes ) {
+			return false; // Das Panel hat selbst nichts zu erzaehlen.
+		}
+
+		$dort = $payload['backups']['last']['at'] ?? null;
+
+		if ( ! is_string( $dort ) || '' === $dort ) {
+			return true; // Dort steht gar nichts — nachreichen.
+		}
+
+		// Eine Minute Spielraum: Panel und Kundenseite rechnen den Zeitpunkt
+		// aus verschiedenen Quellen, auf die Sekunde passt das nie.
+		return ( strtotime( (string) $neuestes . ' UTC' ) - strtotime( $dort ) ) > 60;
+	}
+
+	/**
 	 * Eine Nebensache an die Kundenseite schicken.
 	 *
 	 * Schlaegt das fehl, ist das kein Grund, die Sicherung scheitern zu lassen —

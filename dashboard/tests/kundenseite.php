@@ -147,6 +147,49 @@ NLC_Backuplog::start( 600 );
 NLC_Backuplog::record( array( 'status' => 'ok' ) );
 check( 'Ein abgeschlossener Lauf beendet den Hinweis', null === NLC_Backuplog::running() );
 
+/* ------------------------------------------- Vorgeschichte nachreichen */
+
+// Die Kundenseite kennt nur, was ihr gemeldet wurde. Laeuft das Panel schon
+// laenger, muss es die alten Laeufe nachreichen koennen — sonst steht dort
+// "noch keine Sicherung", obwohl seit Wochen gesichert wird.
+delete_option( NLC_Backuplog::OPT_LOG );
+check( 'Vorher ist die Liste leer', array() === NLC_Backuplog::entries() );
+
+$vorgeschichte = array(
+	array( 'at' => '2026-10-04T02:14:00+00:00', 'status' => 'ok', 'bytes' => 2048, 'files' => 10, 'seconds' => 120, 'message' => 'Lauf A' ),
+	array( 'at' => '2026-10-03T02:14:00+00:00', 'status' => 'failed', 'message' => 'Lauf B' ),
+);
+NLC_Backuplog::replace( $vorgeschichte );
+
+$log = NLC_Backuplog::entries();
+check( 'Die Vorgeschichte kommt an', 2 === count( $log ) );
+check( 'Der Zeitpunkt wird uebernommen, nicht auf jetzt gesetzt',
+	'2026-10-04T02:14:00+00:00' === $log[0]['at'], (string) $log[0]['at'] );
+check( 'Die Reihenfolge bleibt', 'Lauf A' === $log[0]['message'] && 'Lauf B' === $log[1]['message'] );
+check( 'Der Fehlschlag bleibt ein Fehlschlag', 'failed' === $log[1]['status'] );
+
+// Ersetzen, nicht ergaenzen: sonst stuende nach dem zweiten Nachreichen
+// alles doppelt da.
+NLC_Backuplog::replace( $vorgeschichte );
+check( 'Nochmal nachreichen verdoppelt nichts', 2 === count( NLC_Backuplog::entries() ) );
+
+NLC_Backuplog::replace( array_fill( 0, NLC_Backuplog::MAX + 10, array( 'status' => 'ok' ) ) );
+check( 'Auch dabei bleibt die Liste gedeckelt', NLC_Backuplog::MAX === count( NLC_Backuplog::entries() ) );
+
+NLC_Backuplog::replace( array( array( 'status' => 'quatsch' ), 'kein array' ) );
+$geprueft = NLC_Backuplog::entries();
+check( 'Unsinn wird aussortiert', 1 === count( $geprueft ) );
+check( 'Und ein unbekannter Zustand faellt auf "ok"', 'ok' === $geprueft[0]['status'] );
+
+// Ein frisch gemeldeter Lauf traegt immer die aktuelle Zeit, auch wenn das
+// Panel versehentlich eine mitschickt.
+delete_option( NLC_Backuplog::OPT_LOG );
+NLC_Backuplog::record( array( 'status' => 'ok', 'at' => '2001-01-01T00:00:00+00:00' ) );
+check( 'Ein neuer Lauf traegt die jetzige Zeit',
+	substr( (string) NLC_Backuplog::latest()['at'], 0, 4 ) !== '2001', (string) NLC_Backuplog::latest()['at'] );
+
+delete_option( NLC_Backuplog::OPT_LOG );
+
 /* ================================================ Fortschritt des Laufs */
 
 NLC_Backuplog::stop();

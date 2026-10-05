@@ -463,6 +463,11 @@ class NLC_REST {
 				NLC_Backuplog::stop();
 				return rest_ensure_response( array( 'running' => null ) );
 
+			case 'history':
+				return rest_ensure_response(
+					array( 'log' => NLC_Backuplog::replace( (array) $request->get_param( 'entries' ) ) )
+				);
+
 			case 'log':
 				return rest_ensure_response(
 					array( 'log' => NLC_Backuplog::entries(), 'running' => NLC_Backuplog::running() )

@@ -453,5 +453,89 @@ check( 'Der Schluessel wird gefunden', 'ok' === ( $states['SSH-Schlüssel vorhan
 check( 'Der Wirtsschluessel fehlt noch — und das wird gesagt',
 	'bad' === ( $states['Wirtsschlüssel bekannt'] ?? '' ) );
 
+/* ------------------------------- Vorgeschichte fuer die Kundenseite */
+
+// Die Kundenseite zeigt dem Kunden die letzten Sicherungen. Sie kennt aber
+// nur, was ihr gemeldet wurde — alles vor dem Einbau fehlt dort. Das Panel
+// muss die alten Laeufe nachreichen koennen.
+
+$histId = Database::insert( 'sites', array(
+	'name'       => 'Verlauf',
+	'url'        => 'https://verlauf.example',
+	'status'     => 'connected',
+	'created_at' => nl_utc(),
+	'updated_at' => nl_utc(),
+) );
+
+check( 'Ohne Laeufe gibt es nichts nachzureichen', array() === BackupService::historyEntries( $histId ) );
+check( 'Und es gilt auch nichts als veraltet', ! BackupService::historyStale( $histId, array() ) );
+
+Database::insert( 'backups', array(
+	'site_id'     => $histId,
+	'status'      => 'success',
+	'started_at'  => gmdate( 'Y-m-d H:i:s', time() - 7200 ),
+	'finished_at' => gmdate( 'Y-m-d H:i:s', time() - 7080 ),
+	'files_total' => 412,
+	'bytes'       => 1000,
+	'db_bytes'    => 24,
+	'snapshot_id' => 'abc123',
+	'message'     => 'Alles gut',
+) );
+Database::insert( 'backups', array(
+	'site_id'    => $histId,
+	'status'     => 'failed',
+	'started_at' => gmdate( 'Y-m-d H:i:s', time() - 90000 ),
+	'message'    => 'Speicher nicht erreichbar',
+) );
+// Ein noch laufender Lauf gehoert nicht in die Vorgeschichte.
+Database::insert( 'backups', array(
+	'site_id'    => $histId,
+	'status'     => 'running',
+	'started_at' => gmdate( 'Y-m-d H:i:s', time() - 30 ),
+) );
+
+$verlauf = BackupService::historyEntries( $histId );
+
+check( 'Abgeschlossene Laeufe kommen mit', 2 === count( $verlauf ), (string) count( $verlauf ) );
+check( 'Der laufende nicht', ! in_array( 'running', array_column( $verlauf, 'status' ), true ) );
+check( 'Der neueste steht vorn', 'ok' === $verlauf[0]['status'] );
+check( 'Groessen werden zusammengezaehlt', 1024 === (int) $verlauf[0]['bytes'], (string) $verlauf[0]['bytes'] );
+check( 'Die Dateizahl kommt mit', 412 === (int) $verlauf[0]['files'] );
+check( 'Die Dauer wird gerechnet', 120 === (int) $verlauf[0]['seconds'], (string) $verlauf[0]['seconds'] );
+check( 'Der Sicherungspunkt kommt mit', 'abc123' === $verlauf[0]['snapshot'] );
+check( 'Ein Fehlschlag bleibt ein Fehlschlag', 'failed' === $verlauf[1]['status'] );
+check( 'Ohne Ende gibt es keine erfundene Dauer', 0 === (int) $verlauf[1]['seconds'] );
+
+// Der Zeitpunkt muss in UTC gelesen werden - in der Datenbank steht er so.
+// Auf einem Server, der nicht auf UTC laeuft, verschoebe sich sonst die ganze
+// Liste auf der Kundenseite um den Zeitzonenabstand. Die Pruefung stellt die
+// Zeitzone darum ausdruecklich um: auf einem UTC-Server faellt der Fehler
+// sonst nie auf, und genau dort wird entwickelt.
+$vorher = date_default_timezone_get();
+
+foreach ( array( 'UTC', 'Europe/Berlin', 'Pacific/Auckland' ) as $zone ) {
+	date_default_timezone_set( $zone );
+
+	$inZone  = BackupService::historyEntries( $histId );
+	$abstand = abs( strtotime( (string) $inZone[0]['at'] ) - ( time() - 7080 ) );
+
+	check( sprintf( 'Der Zeitpunkt stimmt auch in %s (%ds Abweichung)', $zone, $abstand ), $abstand <= 2 );
+}
+
+date_default_timezone_set( $vorher );
+
+/* --- Wann wird nachgereicht? --- */
+
+check( 'Weiss die Kundenseite nichts, wird nachgereicht',
+	BackupService::historyStale( $histId, array() ) );
+check( 'Auch bei leerem Eintrag',
+	BackupService::historyStale( $histId, array( 'backups' => array( 'last' => array( 'at' => '' ) ) ) ) );
+check( 'Kennt sie einen aelteren Lauf, wird nachgereicht',
+	BackupService::historyStale( $histId, array( 'backups' => array( 'last' => array( 'at' => gmdate( 'c', time() - 90000 ) ) ) ) ) );
+check( 'Ist sie auf demselben Stand, passiert nichts',
+	! BackupService::historyStale( $histId, array( 'backups' => array( 'last' => array( 'at' => gmdate( 'c', time() - 7200 ) ) ) ) ) );
+check( 'Eine Minute Abweichung ist kein Grund',
+	! BackupService::historyStale( $histId, array( 'backups' => array( 'last' => array( 'at' => gmdate( 'c', time() - 7230 ) ) ) ) ) );
+
 printf( "%d Prüfungen, %d Fehler\n", $n, $fails );
 exit( $fails ? 1 : 0 );

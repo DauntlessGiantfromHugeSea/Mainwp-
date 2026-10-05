@@ -29,19 +29,11 @@ class NLC_Backuplog {
 	 * @return array<int,array<string,mixed>>
 	 */
 	public static function record( array $daten ) {
-		$status = isset( $daten['status'] ) ? sanitize_key( (string) $daten['status'] ) : 'ok';
+		// Ein frisch gemeldeter Lauf ist immer jetzt — eine mitgeschickte
+		// Zeitangabe gilt nur beim Nachreichen der Vorgeschichte.
+		unset( $daten['at'] );
 
-		$eintrag = array(
-			'at'       => gmdate( 'c' ),
-			'status'   => in_array( $status, array( 'ok', 'failed' ), true ) ? $status : 'ok',
-			'bytes'    => max( 0, (int) ( $daten['bytes'] ?? 0 ) ),
-			'files'    => max( 0, (int) ( $daten['files'] ?? 0 ) ),
-			'seconds'  => max( 0, (int) ( $daten['seconds'] ?? 0 ) ),
-			'snapshot' => substr( preg_replace( '/[^a-f0-9]/i', '', (string) ( $daten['snapshot'] ?? '' ) ), 0, 64 ),
-			'message'  => sanitize_text_field( (string) ( $daten['message'] ?? '' ) ),
-		);
-
-		$log = array_merge( array( $eintrag ), self::entries() );
+		$log = array_merge( array( self::sanitize( $daten ) ), self::entries() );
 		$log = array_slice( $log, 0, self::MAX );
 
 		update_option( self::OPT_LOG, $log, false );
@@ -51,6 +43,60 @@ class NLC_Backuplog {
 		self::stop();
 
 		return $log;
+	}
+
+	/**
+	 * Die ganze Vorgeschichte auf einmal uebernehmen.
+	 *
+	 * Das Panel kennt alle Laeufe, diese Seite nur die, die ihr seit dem
+	 * Einbau gemeldet wurden. Ohne diesen Weg stuende hier "noch keine
+	 * Sicherung", obwohl seit Wochen gesichert wird.
+	 *
+	 * Ersetzt bewusst statt zu ergaenzen: das Panel ist die Quelle, und
+	 * Zusammenfuehren erzeugte doppelte Zeilen.
+	 *
+	 * @param array<int,array<string,mixed>> $laeufe Neueste zuerst.
+	 * @return array<int,array<string,mixed>>
+	 */
+	public static function replace( array $laeufe ) {
+		$log = array();
+
+		foreach ( $laeufe as $eintrag ) {
+			if ( ! is_array( $eintrag ) ) {
+				continue;
+			}
+
+			$log[] = self::sanitize( $eintrag );
+
+			if ( count( $log ) >= self::MAX ) {
+				break;
+			}
+		}
+
+		update_option( self::OPT_LOG, $log, false );
+
+		return $log;
+	}
+
+	/**
+	 * Einen Eintrag auf das bringen, was hier angezeigt wird.
+	 *
+	 * @param array<string,mixed> $daten
+	 * @return array<string,mixed>
+	 */
+	protected static function sanitize( array $daten ) {
+		$status = isset( $daten['status'] ) ? sanitize_key( (string) $daten['status'] ) : 'ok';
+		$at     = isset( $daten['at'] ) ? trim( (string) $daten['at'] ) : '';
+
+		return array(
+			'at'       => '' !== $at ? $at : gmdate( 'c' ),
+			'status'   => in_array( $status, array( 'ok', 'failed' ), true ) ? $status : 'ok',
+			'bytes'    => max( 0, (int) ( $daten['bytes'] ?? 0 ) ),
+			'files'    => max( 0, (int) ( $daten['files'] ?? 0 ) ),
+			'seconds'  => max( 0, (int) ( $daten['seconds'] ?? 0 ) ),
+			'snapshot' => substr( (string) preg_replace( '/[^a-f0-9]/i', '', (string) ( $daten['snapshot'] ?? '' ) ), 0, 64 ),
+			'message'  => sanitize_text_field( (string) ( $daten['message'] ?? '' ) ),
+		);
 	}
 
 	/**
