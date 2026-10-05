@@ -50,25 +50,34 @@ function check( string $label, bool $condition ): void {
 	}
 }
 
-function render( string $view, array $data ): string {
-	$shared = new ReflectionProperty( View::class, 'shared' );
-	$shared->setAccessible( true );
-	$shared->setValue( null, array() );
+/**
+ * Eine Ansicht rendern.
+ *
+ * Die eigenen Variablen tragen zwei Unterstriche, weil extract() mit
+ * EXTR_SKIP vorhandene Namen stillschweigend ueberspringt. Hiess ein
+ * Schluessel der Daten wie ein Parameter — "view" etwa —, kam er nie in der
+ * Ansicht an, und die Pruefung schlug fehl, ohne dass an der Ansicht etwas
+ * falsch war. Genau das ist einmal passiert.
+ */
+function render( string $__template, array $__data ): string {
+	$__shared = new ReflectionProperty( View::class, 'shared' );
+	$__shared->setAccessible( true );
+	$__shared->setValue( null, array() );
 
-	extract( $data, EXTR_SKIP );
+	extract( $__data, EXTR_SKIP );
 	ob_start();
-	include NL_VIEWS . '/pages/' . $view . '.php';
-	$body = (string) ob_get_clean();
+	include NL_VIEWS . '/pages/' . $__template . '.php';
+	$__body = (string) ob_get_clean();
 
 	// Was das Template via View::set gesetzt hat, gehoert zur Ausgabe dazu -
 	// im echten Betrieb rendert das Layout es mit.
-	foreach ( $shared->getValue() as $value ) {
-		if ( is_string( $value ) ) {
-			$body .= "\n" . $value;
+	foreach ( $__shared->getValue() as $__value ) {
+		if ( is_string( $__value ) ) {
+			$__body .= "\n" . $__value;
 		}
 	}
 
-	return $body;
+	return $__body;
 }
 
 function site( string $type ): array {
@@ -197,6 +206,65 @@ check(
 	'Ein quittierbarer Punkt ist auswaehlbar',
 	str_contains( $sicher, 'value="db_prefix"' )
 );
+
+/* -------------------------------------------------------- Wiederherstellen */
+
+$wiederData = static function ( array $over = array() ): array {
+	return array_replace(
+		array(
+			'site'      => site( 'wordpress' ),
+			'snapshots' => array(
+				array( 'short_id' => 'a1b2c3d4', 'time' => '2026-10-04T02:00:00Z' ),
+				array( 'short_id' => 'e5f6a7b8', 'time' => '2026-10-03T02:00:00Z' ),
+			),
+			'snapshot'  => '',
+			'view'      => array( 'ok' => false, 'error' => '', 'entries' => array(), 'crumbs' => array(), 'path' => '' ),
+			'ready'     => true,
+		),
+		$over
+	);
+};
+
+$wListe = render( 'backups/restore', $wiederData() );
+check( 'Die Sicherungspunkte stehen da', str_contains( $wListe, 'a1b2c3d4' ) && str_contains( $wListe, 'e5f6a7b8' ) );
+check( 'Ohne gewaehlten Punkt kein Inhaltsbereich', ! str_contains( $wListe, 'Dieser Ordner ist leer' ) );
+
+$wLeer = render( 'backups/restore', $wiederData( array( 'snapshots' => array() ) ) );
+check( 'Ohne Sicherung wird das gesagt', str_contains( $wLeer, 'noch keine Sicherung' ) );
+
+$wAus = render( 'backups/restore', $wiederData( array( 'ready' => false, 'snapshots' => array() ) ) );
+check( 'Ohne Ziel wird darauf verwiesen', str_contains( $wAus, 'kein Sicherungsziel' ) );
+
+$wInhalt = render( 'backups/restore', $wiederData( array(
+	'snapshot' => 'a1b2c3d4',
+	'view'     => array(
+		'ok'      => true,
+		'error'   => '',
+		'path'    => 'wp-content',
+		'crumbs'  => array( array( 'name' => 'Sicherung', 'path' => '' ), array( 'name' => 'wp-content', 'path' => 'wp-content' ) ),
+		'entries' => array(
+			array( 'name' => 'uploads', 'relative' => 'wp-content/uploads', 'type' => 'dir', 'size' => 0, 'mtime' => '2026-10-04T01:00:00Z' ),
+			array( 'name' => 'liesmich.txt', 'relative' => 'wp-content/liesmich.txt', 'type' => 'file', 'size' => 2048, 'mtime' => '2026-10-04T01:00:00Z' ),
+		),
+	),
+) ) );
+
+check( 'Der Ordner ist anklickbar', str_contains( $wInhalt, 'path=wp-content%2Fuploads' ) );
+check( 'Die Datei hat einen Ladeknopf', str_contains( $wInhalt, 'restore/download' ) && str_contains( $wInhalt, 'liesmich.txt' ) );
+check( 'Ein Ordner wird als .tar angeboten', str_contains( $wInhalt, 'archive=1' ) );
+// nl_bytes() rechnet in Megabyte. Damit stuende eine 2-KB-Datei hier als
+// "2,00 GB" - darum size_format_de(), das Bytes nimmt.
+check( 'Die Groesse stimmt', str_contains( $wInhalt, '2,0 KB' ), 'keine 2,0 KB in der Ausgabe' );
+check( 'Und keine Gigabyte fuer eine kleine Datei', ! str_contains( $wInhalt, 'GB' ) );
+check( 'Die Brotkrumen sind da', str_contains( $wInhalt, '>Sicherung</a>' ) );
+check( 'Es wird gesagt, dass nichts zurueckgeschrieben wird', str_contains( $wInhalt, 'ändert sich dabei nichts' ) );
+
+$wFehler = render( 'backups/restore', $wiederData( array(
+	'snapshot' => 'a1b2c3d4',
+	'view'     => array( 'ok' => false, 'error' => 'Dieser Pfad führt aus dem Sicherungspunkt heraus.', 'entries' => array(), 'crumbs' => array(), 'path' => '' ),
+) ) );
+check( 'Ein Fehler wird gezeigt', str_contains( $wFehler, 'aus dem Sicherungspunkt heraus' ) );
+check( 'Und keine leere Tabelle daneben', ! str_contains( $wFehler, 'Dieser Ordner ist leer' ) );
 
 /* --------------------------------------------------------------- Berichte */
 

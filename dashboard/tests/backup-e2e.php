@@ -606,5 +606,154 @@ $b = BackupService::historyReport( SiteRepository::find( $nurId ), null );
 check( 'Eine nur ueberwachte Seite wird als solche benannt',
 	! $b['managed'] && false !== strpos( $b['verdict'], 'nur überwacht' ), $b['verdict'] );
 
+/* ====================================== In einer Sicherung bloettern */
+
+use NorthLab\Service\RestoreService;
+
+// Ein frueherer Abschnitt stellt das Ziel auf eine Storage Box um, die es
+// hier nicht gibt. Fuer das Bloettern zaehlt wieder das Repository auf der
+// Platte — sonst scheitert schon die Sicherung und alles danach meldet
+// irrefuehrende Fehler.
+Setting::setMany( array(
+	'backup_target_type' => 'local',
+	'restic_repository'  => Restic::buildRepository( 'local', array( 'repository' => $repo ) ),
+) );
+
+$rsId = Database::insert( 'sites', array(
+	'name' => 'Blaetterkunde', 'url' => 'https://blaettern.example', 'status' => 'connected',
+	'created_at' => nl_utc(), 'updated_at' => nl_utc(),
+) );
+$rsSite = SiteRepository::find( $rsId );
+
+// Ein Baum, wie ihn eine WordPress-Sicherung hat.
+$spiegel = $tmp . '/spiegel-blaettern';
+@mkdir( $spiegel . '/wp-content/uploads/2026', 0700, true );
+@mkdir( $spiegel . '/wp-content/plugins', 0700, true );
+
+file_put_contents( $spiegel . '/datenbank.sql', "-- Export\nINSERT INTO wp_posts VALUES ('Grüße & Umlaute');\n" );
+file_put_contents( $spiegel . '/wp-config.php', "<?php define('DB_NAME','kunde');\n" );
+file_put_contents( $spiegel . '/wp-content/uploads/2026/bild.jpg', str_repeat( "\x89PNG", 300 ) );
+file_put_contents( $spiegel . '/wp-content/plugins/liesmich.txt', 'Plugin' );
+
+$rsHost = BackupService::hostFor( $rsSite );
+$rsBack = Restic::backup( $spiegel, $rsHost, array( 'northlab' ) );
+
+check( 'Die Sicherung zum Bloettern steht', $rsBack['ok'], trim( $rsBack['output'] ) );
+
+$rsSnap = (string) $rsBack['snapshot'];
+
+/* ----------------------------------------------------- Die oberste Ebene */
+
+$ebene = RestoreService::browse( $rsId, $rsSnap, '' );
+
+check( 'Die oberste Ebene laesst sich lesen', $ebene['ok'], $ebene['error'] );
+
+$namen = array_column( $ebene['entries'], 'name' );
+check( 'Der Datenbankexport ist zu sehen', in_array( 'datenbank.sql', $namen, true ), implode( ', ', $namen ) );
+check( 'wp-content auch', in_array( 'wp-content', $namen, true ) );
+check( 'Ordner stehen vor Dateien', 'wp-content' === ( $namen[0] ?? '' ), implode( ', ', $namen ) );
+
+// Der Kunde soll "wp-content" sehen und nicht den halben Serverpfad.
+$erster = $ebene['entries'][0] ?? array();
+check( 'Die Pfade sind gekuerzt', 'wp-content' === ( $erster['relative'] ?? '' ), (string) ( $erster['relative'] ?? '' ) );
+check( 'Das Verzeichnis selbst steht nicht in seiner eigenen Liste',
+	! in_array( '', array_column( $ebene['entries'], 'relative' ), true ) );
+
+/* ------------------------------------------------------ Eine Ebene tiefer */
+
+$tiefer = RestoreService::browse( $rsId, $rsSnap, 'wp-content/uploads/2026' );
+check( 'Eine Ebene tiefer geht', $tiefer['ok'], $tiefer['error'] );
+check( 'Und zeigt das Bild', in_array( 'bild.jpg', array_column( $tiefer['entries'], 'name' ), true ) );
+check( 'Die Groesse kommt mit', 1200 === (int) ( $tiefer['entries'][0]['size'] ?? 0 ), (string) ( $tiefer['entries'][0]['size'] ?? 0 ) );
+check( 'Die Brotkrumen stimmen', 4 === count( $tiefer['crumbs'] ), (string) count( $tiefer['crumbs'] ) );
+
+/* ============================================ Was nicht gehen darf */
+
+// Aus dem Sicherungspunkt herausklettern.
+foreach ( array( '../../../etc', 'wp-content/../../..', '..', '/../etc/passwd' ) as $boese ) {
+	$v = RestoreService::browse( $rsId, $rsSnap, $boese );
+	check( 'Abgewiesen: ' . $boese, ! $v['ok'] && false !== strpos( $v['error'], 'heraus' ), $v['error'] );
+}
+
+// Ein fuehrender Schraegstrich ist kein Aufstieg, sondern nur unsauber
+// getippt - das muss weiter funktionieren.
+$mitSlash = RestoreService::browse( $rsId, $rsSnap, '/wp-content' );
+check( 'Ein fuehrender Schraegstrich stoert nicht', $mitSlash['ok'], $mitSlash['error'] );
+
+// Die Sicherung einer anderen Seite.
+$fremd = RestoreService::browse( $rsId, (string) ( $snapshots[0]['short_id'] ?? '' ), '' );
+check( 'Der Sicherungspunkt einer anderen Seite wird abgewiesen',
+	! $fremd['ok'] && false !== strpos( $fremd['error'], 'gehört nicht' ), $fremd['error'] );
+
+$erfunden = RestoreService::browse( $rsId, 'deadbeef', '' );
+check( 'Eine erfundene Kennung wird abgewiesen', ! $erfunden['ok'] );
+
+$unsinn = RestoreService::browse( $rsId, '; rm -rf /', '' );
+check( 'Eine Kennung mit Sonderzeichen wird abgewiesen', ! $unsinn['ok'] );
+
+/* ====================================== Wirklich herunterladen */
+
+$puffer = '';
+$sink   = static function ( string $stueck ) use ( &$puffer ): void { $puffer .= $stueck; };
+
+$dl = RestoreService::download( $rsId, $rsSnap, 'datenbank.sql', false, $sink );
+
+check( 'Der Datenbankexport kommt heraus', $dl['ok'], $dl['error'] );
+check( 'Und zwar unveraendert', "-- Export\nINSERT INTO wp_posts VALUES ('Grüße & Umlaute');\n" === $puffer, substr( $puffer, 0, 60 ) );
+check( 'Die Byteanzahl stimmt', strlen( $puffer ) === $dl['bytes'] );
+check( 'Der Dateiname passt', 'datenbank.sql' === $dl['filename'] );
+
+// Ein Ordner als tar.
+$puffer = '';
+$dlTar  = RestoreService::download( $rsId, $rsSnap, 'wp-content/plugins', true, $sink );
+
+check( 'Ein Ordner kommt als Archiv', $dlTar['ok'], $dlTar['error'] );
+check( 'Es heisst .tar', str_ends_with( $dlTar['filename'], '.tar' ) );
+
+$tarDatei = $tmp . '/pruef.tar';
+file_put_contents( $tarDatei, $puffer );
+$inhalt = (string) shell_exec( 'tar -tf ' . escapeshellarg( $tarDatei ) . ' 2>&1' );
+check( 'Im Archiv steht die Datei', false !== strpos( $inhalt, 'liesmich.txt' ), trim( $inhalt ) );
+
+/* -------------------- Ein Fehlschlag darf keinen kaputten Download ergeben */
+
+// Das ist der Punkt: scheitert restic, darf vorher nichts geflossen sein -
+// sonst laedt der Browser eine Datei, die nur eine Fehlermeldung enthaelt.
+$geflossen = 0;
+$aufrufe   = 0;
+$zaehler   = static function ( string $stueck ) use ( &$geflossen, &$aufrufe ): void {
+	$aufrufe++;
+	$geflossen += strlen( $stueck );
+};
+
+$weg = RestoreService::download( $rsId, $rsSnap, 'gibt-es-nicht.txt', false, $zaehler );
+
+check( 'Ein fehlender Pfad meldet einen Fehler', ! $weg['ok'] );
+check( 'Und es fliesst kein einziges Byte', 0 === $geflossen, (string) $geflossen );
+
+// Nicht die Bytes zaehlen, sondern die Aufrufe: der Controller schickt beim
+// ersten Aufruf die Download-Kopfzeilen los. Passiert das und danach kommt
+// nichts, laedt der Browser eine leere Datei statt eine Fehlermeldung zu
+// zeigen — und niemand merkt, dass die Wiederherstellung scheiterte.
+check( 'Und der Abnehmer wird gar nicht erst aufgerufen', 0 === $aufrufe, (string) $aufrufe );
+check( 'Der Grund steht dabei', '' !== $weg['error'], $weg['error'] );
+check( 'Und nennt den Pfad oder das Problem',
+	false !== stripos( $weg['error'], 'not found' ) || false !== stripos( $weg['error'], 'nicht' ), $weg['error'] );
+
+// Gegenprobe: beim gelungenen Download wird der Abnehmer sehr wohl gerufen.
+$aufrufe = 0;
+RestoreService::download( $rsId, $rsSnap, 'wp-config.php', false, $zaehler );
+check( 'Beim gelungenen Download wird er gerufen', $aufrufe > 0, (string) $aufrufe );
+
+/* ------------------------------------------------------- Dateinamen */
+
+check( 'Ein Pfad wird zum Dateinamen', 'bild.jpg' === RestoreService::filename( 'wp-content/uploads/bild.jpg', false ) );
+check( 'Ein Ordner bekommt .tar', 'uploads.tar' === RestoreService::filename( 'wp-content/uploads', true ) );
+check( 'Die ganze Sicherung bekommt einen Namen', 'sicherung.tar' === RestoreService::filename( '', true ) );
+check( 'Anfuehrungszeichen fliegen raus', false === strpos( RestoreService::filename( 'a"b;c.txt', false ), '"' ),
+	RestoreService::filename( 'a"b;c.txt', false ) );
+check( 'Zeilenumbrueche auch', false === strpos( RestoreService::filename( "a\nb.txt", false ), "\n" ) );
+check( 'Umlaute bleiben', 'Grüße.txt' === RestoreService::filename( 'Grüße.txt', false ), RestoreService::filename( 'Grüße.txt', false ) );
+
 printf( "%d Prüfungen, %d Fehler\n", $n, $fails );
 exit( $fails ? 1 : 0 );

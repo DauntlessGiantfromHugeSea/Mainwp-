@@ -22,6 +22,7 @@ use NorthLab\Controller\DashboardController;
 use NorthLab\Controller\DownloadController;
 use NorthLab\Controller\InstallController;
 use NorthLab\Controller\ReportController;
+use NorthLab\Controller\RestoreController;
 use NorthLab\Controller\SettingsController;
 use NorthLab\Controller\SiteController;
 use NorthLab\Controller\SiteUserController;
@@ -133,6 +134,8 @@ $router->post( '/backups/panel', array( BackupController::class, 'runPanel' ) );
 $router->post( '/backups/{id:\d+}/run', array( BackupController::class, 'run' ) );
 $router->post( '/backups/{id:\d+}/schedule', array( BackupController::class, 'schedule' ) );
 $router->get( '/backups/{id:\d+}/snapshots', array( BackupController::class, 'snapshots' ) );
+$router->get( '/sites/{id:\d+}/restore', array( RestoreController::class, 'index' ) );
+$router->get( '/sites/{id:\d+}/restore/download', array( RestoreController::class, 'download' ) );
 
 // Uptime
 $router->get( '/uptime', array( UptimeController::class, 'index' ) );

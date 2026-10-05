@@ -812,6 +812,25 @@ final class Restic {
 	 *
 	 * @return string|null Hinweis oder null, wenn keiner passt.
 	 */
+	/**
+	 * Die letzten Zeilen einer Ausgabe — fuer den Fall, dass hinweis() nichts
+	 * Besseres weiss. Gar nichts zu sagen waere die schlechteste Antwort.
+	 */
+	public static function lastLines( string $text, int $lines = 3 ): string {
+		$zeilen = array_values(
+			array_filter(
+				array_map( 'trim', preg_split( '/\R/', $text ) ?: array() ),
+				static fn( string $z ): bool => '' !== $z
+			)
+		);
+
+		if ( ! $zeilen ) {
+			return 'Keine Ausgabe von restic.';
+		}
+
+		return implode( ' | ', array_slice( $zeilen, -1 * max( 1, $lines ) ) );
+	}
+
 	public static function hinweis( string $output ): ?string {
 		$lower = strtolower( $output );
 
@@ -1171,6 +1190,210 @@ final class Restic {
 	 * @param array<int,string> $args
 	 * @return array{ok:bool,output:string,code:int}
 	 */
+	/**
+	 * Wurzel eines Sicherungspunkts — der Pfad, der gesichert wurde.
+	 *
+	 * Ein Schnappschuss traegt die vollen Serverpfade. Wer darin bloettern
+	 * will, muesste sich sonst erst durch /var/www/... klicken, bevor etwas
+	 * zu sehen ist.
+	 */
+	public static function snapshotRoot( string $snapshot ): ?string {
+		$result = self::run( array( 'snapshots', $snapshot, '--json' ), true, 60 );
+
+		if ( ! $result['ok'] ) {
+			return null;
+		}
+
+		$liste = json_decode( $result['output'], true );
+
+		if ( ! is_array( $liste ) || ! isset( $liste[0]['paths'][0] ) ) {
+			return null;
+		}
+
+		return rtrim( (string) $liste[0]['paths'][0], '/' );
+	}
+
+	/**
+	 * Eine Ebene eines Sicherungspunkts auflisten.
+	 *
+	 * Ohne Pfadangabe listet restic den ganzen Baum — bei einer Mediathek
+	 * sind das Zehntausende Zeilen. Darum wird immer ein Verzeichnis
+	 * mitgegeben.
+	 *
+	 * @return array{ok:bool,error:string,entries:array<int,array<string,mixed>>}
+	 */
+	public static function ls( string $snapshot, string $directory ): array {
+		$result = self::run( array( 'ls', '--json', $snapshot, $directory ), true, 180 );
+
+		if ( ! $result['ok'] ) {
+			return array(
+				'ok'      => false,
+				'error'   => self::hinweis( $result['output'] ) ?? self::lastLines( $result['output'] ),
+				'entries' => array(),
+			);
+		}
+
+		$entries = array();
+
+		foreach ( explode( "\n", $result['output'] ) as $zeile ) {
+			$zeile = trim( $zeile );
+
+			if ( '' === $zeile ) {
+				continue;
+			}
+
+			$node = json_decode( $zeile, true );
+
+			if ( ! is_array( $node ) || 'node' !== ( $node['struct_type'] ?? '' ) ) {
+				continue;
+			}
+
+			// Das Verzeichnis selbst steht mit in der Liste. Es noch einmal
+			// anzuzeigen hiesse, dass man darin auf sich selbst klickt.
+			if ( rtrim( (string) ( $node['path'] ?? '' ), '/' ) === rtrim( $directory, '/' ) ) {
+				continue;
+			}
+
+			$entries[] = array(
+				'name' => (string) ( $node['name'] ?? '' ),
+				'path' => (string) ( $node['path'] ?? '' ),
+				'type' => (string) ( $node['type'] ?? '' ),
+				'size' => (int) ( $node['size'] ?? 0 ),
+				'mtime' => (string) ( $node['mtime'] ?? '' ),
+			);
+		}
+
+		// Ordner zuerst, dann nach Namen — so wie jeder Dateimanager.
+		usort(
+			$entries,
+			static function ( array $a, array $b ): int {
+				if ( ( 'dir' === $a['type'] ) !== ( 'dir' === $b['type'] ) ) {
+					return 'dir' === $a['type'] ? -1 : 1;
+				}
+				return strnatcasecmp( $a['name'], $b['name'] );
+			}
+		);
+
+		return array( 'ok' => true, 'error' => '', 'entries' => $entries );
+	}
+
+	/**
+	 * Eine Datei oder einen Ordner aus einem Sicherungspunkt herausgeben.
+	 *
+	 * Der Inhalt wird in Stuecken durchgereicht und nicht gesammelt: eine
+	 * Mediathek gehoert nicht in eine PHP-Variable. Darum auch nicht ueber
+	 * run() — das fuehrt stderr mit stdout zusammen, und eine Fehlermeldung
+	 * mitten in einer Datei macht sie kaputt.
+	 *
+	 * @param string|null $archive null fuer eine einzelne Datei, sonst "tar" oder "zip".
+	 * @param callable    $onChunk fn(string $stueck): void
+	 * @return array{ok:bool,error:string,bytes:int}
+	 */
+	public static function dump( string $snapshot, string $path, ?string $archive, callable $onChunk ): array {
+		$binary = self::binary();
+
+		if ( '' === $binary ) {
+			return array( 'ok' => false, 'error' => self::binaryProblem() ?? 'restic fehlt.', 'bytes' => 0 );
+		}
+
+		$prepared = self::prepareDirectories() ?? self::writeSshConfig();
+
+		if ( null !== $prepared ) {
+			return array( 'ok' => false, 'error' => $prepared, 'bytes' => 0 );
+		}
+
+		$args = array();
+		$sftp = self::parseSftp( self::repository() );
+
+		if ( null !== $sftp ) {
+			$args[] = '-o';
+			$args[] = 'sftp.command=' . self::sftpCommand( $sftp );
+		}
+
+		$args[] = 'dump';
+
+		if ( null !== $archive ) {
+			$args[] = '--archive';
+			$args[] = 'zip' === $archive ? 'zip' : 'tar';
+		}
+
+		$args[] = $snapshot;
+		$args[] = $path;
+
+		$command = escapeshellcmd( $binary );
+
+		foreach ( $args as $arg ) {
+			$command .= ' ' . escapeshellarg( $arg );
+		}
+
+		$process = proc_open(
+			self::sanft() . 'timeout 3600 ' . $command,
+			array( 1 => array( 'pipe', 'w' ), 2 => array( 'pipe', 'w' ) ),
+			$pipes,
+			null,
+			self::environment( true )
+		);
+
+		if ( ! is_resource( $process ) ) {
+			return array( 'ok' => false, 'error' => 'restic konnte nicht gestartet werden.', 'bytes' => 0 );
+		}
+
+		$bytes  = 0;
+		$fehler = '';
+
+		// Das erste Stueck getrennt lesen: scheitert restic sofort — falscher
+		// Pfad, Speicher nicht erreichbar —, soll das als Fehlermeldung
+		// ankommen und nicht als kaputter Download.
+		$erstes = fread( $pipes[1], 65536 );
+
+		if ( false === $erstes || '' === $erstes ) {
+			$fehler = trim( (string) stream_get_contents( $pipes[2] ) );
+
+			fclose( $pipes[1] );
+			fclose( $pipes[2] );
+			proc_close( $process );
+
+			return array(
+				'ok'    => false,
+				'error' => '' !== $fehler
+					? ( self::hinweis( $fehler ) ?? self::lastLines( $fehler ) )
+					: 'Der Sicherungspunkt gab nichts heraus.',
+				'bytes' => 0,
+			);
+		}
+
+		$onChunk( $erstes );
+		$bytes += strlen( $erstes );
+
+		while ( ! feof( $pipes[1] ) ) {
+			$stueck = fread( $pipes[1], 262144 );
+
+			if ( false === $stueck || '' === $stueck ) {
+				break;
+			}
+
+			$onChunk( $stueck );
+			$bytes += strlen( $stueck );
+		}
+
+		$fehler = trim( (string) stream_get_contents( $pipes[2] ) );
+
+		fclose( $pipes[1] );
+		fclose( $pipes[2] );
+
+		$code = proc_close( $process );
+
+		if ( 0 !== $code ) {
+			Logger::error( 'restic dump fehlgeschlagen', array( 'code' => $code, 'error' => substr( $fehler, -500 ) ) );
+		}
+
+		return array(
+			'ok'    => 0 === $code,
+			'error' => 0 === $code ? '' : ( self::hinweis( $fehler ) ?? self::lastLines( $fehler ) ),
+			'bytes' => $bytes,
+		);
+	}
+
 	public static function run( array $args, bool $withRepository = true, int $timeout = 300 ): array {
 		$binary = self::binary();
 

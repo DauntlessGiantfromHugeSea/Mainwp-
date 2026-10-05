@@ -923,6 +923,8 @@ $outdatedPlugins = array_values(
 			<div class="card-head">
 				<h2>Sicherungspunkte auf dem Speicher</h2>
 				<div class="spacer"></div>
+				<a class="btn sm" href="<?= e( url( '/sites/' . $site['id'] . '/restore' ) ) ?>">Darin blättern</a>
+				<div class="spacer"></div>
 				<?php if ( $backupReady ) : ?>
 					<button class="btn sm" type="button" data-snapshot-load>Abrufen</button>
 				<?php endif; ?>
