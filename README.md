@@ -195,6 +195,7 @@ dashboard/
   bin/check-storagebox.sh     Sagt, warum eine Storage Box nicht hereinlässt
   bin/deploy-and-setup.sh     Update einspielen und Sicherung vorbereiten
   tests/                      Prüfläufe — `sh dashboard/tests/run.sh`
+  resources/tools/            Wegwerf-Diagnose für Kundenseiten
   resources/child-plugin/     Quelle des WordPress-Plugins, wird auf Abruf gezippt
   storage/                    Logs, Cache, erzeugte ZIPs — muss beschreibbar sein
     branding/                 Hinterlegtes Logo und die daraus erzeugten Symbole
