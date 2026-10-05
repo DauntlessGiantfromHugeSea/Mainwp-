@@ -87,7 +87,7 @@ final class BackupService {
 		// Prozess, verschwindet der Hinweis von selbst.
 		self::$bannerSite = $site;
 		self::$bannerAt   = 0;
-		self::announce();
+		self::announce( 'Wird vorbereitet' );
 
 		try {
 			$mirror = self::mirrorPath( $siteId );
@@ -232,8 +232,15 @@ final class BackupService {
 	/** So lange gilt eine Ankuendigung ohne neues Lebenszeichen. */
 	private const BANNER_LEASE = 900;
 
-	/** Und so oft wird eines geschickt. Deutlich haeufiger als die Frist. */
-	private const BANNER_EVERY = 300;
+	/**
+	 * Und so oft wird eines geschickt.
+	 *
+	 * Deutlich haeufiger als die Frist — und haeufig genug, dass der
+	 * Fortschritt auf der Kundenseite sich sichtbar bewegt. Eine Anfrage je
+	 * Minute faellt neben dem, was eine Sicherung ohnehin an Verkehr macht,
+	 * nicht ins Gewicht.
+	 */
+	private const BANNER_EVERY = 60;
 
 	/**
 	 * Der Kundenseite sagen, dass gerade gesichert wird.
@@ -242,7 +249,7 @@ final class BackupService {
 	 * Ankuendigung von selbst aus. Ein Hinweis, der nur durch ein "fertig"
 	 * verschwindet, haengt sonst fuer immer auf der Kundenseite.
 	 */
-	private static function announce(): void {
+	private static function announce( string $phase = '', int $done = 0, int $total = 0 ): void {
 		if ( null === self::$bannerSite || ( time() - self::$bannerAt ) < self::BANNER_EVERY ) {
 			return;
 		}
@@ -255,9 +262,10 @@ final class BackupService {
 		self::tellSite(
 			self::$bannerSite,
 			array(
-				'action'  => 'running',
-				'seconds' => self::BANNER_LEASE,
-				'label'   => 'Sicherung',
+				'action'   => 'running',
+				'seconds'  => self::BANNER_LEASE,
+				'label'    => 'Sicherung',
+				'progress' => array( 'phase' => $phase, 'done' => $done, 'total' => $total ),
 				'banner'  => array(
 					'enabled'  => Setting::getBool( 'backup_banner', true ),
 					'audience' => (string) Setting::get( 'backup_banner_audience', 'loggedin' ),
@@ -325,11 +333,11 @@ final class BackupService {
 			array( 'id' => $runId )
 		);
 
-		// Gelegenheit fuer ein Lebenszeichen an die Kundenseite. announce()
-		// drosselt selbst, hier faellt also nur alle paar Minuten eine Anfrage
-		// an — eine lange Dateiuebertragung soll den Hinweis nicht mittendrin
-		// auslaufen lassen.
-		self::announce();
+		// Lebenszeichen an die Kundenseite, mit demselben Stand, der gerade in
+		// die Datenbank ging. announce() drosselt selbst; eine lange
+		// Dateiuebertragung soll den Hinweis nicht mittendrin auslaufen lassen,
+		// und der Kunde soll sehen, wie weit es ist.
+		self::announce( $phase, $done, $total );
 	}
 
 	/**

@@ -149,6 +149,12 @@ class NLC_Banner {
 		$logo   = (string) $state['logo'];
 		$seit   = (int) ( $running['started'] ?? time() );
 
+		// Wie weit der Lauf ist. Steht als zweite Zeile darunter, nicht im
+		// Satz: der Satz erklaert, warum die Seite langsamer ist, die Zahl
+		// sagt wie lange noch.
+		$fortschritt = NLC_Backuplog::progress_text( $running );
+		$anteil      = isset( $running['percent'] ) ? $running['percent'] : null;
+
 		// Ein Schluessel je Lauf: wird der Hinweis weggeklickt, bleibt er fuer
 		// diesen Lauf weg — die naechste Sicherung zeigt ihn wieder.
 		$key = 'nlc-backup-' . $seit;
@@ -181,7 +187,13 @@ class NLC_Banner {
 			. '#nlc-backup-banner img{display:block;width:20px;height:20px;object-fit:contain;flex:0 0 auto;margin-top:1px;border-radius:4px}'
 			. '#nlc-backup-banner .nlc-bb-dot{display:block;flex:0 0 auto;width:9px;height:9px;margin-top:5px;'
 			. 'border-radius:50%;background:' . esc_attr( $accent ) . ';animation:nlc-bb-pulse 1.8s ease-in-out infinite}'
-			. '#nlc-backup-banner .nlc-bb-text{display:block;flex:1 1 auto;color:#dcdce2}'
+			. '#nlc-backup-banner .nlc-bb-body{display:block;flex:1 1 auto;min-width:0}'
+			. '#nlc-backup-banner .nlc-bb-text{display:block;color:#dcdce2}'
+			. '#nlc-backup-banner .nlc-bb-step{display:block;margin-top:5px;font-size:12px;color:#8b8b96}'
+			. '#nlc-backup-banner .nlc-bb-bar{display:block;margin-top:6px;height:3px;border-radius:2px;'
+			. 'background:rgba(255,255,255,.14);overflow:hidden}'
+			. '#nlc-backup-banner .nlc-bb-bar > span{display:block;height:3px;border-radius:2px;'
+			. 'background:' . esc_attr( $accent ) . '}'
 			. '#nlc-backup-banner .nlc-bb-close{display:block;flex:0 0 auto;appearance:none;cursor:pointer;'
 			. 'color:#8b8b96;font-size:17px;line-height:1;padding:0 2px;margin:-2px -4px 0 0}'
 			. '#nlc-backup-banner .nlc-bb-close:hover{color:#f1f1f4}'
@@ -190,7 +202,15 @@ class NLC_Banner {
 			. '@media (max-width:480px){#nlc-backup-banner{left:16px;right:16px;max-width:none}}'
 			. '</style>'
 			. $bild
+			. '<div class="nlc-bb-body">'
 			. '<p class="nlc-bb-text">' . esc_html( $text ) . '</p>'
+			. ( '' !== $fortschritt
+				? '<p class="nlc-bb-step">' . esc_html( $fortschritt ) . '</p>'
+					. ( null !== $anteil
+						? '<span class="nlc-bb-bar"><span style="width:' . (int) $anteil . '%"></span></span>'
+						: '' )
+				: '' )
+			. '</div>'
 			. '<button type="button" class="nlc-bb-close" aria-label="Hinweis ausblenden">&times;</button>'
 			. '<script>(function(){'
 			. 'var b=document.getElementById("nlc-backup-banner");if(!b)return;'

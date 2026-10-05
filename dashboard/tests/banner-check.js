@@ -97,6 +97,23 @@ const LOGO = Buffer.from(
 
 	check('Es meldet sich als Statusmeldung an', await banner.getAttribute('role') === 'status');
 
+	// --- Fortschritt --------------------------------------------------------
+	const stand = await page.locator('#nlc-backup-banner .nlc-bb-step').innerText();
+	check('Der Stand steht darunter (' + stand.trim() + ')', /342 von 1\.200/.test(stand));
+
+	const bal = await page.locator('#nlc-backup-banner .nlc-bb-bar').boundingBox();
+	const fue = await page.locator('#nlc-backup-banner .nlc-bb-bar > span').boundingBox();
+	check('Der Balken ist da', bal !== null && bal.width > 0);
+	check('Und zeigt rund 28 Prozent',
+		bal !== null && fue !== null && Math.abs(fue.width / bal.width - 0.28) < 0.03,
+		bal && fue ? Math.round(fue.width / bal.width * 100) + '%' : '?');
+	check('Der Balken bleibt im Kasten', bal !== null && box !== null && bal.width <= box.width);
+
+	// Die Zusatzzeilen duerfen die Schriftgroesse des Themes nicht erben.
+	const standGroesse = await page.locator('#nlc-backup-banner .nlc-bb-step')
+		.evaluate(el => getComputedStyle(el).fontSize);
+	check('Auch die Standzeile bleibt klein (' + standGroesse + ')', standGroesse === '12px');
+
 	await page.screenshot({ path: path.join(__dirname, 'banner-desktop.png') });
 
 	// --- Wegklicken ---------------------------------------------------------

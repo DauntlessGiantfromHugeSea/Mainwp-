@@ -8,6 +8,8 @@ declare( strict_types = 1 );
 
 require __DIR__ . '/child-stubs.php';
 
+function number_format_i18n( $zahl, $dez = 0 ) { return number_format( (float) $zahl, (int) $dez, ',', '.' ); }
+
 require_once dirname( __DIR__ ) . '/resources/child-plugin/north-lab-child/includes/class-nlc-cache.php';
 require_once dirname( __DIR__ ) . '/resources/child-plugin/north-lab-child/includes/class-nlc-maintenance-mode.php';
 require_once dirname( __DIR__ ) . '/resources/child-plugin/north-lab-child/includes/class-nlc-backuplog.php';
@@ -21,7 +23,14 @@ $banner = NLC_Banner::markup(
 		'accent' => '#ff3d8b',
 		'logo'   => $mitLogo ? 'https://north-flow.de/api/assets/188bbf40' : '',
 	),
-	array( 'started' => 1700000000 )
+	array(
+		'started' => 1700000000,
+		'phase'   => 'Dateien werden geholt',
+		'done'    => 342,
+		'total'   => 1200,
+		'percent' => 28,
+		'at'      => time(),
+	)
 );
 
 echo '<!doctype html>

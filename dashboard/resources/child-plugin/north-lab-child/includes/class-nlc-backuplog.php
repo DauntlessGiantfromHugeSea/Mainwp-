@@ -84,14 +84,24 @@ class NLC_Backuplog {
 	 * @param string $label
 	 * @return array<string,mixed>
 	 */
-	public static function start( $seconds = 600, $label = '' ) {
+	public static function start( $seconds = 600, $label = '', $fortschritt = array() ) {
 		$seconds = min( self::MAX_LEASE, max( 60, (int) $seconds ) );
 		$bisher  = self::running();
+
+		$fortschritt = is_array( $fortschritt ) ? $fortschritt : array();
+		$done        = max( 0, (int) ( isset( $fortschritt['done'] ) ? $fortschritt['done'] : 0 ) );
+		$total       = max( 0, (int) ( isset( $fortschritt['total'] ) ? $fortschritt['total'] : 0 ) );
 
 		$state = array(
 			'until'   => time() + $seconds,
 			'started' => $bisher ? (int) $bisher['started'] : time(),
 			'label'   => sanitize_text_field( (string) $label ),
+			'phase'   => sanitize_text_field( (string) ( isset( $fortschritt['phase'] ) ? $fortschritt['phase'] : '' ) ),
+			// Mehr erledigt als insgesamt gibt es nicht. Ohne die Klammer
+			// stuende auf der Kundenseite irgendwann "1200 von 900".
+			'done'    => $total > 0 ? min( $done, $total ) : $done,
+			'total'   => $total,
+			'at'      => time(),
 		);
 
 		update_option( self::OPT_RUNNING, $state, true );
@@ -120,11 +130,58 @@ class NLC_Backuplog {
 			return null;
 		}
 
+		$done  = max( 0, (int) ( $state['done'] ?? 0 ) );
+		$total = max( 0, (int) ( $state['total'] ?? 0 ) );
+
 		return array(
 			'until'   => (int) $state['until'],
 			'started' => (int) ( $state['started'] ?? time() ),
 			'label'   => (string) ( $state['label'] ?? '' ),
+			'phase'   => (string) ( $state['phase'] ?? '' ),
+			'done'    => $total > 0 ? min( $done, $total ) : $done,
+			'total'   => $total,
+			'at'      => (int) ( $state['at'] ?? $state['started'] ?? time() ),
+			'percent' => $total > 0 ? (int) floor( min( $done, $total ) / $total * 100 ) : null,
 		);
+	}
+
+	/**
+	 * Der Fortschritt in einem Satz — oder leer, wenn es nichts zu sagen gibt.
+	 *
+	 * @param array<string,mixed> $running
+	 * @return string
+	 */
+	public static function progress_text( array $running ) {
+		$phase = trim( (string) ( $running['phase'] ?? '' ) );
+		$total = (int) ( $running['total'] ?? 0 );
+		$done  = (int) ( $running['done'] ?? 0 );
+
+		if ( $total > 0 ) {
+			$zahlen = sprintf(
+				'%s von %s (%d %%)',
+				number_format_i18n( min( $done, $total ) ),
+				number_format_i18n( $total ),
+				(int) floor( min( $done, $total ) / $total * 100 )
+			);
+
+			return '' !== $phase ? $phase . ': ' . $zahlen : $zahlen;
+		}
+
+		return $phase;
+	}
+
+	/**
+	 * Wie alt die letzte Meldung ist.
+	 *
+	 * Das Panel meldet sich regelmaessig. Bleibt das lange aus, laeuft der
+	 * Vorgang vielleicht noch, aber die Zahlen stimmen nicht mehr — das
+	 * gehoert dazugesagt, statt einen alten Stand als aktuell auszugeben.
+	 *
+	 * @param array<string,mixed> $running
+	 * @return bool
+	 */
+	public static function stale( array $running ) {
+		return ( time() - (int) ( $running['at'] ?? 0 ) ) > 600;
 	}
 
 	/**

@@ -147,6 +147,47 @@ NLC_Backuplog::start( 600 );
 NLC_Backuplog::record( array( 'status' => 'ok' ) );
 check( 'Ein abgeschlossener Lauf beendet den Hinweis', null === NLC_Backuplog::running() );
 
+/* ================================================ Fortschritt des Laufs */
+
+NLC_Backuplog::stop();
+NLC_Backuplog::start( 600, 'Sicherung', array( 'phase' => 'Dateien werden geholt', 'done' => 300, 'total' => 1200 ) );
+$lauf = NLC_Backuplog::running();
+
+check( 'Die Phase kommt an', 'Dateien werden geholt' === $lauf['phase'] );
+check( 'Der Stand kommt an', 300 === $lauf['done'] && 1200 === $lauf['total'] );
+check( 'Der Anteil wird gerechnet', 25 === $lauf['percent'], var_export( $lauf['percent'], true ) );
+
+$text = NLC_Backuplog::progress_text( $lauf );
+check( 'Der Fortschritt steht als Satz da', false !== strpos( $text, '300 von 1.200' ), $text );
+check( 'Mit Prozent', false !== strpos( $text, '25 %' ), $text );
+check( 'Und mit der Phase', 0 === strpos( $text, 'Dateien werden geholt' ), $text );
+
+// Ohne Gesamtzahl laesst sich kein Anteil angeben - dann darf auch keiner
+// erfunden werden, sonst steht da ein Balken, der nichts bedeutet.
+NLC_Backuplog::start( 600, 'Sicherung', array( 'phase' => 'Datenbank wird exportiert' ) );
+$ohne = NLC_Backuplog::running();
+check( 'Ohne Gesamtzahl gibt es keinen Anteil', null === $ohne['percent'] );
+check( 'Aber die Phase steht da', 'Datenbank wird exportiert' === NLC_Backuplog::progress_text( $ohne ) );
+
+// Mehr erledigt als insgesamt gibt es nicht.
+NLC_Backuplog::start( 600, 'Sicherung', array( 'phase' => 'x', 'done' => 1500, 'total' => 900 ) );
+$zuviel = NLC_Backuplog::running();
+check( 'Mehr als 100 % gibt es nicht', 100 === $zuviel['percent'] && 900 === $zuviel['done'] );
+
+// Der Beginn bleibt ueber alle Lebenszeichen hinweg derselbe.
+NLC_Backuplog::stop();
+NLC_Backuplog::start( 600, 'Sicherung', array( 'done' => 0, 'total' => 10 ) );
+$beginn = NLC_Backuplog::running()['started'];
+NLC_Backuplog::start( 600, 'Sicherung', array( 'done' => 5, 'total' => 10 ) );
+check( 'Ein neues Lebenszeichen verschiebt den Beginn nicht', $beginn === NLC_Backuplog::running()['started'] );
+check( 'Aber der Stand zieht nach', 50 === NLC_Backuplog::running()['percent'] );
+
+// Bleibt die Meldung aus, duerfen alte Zahlen nicht als aktuell gelten.
+check( 'Frische Zahlen gelten als frisch', ! NLC_Backuplog::stale( NLC_Backuplog::running() ) );
+$alt = NLC_Backuplog::running();
+$alt['at'] = time() - 1200;
+check( 'Alte Zahlen werden als alt erkannt', NLC_Backuplog::stale( $alt ) );
+
 /* ======================================================== Das Banner */
 
 NLC_Backuplog::start( 600 );
@@ -175,6 +216,20 @@ $markup = NLC_Banner::markup( NLC_Banner::state(), (array) NLC_Backuplog::runnin
 check( 'Das Banner traegt den Text', false !== strpos( $markup, 'Sicherung läuft' ) );
 check( 'Und die gewaehlte Farbe', false !== strpos( $markup, '#ff3399' ) );
 check( 'Es liegt unten rechts', false !== strpos( $markup, 'right:16px;bottom:16px' ) );
+
+$mitStand = NLC_Banner::markup(
+	NLC_Banner::state(),
+	array( 'started' => time(), 'phase' => 'Dateien werden geholt', 'done' => 300, 'total' => 1200, 'percent' => 25, 'at' => time() )
+);
+check( 'Das Banner nennt den Stand', false !== strpos( $mitStand, '300 von 1.200' ) );
+check( 'Und zeigt einen Balken', false !== strpos( $mitStand, 'width:25%' ), 'kein Balken' );
+
+$ohneStand = NLC_Banner::markup( NLC_Banner::state(), array( 'started' => time() ) );
+// Auf das Element pruefen, nicht auf den Klassennamen: der steht immer im
+// CSS-Block, auch wenn gar kein Balken gezeichnet wird.
+check( 'Ohne Stand kein Balken', false === strpos( $ohneStand, '<span class="nlc-bb-bar">' ) );
+check( 'Und keine Fortschrittszeile', false === strpos( $ohneStand, '<p class="nlc-bb-step">' ) );
+check( 'Mit Stand aber schon', false !== strpos( $mitStand, '<span class="nlc-bb-bar">' ) );
 
 $boese = NLC_Banner::markup(
 	array( 'text' => 'Hallo</p><script>alert(1)</script>', 'accent' => '#000"><script>x</script>', 'logo' => 'javascript:alert(2)' ),
@@ -419,6 +474,82 @@ $plaene = NLC_Links::add_interval( array() );
 check( 'Der woechentliche Takt wird angemeldet', 604800 === (int) $plaene['weekly']['interval'] );
 
 @unlink( ABSPATH . 'wp-content/da.pdf' );
+
+/* ============================================ Die Seite des Kunden rendern */
+
+// Ein Fehler hier ist ein weisser Bildschirm im Backend des Kunden. Die Seite
+// wird darum wirklich gerendert, nicht nur eingebunden.
+function wp_json_encode( $v, $f = 0 ) { return json_encode( $v, (int) $f ); }
+function wp_nonce_field( $a = '', $n = '_wpnonce', $r = true, $e = true ) { echo '<input type="hidden" name="' . $n . '" value="x">'; }
+function get_edit_post_link( $id = 0 ) { return 'https://kunde.de/wp-admin/post.php?post=' . (int) $id . '&action=edit'; }
+function add_menu_page( ...$a ) { $GLOBALS['menus'][] = $a; return 'toplevel_page'; }
+function wp_send_json_success( $d = null ) { $GLOBALS['json'] = $d; throw new ExitSignal( 'json' ); }
+function wp_send_json_error( $d = null, $c = 0 ) { $GLOBALS['json_error'] = $c; throw new ExitSignal( 'json' ); }
+
+require_once dirname( __DIR__ ) . '/resources/child-plugin/north-lab-child/includes/class-nlc-options.php';
+require_once dirname( __DIR__ ) . '/resources/child-plugin/north-lab-child/includes/class-nlc-status.php';
+
+$GLOBALS['options']['nlc_connection'] = array(
+	'connection_id' => 'abc', 'public_key' => 'x',
+	'dashboard_url' => 'https://panel.north-lab.de', 'dashboard_name' => 'NorthLab',
+	'connected_at'  => gmdate( 'c' ),
+);
+$GLOBALS['current']  = 9;
+$GLOBALS['users'][9] = array( 'login' => 'kunde', 'roles' => array( 'administrator' ), 'can' => true );
+
+/** Die Seite rendern und den Text zurueckgeben. */
+function seite(): string {
+	ob_start();
+	try {
+		NLC_Status::instance()->render();
+	} catch ( Throwable $e ) {
+		ob_end_clean();
+		return 'FEHLER: ' . $e->getMessage();
+	}
+	return (string) ob_get_clean();
+}
+
+// Mit laufender Sicherung und Fortschritt.
+NLC_Backuplog::stop();
+NLC_Backuplog::start( 600, 'Sicherung', array( 'phase' => 'Dateien werden geholt', 'done' => 342, 'total' => 1200 ) );
+$html = seite();
+
+check( 'Die Seite rendert ohne Fehler', 0 !== strpos( $html, 'FEHLER:' ), substr( $html, 0, 160 ) );
+check( 'Sie nennt die Agentur', false !== strpos( $html, 'NorthLab' ) );
+check( 'Sie sagt, dass gerade gesichert wird', false !== strpos( $html, 'Es läuft gerade eine Sicherung' ) );
+check( 'Sie zeigt den Stand', false !== strpos( $html, '342 von 1.200' ), 'kein Stand' );
+check( 'Und einen Balken mit dem richtigen Anteil', false !== strpos( $html, 'width:28%' ), 'kein Balken' );
+check( 'Sie fuehrt sich selbst nach', false !== strpos( $html, 'nlc_fortschritt' ) );
+check( 'Die Sicherungstabelle ist da', false !== strpos( $html, 'Erfolgreich' ) || false !== strpos( $html, 'noch keine Sicherung' ) );
+
+// Ohne Gesamtzahl darf kein Balken erscheinen.
+NLC_Backuplog::start( 600, 'Sicherung', array( 'phase' => 'Datenbank wird exportiert' ) );
+$ohne = seite();
+check( 'Ohne Gesamtzahl bleibt der Balken verborgen', false !== strpos( $ohne, 'display:none;max-width:420px' ), 'Balken sichtbar' );
+check( 'Die Phase steht trotzdem da', false !== strpos( $ohne, 'Datenbank wird exportiert' ) );
+
+// Ohne laufende Sicherung.
+NLC_Backuplog::stop();
+$ruhig = seite();
+check( 'Ohne Lauf kein Hinweis', false === strpos( $ruhig, 'Es läuft gerade eine Sicherung' ) );
+check( 'Und kein Nachfuehren', false === strpos( $ruhig, 'nlc_fortschritt' ) );
+check( 'Der Knopf fuer die Link-Pruefung ist da', false !== strpos( $ruhig, 'Jetzt prüfen' ) );
+
+// Die Abfrage des Fortschritts.
+NLC_Backuplog::start( 600, 'Sicherung', array( 'phase' => 'Übertragung', 'done' => 9, 'total' => 10 ) );
+unset( $GLOBALS['json'], $GLOBALS['json_error'] );
+try { NLC_Status::instance()->handle_progress(); } catch ( ExitSignal $e ) { /* wie in WordPress */ }
+check( 'Die Abfrage antwortet', isset( $GLOBALS['json'] ) && ! empty( $GLOBALS['json']['running'] ) );
+check( 'Mit dem Anteil', 90 === ( $GLOBALS['json']['percent'] ?? null ), var_export( $GLOBALS['json']['percent'] ?? null, true ) );
+
+// Wer nichts darf, bekommt auch nichts.
+$GLOBALS['current'] = 0;
+unset( $GLOBALS['json'], $GLOBALS['json_error'] );
+try { NLC_Status::instance()->handle_progress(); } catch ( ExitSignal $e ) { /* wie in WordPress */ }
+check( 'Ohne Berechtigung keine Auskunft', 403 === ( $GLOBALS['json_error'] ?? 0 ) && ! isset( $GLOBALS['json'] ) );
+$GLOBALS['current'] = 9;
+
+NLC_Backuplog::stop();
 
 echo "$n Prüfungen, $fails Fehler\n";
 exit( $fails > 0 ? 1 : 0 );

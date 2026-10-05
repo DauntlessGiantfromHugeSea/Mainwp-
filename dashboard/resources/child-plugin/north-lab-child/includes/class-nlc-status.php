@@ -25,6 +25,34 @@ class NLC_Status {
 	public function hooks() {
 		add_action( 'admin_menu', array( $this, 'menu' ) );
 		add_action( 'admin_post_nlc_links_scan', array( $this, 'handle_scan' ) );
+		add_action( 'wp_ajax_nlc_fortschritt', array( $this, 'handle_progress' ) );
+	}
+
+	/**
+	 * Stand der laufenden Sicherung — fuer die Anzeige, die sich selbst
+	 * nachfuehrt. Eine Seite, die man neu laden muss, um einen Fortschritt
+	 * zu sehen, zeigt keinen Fortschritt.
+	 */
+	public function handle_progress() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_send_json_error( array(), 403 );
+		}
+
+		$laeuft = NLC_Backuplog::running();
+
+		if ( null === $laeuft ) {
+			wp_send_json_success( array( 'running' => false ) );
+		}
+
+		wp_send_json_success(
+			array(
+				'running' => true,
+				'text'    => NLC_Backuplog::progress_text( $laeuft ),
+				'percent' => isset( $laeuft['percent'] ) ? $laeuft['percent'] : null,
+				'stale'   => NLC_Backuplog::stale( $laeuft ),
+				'since'   => human_time_diff( (int) $laeuft['started'] ),
+			)
+		);
 	}
 
 	/**
@@ -101,11 +129,70 @@ class NLC_Status {
 			<?php endif; ?>
 
 			<?php if ( $laeuft ) : ?>
-				<div class="notice notice-info">
-					<p><strong>Es läuft gerade eine Sicherung.</strong>
-					Begonnen <?php echo esc_html( human_time_diff( (int) $laeuft['started'] ) ); ?> her.
-					Die Website kann währenddessen etwas langsamer reagieren.</p>
+				<div class="notice notice-info" id="nlc-lauf">
+					<p>
+						<strong>Es läuft gerade eine Sicherung.</strong>
+						Begonnen <span id="nlc-lauf-seit"><?php echo esc_html( human_time_diff( (int) $laeuft['started'] ) ); ?></span> her.
+						Die Website kann währenddessen etwas langsamer reagieren.
+					</p>
+					<p id="nlc-lauf-schritt" style="margin:0 0 6px;color:#50575e">
+						<?php echo esc_html( NLC_Backuplog::progress_text( $laeuft ) ); ?>
+					</p>
+					<div id="nlc-lauf-balken"
+						style="<?php echo null === $laeuft['percent'] ? 'display:none;' : ''; ?>max-width:420px;height:6px;border-radius:3px;background:#dcdcde;overflow:hidden;margin-bottom:12px">
+						<div id="nlc-lauf-fuellung"
+							style="height:6px;border-radius:3px;background:#2271b1;width:<?php echo (int) $laeuft['percent']; ?>%"></div>
+					</div>
+					<?php if ( NLC_Backuplog::stale( $laeuft ) ) : ?>
+						<p id="nlc-lauf-still" style="margin:0 0 8px;color:#996800">
+							Seit über zehn Minuten kam keine Meldung mehr. Der Vorgang läuft vielleicht noch,
+							die Zahlen oben sind dann aber nicht mehr aktuell.
+						</p>
+					<?php endif; ?>
 				</div>
+				<script>
+				(function () {
+					var kasten  = document.getElementById('nlc-lauf');
+					var schritt = document.getElementById('nlc-lauf-schritt');
+					var balken  = document.getElementById('nlc-lauf-balken');
+					var fuell   = document.getElementById('nlc-lauf-fuellung');
+					if (!kasten) { return; }
+
+					var adresse = <?php echo wp_json_encode( admin_url( 'admin-ajax.php?action=nlc_fortschritt' ) ); ?>;
+					var leer    = 0;
+
+					function hole() {
+						fetch(adresse, { credentials: 'same-origin' })
+							.then(function (a) { return a.ok ? a.json() : null; })
+							.then(function (a) {
+								if (!a || !a.success) { return; }
+
+								// Fertig: die Seite einmal neu laden, dann steht
+								// der Lauf in der Tabelle darunter.
+								if (!a.data.running) {
+									if (++leer >= 2) { location.reload(); }
+									return;
+								}
+
+								leer = 0;
+								schritt.textContent = a.data.text || '';
+
+								if (a.data.percent === null) {
+									balken.style.display = 'none';
+								} else {
+									balken.style.display = '';
+									fuell.style.width = a.data.percent + '%';
+								}
+							})
+							// Ein fehlgeschlagener Abruf ist kein Grund, die Seite
+							// mit einer Fehlermeldung zu behelligen - beim naechsten
+							// Mal klappt es vielleicht wieder.
+							.catch(function () {});
+					}
+
+					setInterval(hole, 20000);
+				})();
+				</script>
 			<?php endif; ?>
 
 			<h2 class="title">Sicherungen</h2>

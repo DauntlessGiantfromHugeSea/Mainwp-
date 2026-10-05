@@ -452,7 +452,8 @@ class NLC_REST {
 					array(
 						'running' => NLC_Backuplog::start(
 							(int) $request->get_param( 'seconds' ),
-							(string) $request->get_param( 'label' )
+							(string) $request->get_param( 'label' ),
+							(array) $request->get_param( 'progress' )
 						),
 						'banner'  => NLC_Banner::state(),
 					)
