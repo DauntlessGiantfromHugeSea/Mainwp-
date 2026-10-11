@@ -4,6 +4,7 @@
  * @var array<int,array<string,mixed>> $feed
  * @var int                            $days
  * @var string                         $globalUrl
+ * @var bool                           $globalExists
  */
 
 use NorthLab\Core\View;
@@ -75,6 +76,11 @@ $average = $rows ? $sum / count( $rows ) : 100.0;
 					<input type="hidden" name="section" value="uptime_token">
 					<button class="btn primary">Sammel-URL erzeugen</button>
 				</form>
+			<?php elseif ( $globalExists ) : ?>
+				<p class="hint">
+					Sie ist eingerichtet. Sehen können sie nur Administratoren — wer sie hat, kann ohne
+					Anmeldung für jede Seite Störungen melden.
+				</p>
 			<?php else : ?>
 				<p class="hint">Ein Administrator kann sie unter Einstellungen → Monitoring erzeugen.</p>
 			<?php endif; ?>

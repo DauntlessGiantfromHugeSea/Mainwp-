@@ -962,6 +962,55 @@ check( 'Bericht zeigt die Verfügbarkeit beider Seiten', substr_count( $reportHt
 // ------------------------------------------------------ Reine Typlogik
 check( 'isManaged: Standard ist WordPress', SiteRepository::isManaged( array() ) );
 check( 'isManaged: monitor ist nicht verwaltet', ! SiteRepository::isManaged( array( 'site_type' => 'monitor' ) ) );
+/* ===================================== Updateseite: die Warteschlange */
+
+// Ein Fehler hier ist ein weisser Bildschirm statt der Updateseite. Die
+// Karte wird darum wirklich gerendert, mit allen drei Zustaenden.
+$updateData = static function ( array $queue ): array {
+	return array(
+		'grouped'  => array(),
+		'rows'     => array(),
+		'counts'   => array( 'core' => 0, 'plugin' => 2, 'theme' => 1 ),
+		'clients'  => array(),
+		'filters'  => array( 'client_id' => 0, 'type' => '', 'search' => '', 'include_ignored' => false, 'site_ids' => null ),
+		'sites'    => array( site( 'wordpress' ) ),
+		'excludes' => array(),
+		'queue'    => $queue,
+	);
+};
+
+$uLeer = render( 'updates/index', $updateData( array(
+	'ok' => true, 'cron' => true, 'laufend' => null, 'offen' => array(), 'letzte' => array(),
+) ) );
+
+check( 'Die Updateseite nennt die Warteschlange', str_contains( $uLeer, 'Warteschlange' ) );
+check( 'Und sagt, dass nichts ansteht', str_contains( $uLeer, 'Es ist nichts vorgemerkt' ) );
+check( 'Die Anzeige wird geladen', str_contains( $uLeer, 'update-queue.js' ) );
+check( 'Der Knopf merkt vor, er spielt nicht ein', str_contains( $uLeer, 'Alles vormerken' ) );
+check( 'Und verspricht nichts anderes', ! str_contains( $uLeer, 'Alles aktualisieren' ) );
+
+$uLaeuft = render( 'updates/index', $updateData( array(
+	'ok'      => true,
+	'cron'    => true,
+	'laufend' => array( 'site_id' => 7, 'name' => 'Kundenshop', 'total' => 3 ),
+	'offen'   => array( array( 'site_id' => 8, 'name' => 'Zweite Seite', 'total' => 0 ) ),
+	'letzte'  => array(),
+) ) );
+
+check( 'Laeuft etwas, steht der Name da', str_contains( $uLaeuft, 'Kundenshop' ) );
+check( 'Und wie viele noch warten', str_contains( $uLaeuft, '1 Seite(n) warten' ) );
+
+// Ohne Zeitplaner wird nichts abgearbeitet — das muss die Seite sagen,
+// sonst wartet jemand auf ein Update, das nie kommt.
+$uOhneCron = render( 'updates/index', $updateData( array(
+	'ok' => true, 'cron' => false, 'laufend' => null, 'offen' => array(), 'letzte' => array(),
+) ) );
+
+check( 'Ohne Zeitplaner steht eine Warnung da', str_contains( $uOhneCron, 'Zeitplaner läuft nicht' ) );
+check( 'Und nicht gleichzeitig die Entwarnung', ! str_contains( $uOhneCron, 'Es ist nichts vorgemerkt' ) );
+
+/* ==================================================== Kleinigkeiten */
+
 check( 'typeLabel kennt beide Typen', 2 === count( SiteRepository::TYPES ) );
 check( 'typeLabel faellt auf WordPress zurueck', SiteRepository::typeLabel( array() ) === SiteRepository::TYPES['wordpress'] );
 

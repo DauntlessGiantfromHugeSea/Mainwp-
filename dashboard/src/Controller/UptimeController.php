@@ -51,6 +51,9 @@ final class UptimeController extends BaseController {
 				// Wer diese Adresse hat, kann ohne Anmeldung fuer jede Seite
 				// Stoerungen melden — Alarm, Push, Verfuegbarkeitsverlauf.
 				'globalUrl' => '' !== $globalToken && Auth::isAdmin() ? self::baseUrl() . '/api/uptime/' . $globalToken : '',
+				// Damit die Seite nicht "gibt es noch nicht" sagt, wenn sie
+				// nur nicht gezeigt wird.
+				'globalExists' => '' !== $globalToken,
 			)
 		);
 	}
