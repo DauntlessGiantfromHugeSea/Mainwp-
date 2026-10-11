@@ -31,6 +31,10 @@ class NLC_Info {
 			'content'       => self::content_summary(),
 			'health'        => self::health(),
 			'security'      => NLC_Security::scan(),
+			// Welche Seiten-Caches hier laufen. Das Panel braucht das, um bei
+			// Wartungsmodus und Ein-Klick-Anmeldung den richtigen Verdacht
+			// nennen zu koennen, statt den Benutzer raten zu lassen.
+			'caches'        => class_exists( 'NLC_Cache' ) ? NLC_Cache::detected() : array(),
 			'links'         => NLC_Options::setting( 'allow_links' ) ? NLC_Links::summary() : array( 'enabled' => false ),
 			'backups'       => array(
 				'running' => NLC_Backuplog::running(),

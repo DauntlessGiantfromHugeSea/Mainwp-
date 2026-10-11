@@ -15,6 +15,8 @@ $GLOBALS['redirects']  = array();
 $GLOBALS['died']       = array();
 $GLOBALS['cookies']    = array();
 $GLOBALS['current']    = 0;
+$GLOBALS['logouts']    = array();
+$GLOBALS['nocache']    = 0;
 
 function get_option( $k, $d = false ) { return $GLOBALS['options'][ $k ] ?? $d; }
 function update_option( $k, $v, $a = null ) { $GLOBALS['options'][ $k ] = $v; return true; }
@@ -52,9 +54,10 @@ function get_locale() { return 'de_DE'; }
 function wp_date( $f, $ts ) { return gmdate( $f, $ts ); }
 function home_url( $p = '/' ) { return 'https://kunde.de' . $p; }
 function admin_url( $p = '' ) { return 'https://kunde.de/wp-admin/' . $p; }
+function wp_login_url( $redirect = '' ) { return 'https://kunde.de/wp-login.php'; }
 function add_query_arg( $k, $v, $url ) { return $url . ( str_contains( $url, '?' ) ? '&' : '?' ) . $k . '=' . rawurlencode( $v ); }
 function status_header( $c ) { $GLOBALS['status'] = $c; }
-function nocache_headers() {}
+function nocache_headers() { $GLOBALS['nocache']++; }
 function wp_doing_cron() { return false; }
 function is_admin() { return false; }
 function wp_doing_ajax() { return false; }
@@ -62,6 +65,8 @@ function is_user_logged_in() { return $GLOBALS['current'] > 0; }
 function current_user_can( $cap ) { return $GLOBALS['current'] > 0 && ! empty( $GLOBALS['users'][ $GLOBALS['current'] ]['can'] ); }
 function add_action( ...$a ) {}
 function wp_set_current_user( $id ) { $GLOBALS['current'] = $id; }
+function get_current_user_id() { return (int) $GLOBALS['current']; }
+function wp_logout() { $GLOBALS['logouts'][] = (int) $GLOBALS['current']; $GLOBALS['current'] = 0; }
 function wp_set_auth_cookie( $id, $remember ) { $GLOBALS['cookies'][] = array( 'id' => $id, 'remember' => $remember ); }
 function do_action( ...$a ) {}
 function update_user_meta( $id, $k, $v ) { $GLOBALS['users'][ $id ]['meta'][ $k ] = $v; return true; }

@@ -58,6 +58,16 @@ $users    = (array) ( $payload['users'] ?? array() );
 $links    = (array) ( $payload['links'] ?? array() );
 ?>
 
+<?php $caches = (array) ( $payload['caches'] ?? array() ); ?>
+<?php if ( $caches && $managed ) : ?>
+	<div class="notice warn">
+		<strong>Auf dieser Seite läuft ein Seiten-Cache:</strong> <?= e( implode( ', ', array_map( 'strval', $caches ) ) ) ?>.
+		Er liefert fertiges HTML aus, bevor WordPress überhaupt gefragt wird. Wartungsmodus und
+		Ein-Klick-Anmeldung können daran scheitern — beide umgehen ihn inzwischen,
+		aber wenn etwas davon nicht greift, ist das die erste Stelle zum Nachsehen.
+	</div>
+<?php endif; ?>
+
 <?php if ( ! empty( $site['last_error'] ) ) : ?>
 	<div class="notice bad"><strong>Letzter Fehler:</strong> <?= e( (string) $site['last_error'] ) ?></div>
 <?php endif; ?>

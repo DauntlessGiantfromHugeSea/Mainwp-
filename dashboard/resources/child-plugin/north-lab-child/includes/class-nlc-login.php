@@ -61,10 +61,16 @@ class NLC_Login {
 			self::TTL
 		);
 
+		// Bewusst wp-login.php und nicht die Startseite: ein Seiten-Cache
+		// liefert die Startseite als fertiges HTML aus, ohne dass PHP
+		// ueberhaupt laeuft — der Anmeldelink verpufft dann wirkungslos und
+		// der Besucher landet einfach auf der Startseite. wp-login.php wird
+		// von keinem vernuenftig eingestellten Cache ausgeliefert.
 		return array(
 			'ok'         => true,
-			'url'        => add_query_arg( self::QUERY_VAR, $token, home_url( '/' ) ),
+			'url'        => add_query_arg( self::QUERY_VAR, $token, wp_login_url() ),
 			'expires_in' => self::TTL,
+			'caches'     => class_exists( 'NLC_Cache' ) ? NLC_Cache::detected() : array(),
 			'user'       => array(
 				'id'    => (int) $user->ID,
 				'login' => $user->user_login,
@@ -109,10 +115,9 @@ class NLC_Login {
 			return;
 		}
 
-		// Ein bereits angemeldeter Benutzer braucht nichts weiter als die Weiterleitung.
-		if ( is_user_logged_in() ) {
-			self::redirect_to_admin();
-		}
+		// Diese Antwort darf niemand zwischenspeichern — weder ein Cache auf
+		// der Seite noch einer davor.
+		nocache_headers();
 
 		if ( ! preg_match( '/^[0-9a-f]{64}$/', $token ) ) {
 			self::deny();
@@ -136,6 +141,14 @@ class NLC_Login {
 
 		if ( ! $user ) {
 			self::deny();
+		}
+
+		// Wer schon angemeldet ist, ist es haeufig als jemand anders — etwa
+		// als Kunde im eigenen Browser. Frueher wurde dann nur weitergeleitet,
+		// und man landete als der falsche Benutzer im Backend oder bekam
+		// "keine ausreichenden Rechte". Das sah wie ein kaputter Link aus.
+		if ( is_user_logged_in() && get_current_user_id() !== (int) $user->ID ) {
+			wp_logout();
 		}
 
 		wp_set_current_user( $user->ID );
