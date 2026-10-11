@@ -43,6 +43,18 @@ $router  = new Router();
 
 /* ------------------------------------------------------------ Installer */
 
+// Es gibt eine config.php, aber sie ergibt keine brauchbare Einrichtung:
+// kaputt geschrieben, halb kopiert, Rechte verstellt. Frueher fuehrte das auf
+// den Installationsassistenten — und der steht jedem Besucher offen, der dann
+// eine eigene Datenbank eintraegt und sich ein Administratorkonto anlegt.
+// Lieber ehrlich stehenbleiben als die Tuer aufmachen.
+if ( is_file( NL_CONFIG_FILE ) && ! Config::isInstalled() ) {
+	http_response_code( 500 );
+	header( 'Content-Type: text/plain; charset=UTF-8' );
+	exit( "Die Konfiguration ist unvollständig oder nicht lesbar.\n"
+		. "Es wird bewusst nicht zur Einrichtung weitergeleitet — bitte config.php prüfen.\n" );
+}
+
 if ( ! Config::isInstalled() ) {
 	$router->any( '/install', array( InstallController::class, 'run' ) );
 	$router->get( '/{any:.*}', static fn(): never => Response::redirect( '/install' ) );

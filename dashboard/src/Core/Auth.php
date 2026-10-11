@@ -121,8 +121,12 @@ final class Auth {
 		// Passwort stimmt. Ist ein zweiter Faktor eingerichtet, gilt die Anmeldung
 		// erst nach dessen Prüfung — bis dahin wird nur ein Vormerker gesetzt.
 		if ( ! empty( $user['totp_enabled'] ) ) {
-			Database::update( 'users', array( 'failed_attempts' => 0, 'locked_until' => null ), array( 'id' => (int) $user['id'] ) );
-
+			// Der Zaehler wurde hier frueher geleert. Das Passwort stimmt ja —
+			// aber die Anmeldung ist noch nicht durch, und die Fehlversuche am
+			// zweiten Faktor zaehlten nur in der Sitzung. Sechs Versuche,
+			// Sitzung wegwerfen, von vorn: beliebig oft, ohne dass am Konto
+			// etwas mitlief. Geleert wird jetzt erst, wenn der zweite Faktor
+			// stimmt.
 			Session::regenerate();
 			Session::set( '_2fa_user', (int) $user['id'] );
 			Session::set( '_2fa_since', time() );
@@ -214,12 +218,28 @@ final class Auth {
 		}
 
 		if ( ! $valid ) {
+			// Am Konto zaehlen, nicht nur in der Sitzung — sonst kostet ein
+			// neuer Anlauf nur eine neue Sitzung.
+			self::registerFailure( $user );
+
+			$frisch = UserRepository::find( (int) $user['id'] );
+
+			if ( null !== $frisch && ! empty( $frisch['locked_until'] )
+				&& strtotime( (string) $frisch['locked_until'] . ' UTC' ) > time() ) {
+				self::clearChallenge();
+				Session::forget( '_2fa_tries' );
+
+				return 'Zu viele Fehlversuche. Das Konto ist vorübergehend gesperrt.';
+			}
+
 			return 'Der Code stimmt nicht. Prüfe die Uhrzeit deines Geräts oder nimm einen Ersatzcode.';
 		}
 
 		self::clearChallenge();
 		Session::forget( '_2fa_tries' );
 
+		// login() setzt failed_attempts und locked_until zurueck — jetzt ist
+		// die Anmeldung wirklich durch.
 		self::login( $user, $request );
 
 		if ( $viaRecovery ) {
@@ -248,6 +268,13 @@ final class Auth {
 		Session::set( 'user_id', (int) $user['id'] );
 
 		$ttl = max( 900, (int) Config::get( 'security.session_ttl', 43200 ) );
+
+		// Die Kennung ist frisch — regenerate() steht eine Zeile darueber.
+		// Scheitert das aber einmal (es kann), lief die Anmeldung frueher in
+		// einen Schluesselkonflikt und endete mit einem Serverfehler, obwohl
+		// Passwort und zweiter Faktor stimmten. Eine Zeile mit derselben
+		// Kennung gehoert ohnehin derselben Sitzung.
+		Database::delete( 'sessions', array( 'id' => hash( 'sha256', Session::id() ) ) );
 
 		Database::insert(
 			'sessions',

@@ -140,5 +140,52 @@ function wp_cache_flush() { $GLOBALS['cache_flushed'] = ( $GLOBALS['cache_flushe
 function is_admin_bar_showing() { return ! empty( $GLOBALS['admin_bar'] ); }
 function date_i18n( $f, $ts = null ) { return gmdate( $f, null === $ts ? time() : $ts ); }
 
+/**
+ * Gerade genug von WP_REST_Request, um die Endpunkte anzufassen.
+ *
+ * Wichtig ist der Unterschied zwischen Rumpf und Abfrage: get_param() greift
+ * in WordPress auf die Abfrage zurueck, sobald ein Wert im Rumpf fehlt, und
+ * genau daran haengt eine der Pruefungen.
+ */
+class WP_REST_Request {
+	/** @var array<string,mixed> */
+	private $rumpf;
+	/** @var array<string,mixed> */
+	private $abfrage;
+	/** @var string */
+	private $methode;
+	/** @var string */
+	private $route;
+
+	public function __construct( $rumpf = array(), $abfrage = array(), $methode = 'POST', $route = '/' ) {
+		$this->rumpf   = (array) $rumpf;
+		$this->abfrage = (array) $abfrage;
+		$this->methode = (string) $methode;
+		$this->route   = (string) $route;
+	}
+
+	public function get_json_params() { return $this->rumpf; }
+	public function get_body() { return (string) wp_json_encode( $this->rumpf ); }
+	public function get_method() { return $this->methode; }
+	public function get_route() { return $this->route; }
+
+	public function get_param( $name ) {
+		if ( array_key_exists( $name, $this->rumpf ) ) { return $this->rumpf[ $name ]; }
+		if ( array_key_exists( $name, $this->abfrage ) ) { return $this->abfrage[ $name ]; }
+		return null;
+	}
+}
+
+function rest_ensure_response( $daten ) { return $daten; }
+function rest_sanitize_boolean( $wert ) {
+	if ( is_string( $wert ) ) {
+		return ! in_array( strtolower( $wert ), array( '', '0', 'false', 'off', 'no' ), true );
+	}
+	return (bool) $wert;
+}
+function register_rest_route( ...$a ) {}
+function wp_raise_memory_limit( $kontext = 'admin' ) { return false; }
+function wp_json_encode( $v, $f = 0 ) { return json_encode( $v, (int) $f ); }
+
 class ExitSignal extends RuntimeException {}
 

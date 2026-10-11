@@ -103,6 +103,31 @@ class NLC_REST {
 			);
 		}
 
+		// Eine schon verbundene Seite darf das Dashboard nicht wechseln.
+		//
+		// Wer an einen gueltigen Verbindungscode kam — er steht im Backend im
+		// Klartext und wird bei der Uebernahme per Mail oder Chat an die
+		// Agentur weitergegeben — konnte sonst dashboard_url auf einen
+		// eigenen Server setzen. Damit war er das Dashboard dieser Seite:
+		// eigenes signiertes Manifest, eigenes ZIP, beliebiger PHP-Code ueber
+		// die Selbstaktualisierung. Die Pruefung belongs_to_dashboard half
+		// nicht, weil genau die Adresse getauscht wurde, gegen die sie prueft.
+		//
+		// Das Erneuern derselben Verbindung bleibt erlaubt: genau das tut das
+		// Panel, wenn ein Schluesselpaar ersetzt wird. Zum Wechseln des
+		// Dashboards erst im WordPress-Backend trennen.
+		$neues = $this->dashboard_host( (string) $request->get_param( 'dashboard_url' ) );
+		$bisher = NLC_Options::connection();
+		$altes  = $this->dashboard_host( is_array( $bisher ) ? (string) ( $bisher['dashboard_url'] ?? '' ) : '' );
+
+		if ( NLC_Options::is_connected() && '' !== $altes && $neues !== $altes ) {
+			return new WP_Error(
+				'nlc_other_dashboard',
+				'Diese Seite ist bereits mit einem anderen Dashboard verbunden. Zum Wechseln bitte erst im WordPress-Backend trennen.',
+				array( 'status' => 409 )
+			);
+		}
+
 		// Erst alles pruefen, dann den Code verbrauchen. Andersherum waere er
 		// nach einem spaeteren Fehler weg, obwohl er nie zu einer Verbindung fuehrte.
 		$problem = NLC_Options::check_connect_code( $code );
@@ -154,6 +179,47 @@ class NLC_REST {
 		return rest_ensure_response( array( 'disconnected' => true ) );
 	}
 
+	/**
+	 * Wirt einer Dashboard-Adresse, klein geschrieben.
+	 *
+	 * @param string $url
+	 * @return string
+	 */
+	private function dashboard_host( $url ) {
+		$host = parse_url( trim( (string) $url ), PHP_URL_HOST );
+
+		return is_string( $host ) ? strtolower( $host ) : '';
+	}
+
+	/**
+	 * Ein Wert aus dem signierten Rumpf — und nur von dort.
+	 *
+	 * Die Signatur des Dashboards deckt Verbindung, Zeit, Nonce, Methode,
+	 * Route und den Hash des Rumpfes ab. Den Query-String deckt sie nicht ab.
+	 * WP_REST_Request::get_param() greift aber auf GET zurueck, sobald ein
+	 * Wert im Rumpf fehlt — wer auf dem Uebertragungsweg sitzt, haengte also
+	 * "&all=1" an eine Anfrage fuer ein einzelnes Plugin, und die Seite
+	 * aktualisierte alles: Core, Plugins, Themes, Uebersetzungen. Signatur und
+	 * Rumpf blieben dabei gueltig.
+	 *
+	 * Das trifft nur Werte, die der Rumpf nicht ohnehin setzt — aber genau
+	 * darum wird hier ausschliesslich der Rumpf gelesen.
+	 *
+	 * @param WP_REST_Request $request
+	 * @param string          $name
+	 * @param mixed           $vorgabe
+	 * @return mixed
+	 */
+	private function signed( WP_REST_Request $request, $name, $vorgabe = null ) {
+		$rumpf = $request->get_json_params();
+
+		if ( ! is_array( $rumpf ) || ! array_key_exists( $name, $rumpf ) ) {
+			return $vorgabe;
+		}
+
+		return $rumpf[ $name ];
+	}
+
 	/* ---------------------------------------------------------------- Auslesen */
 
 	public function ping( WP_REST_Request $request ) {
@@ -176,10 +242,10 @@ class NLC_REST {
 			return new WP_Error( 'nlc_updates_disabled', 'Updates über das Dashboard sind auf dieser Seite deaktiviert.', array( 'status' => 403 ) );
 		}
 
-		$items = $request->get_param( 'items' );
+		$items = $this->signed( $request, 'items' );
 		$items = is_array( $items ) ? $items : array();
 
-		if ( rest_sanitize_boolean( $request->get_param( 'all' ) ) ) {
+		if ( rest_sanitize_boolean( $this->signed( $request, 'all' ) ) ) {
 			$available = NLC_Updates::available();
 			$items     = array();
 			foreach ( $available['core'] as $entry ) {

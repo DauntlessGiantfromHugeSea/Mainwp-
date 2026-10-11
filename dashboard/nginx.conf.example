@@ -6,7 +6,7 @@ server {
 	listen 443 ssl http2;
 	server_name panel.example.com;
 
-	root /var/www/northlab/dashboard/public;
+	root /var/www/northlab/public;
 	index index.php;
 
 	ssl_certificate     /etc/letsencrypt/live/panel.example.com/fullchain.pem;
@@ -33,6 +33,15 @@ server {
 	# Punktdateien ausser .well-known nicht ausliefern.
 	location ~ /\.(?!well-known) {
 		deny all;
+	}
+
+	# Tiefenstaffelung. Steht root richtig, ist nichts davon erreichbar — aber
+	# eine Ebene zu hoch, und storage/ liegt offen: darin stehen die
+	# Datenbankabzuege aller Kundenseiten, das Protokoll und der private
+	# SSH-Schluessel zum Sicherungsspeicher. Bei Apache faengt die .htaccess in
+	# storage/ das ab, bei nginx gibt es nichts Vergleichbares.
+	location ~ ^/(storage|src|views|bin|resources|tests)(/|$) {
+		return 404;
 	}
 }
 

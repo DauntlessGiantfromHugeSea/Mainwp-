@@ -85,7 +85,23 @@ rsync -a "$NL_SRC/dashboard/storage/" "$NL_TARGET/storage/"
 # --- 3. Rechte wiederherstellen --------------------------------------------
 
 echo "→ Rechte setzen"
-chown -R "$NL_USER:$NL_USER" "$NL_TARGET"
+
+# Der Webserver braucht am Programmcode nur Leserechte. Frueher stand hier
+# ein pauschales chown -R auf den ganzen Baum: damit gehoerten src/, public/,
+# views/, bin/, config.php und resources/child-plugin dem Webbenutzer, und
+# der darf, was ihm gehoert, auch ueberschreiben — Besitz schlaegt die Modi.
+# Das chmod 550 sperrte nur das oberste Verzeichnis. Besonders heikel war
+# resources/child-plugin: daraus baut das Panel das ZIP, dessen Pruefsumme es
+# anschliessend signiert und an jede Kundenseite ausliefert.
+#
+# Also: der Code gehoert root, die Gruppe des Webbenutzers darf lesen.
+# Beschreibbar ist nur storage/.
+chown -R "root:$NL_USER" "$NL_TARGET"
+find "$NL_TARGET" -type d -exec chmod 750 {} +
+find "$NL_TARGET" -type f -exec chmod 640 {} +
+find "$NL_TARGET/bin" -type f -name '*.sh' -exec chmod 750 {} + 2>/dev/null || true
+
+chown -R "$NL_USER:$NL_USER" "$NL_TARGET/storage"
 chmod -R 750 "$NL_TARGET/storage"
 chmod 640 "$NL_TARGET/config.php"
 chmod 550 "$NL_TARGET"

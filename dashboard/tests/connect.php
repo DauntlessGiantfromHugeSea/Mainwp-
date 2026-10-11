@@ -116,5 +116,144 @@ check( 'Nach abgelehntem Schluessel gilt der Code noch', null === NLC_Options::c
 NLC_Options::consume_connect_code( $code );
 check( 'Erst der Erfolg verbraucht den Code', null !== NLC_Options::check_connect_code( $code ) );
 
+/* ================================ Der Endpunkt selbst: /connect und /update */
+
+// Doppel statt der echten Klassen: NLC_Info und NLC_Updates greifen tief in
+// WordPress hinein. Hier geht es um den Endpunkt, nicht um sie.
+class NLC_Info {
+	public static function ping() { return array( 'version' => '1.0.0' ); }
+	public static function collect( $force = false ) { return array( 'site' => array() ); }
+}
+
+class NLC_Updates {
+	public static function available() {
+		return array(
+			'core'         => array( array( 'slug' => 'wordpress' ) ),
+			'plugins'      => array( array( 'slug' => 'eins' ), array( 'slug' => 'zwei' ) ),
+			'themes'       => array( array( 'slug' => 'thema' ) ),
+			'translations' => 2,
+		);
+	}
+
+	public static function run( array $items ) {
+		$GLOBALS['nlc_update_aufrufe'] = $items;
+
+		return array_map(
+			static function ( $eintrag ) { return array( 'slug' => $eintrag['slug'], 'success' => true ); },
+			$items
+		);
+	}
+}
+
+require_once dirname( __DIR__ ) . '/resources/child-plugin/north-lab-child/includes/class-nlc-rest.php';
+
+$rest = new NLC_REST();
+
+/** Ein echtes Schluesselpaar — openssl_pkey_get_public prueft wirklich. */
+$paar = openssl_pkey_new( array( 'private_key_bits' => 2048, 'private_key_type' => OPENSSL_KEYTYPE_RSA ) );
+$oeff = (string) openssl_pkey_get_details( $paar )['key'];
+
+/* ------------------------------------------- Das Dashboard darf nicht wechseln */
+
+reset_all();
+$code = NLC_Options::generate_connect_code();
+
+$erste = $rest->connect(
+	new WP_REST_Request(
+		array(
+			'code'          => $code,
+			'public_key'    => $oeff,
+			'connection_id' => 'abc123',
+			'dashboard_url' => 'https://panel.north-lab.de',
+		)
+	)
+);
+
+check( 'Die erste Verbindung kommt zustande', is_array( $erste ) && ! empty( $erste['connected'] ) );
+check( 'Danach gilt die Seite als verbunden', NLC_Options::is_connected() );
+
+// Der Fall, um den es geht: wer an einen gueltigen Code kommt — er steht im
+// Backend im Klartext und geht bei der Uebernahme per Mail an die Agentur —
+// setzte frueher einfach eine eigene dashboard_url und war damit das
+// Dashboard dieser Seite. Ueber die Selbstaktualisierung heisst das:
+// beliebiger PHP-Code, signiert mit dem eigenen Schluessel.
+$code2 = NLC_Options::generate_connect_code();
+$fremd = $rest->connect(
+	new WP_REST_Request(
+		array(
+			'code'          => $code2,
+			'public_key'    => $oeff,
+			'connection_id' => 'uebernahme',
+			'dashboard_url' => 'https://angreifer.example',
+		)
+	)
+);
+
+check( 'Ein fremdes Dashboard wird abgewiesen', $fremd instanceof WP_Error );
+check( 'Mit einem verstaendlichen Grund', $fremd instanceof WP_Error && str_contains( $fremd->get_error_message(), 'anderen Dashboard' ) );
+check( 'Die bestehende Verbindung bleibt, wie sie war', 'abc123' === ( NLC_Options::connection()['connection_id'] ?? '' ) );
+check( 'Und der Code ist nicht verbrannt', null === NLC_Options::check_connect_code( $code2 ) );
+
+// Das Erneuern derselben Verbindung muss weiter gehen — genau das tut das
+// Panel, wenn es ein Schluesselpaar ersetzt.
+$erneut = $rest->connect(
+	new WP_REST_Request(
+		array(
+			'code'          => $code2,
+			'public_key'    => $oeff,
+			'connection_id' => 'neu456',
+			'dashboard_url' => 'https://panel.north-lab.de/',
+		)
+	)
+);
+
+check( 'Dasselbe Dashboard darf die Verbindung erneuern', is_array( $erneut ) && ! empty( $erneut['connected'] ) );
+check( 'Und die neue Kennung steht', 'neu456' === ( NLC_Options::connection()['connection_id'] ?? '' ) );
+
+/* ----------------------------- Was nicht signiert ist, wird nicht gelesen */
+
+// Die Signatur deckt Verbindung, Zeit, Nonce, Methode, Route und den Hash des
+// Rumpfes ab — nicht den Query-String. get_param() greift aber auf die
+// Abfrage zurueck, sobald ein Wert im Rumpf fehlt. Wer auf dem
+// Uebertragungsweg sass, haengte "&all=1" an eine Anfrage fuer ein einzelnes
+// Plugin, und die Seite aktualisierte alles.
+NLC_Options::save_settings( array( 'allow_updates' => true ) );
+
+$GLOBALS['nlc_update_aufrufe'] = array();
+
+$angehaengt = $rest->update(
+	new WP_REST_Request(
+		array( 'items' => array( array( 'type' => 'plugin', 'slug' => 'eins' ) ) ),
+		array( 'all' => '1' ),
+		'POST',
+		'/northlab/v1/update'
+	)
+);
+
+$verarbeitet = $GLOBALS['nlc_update_aufrufe'];
+
+check( 'Ein angehaengtes all=1 wird nicht beachtet', 1 === count( $verarbeitet ), (string) count( $verarbeitet ) );
+check( 'Es bleibt bei dem einen Plugin', 'eins' === ( $verarbeitet[0]['slug'] ?? '' ) );
+
+// Dasselbe fuer die Liste selbst: wer sie nur an die Adresse haengt,
+// bestimmt sonst, was eingespielt wird.
+$GLOBALS['nlc_update_aufrufe'] = array();
+
+$rest->update(
+	new WP_REST_Request(
+		array( 'all' => false ),
+		array( 'items' => array( array( 'type' => 'plugin', 'slug' => 'untergeschoben' ) ) ),
+		'POST',
+		'/northlab/v1/update'
+	)
+);
+
+check( 'Eine nur angehaengte Liste wird nicht eingespielt', array() === $GLOBALS['nlc_update_aufrufe'] );
+
+// Im Rumpf, also signiert, gilt es weiterhin.
+$GLOBALS['nlc_update_aufrufe'] = array();
+$rest->update( new WP_REST_Request( array( 'all' => true ), array(), 'POST', '/northlab/v1/update' ) );
+check( 'Im signierten Rumpf gilt all weiterhin', count( $GLOBALS['nlc_update_aufrufe'] ) > 1, (string) count( $GLOBALS['nlc_update_aufrufe'] ) );
+
 printf( "%d Prüfungen, %d Fehler\n", $n, $fails );
 exit( $fails ? 1 : 0 );

@@ -61,6 +61,14 @@ final class Session {
 
 	public static function regenerate(): void {
 		self::start();
+
+		// start() steigt in der Kommandozeile aus — dort gibt es keine
+		// Sitzung, die sich erneuern liesse, und session_regenerate_id()
+		// warnte in jeden Prueflauf hinein.
+		if ( PHP_SESSION_ACTIVE !== session_status() ) {
+			return;
+		}
+
 		session_regenerate_id( true );
 	}
 

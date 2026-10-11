@@ -7,8 +7,36 @@
  * nur gefragt, ob eine Verbindung ueberhaupt zustande kommt.
  */
 header( 'Content-Type: text/plain; charset=utf-8' );
+header( 'X-Robots-Tag: noindex, nofollow' );
 
-$wirt = $_GET['box'] ?? 'uXXXXXX.your-storagebox.de';
+/*
+ * Diese Datei wird auf eine fremde Kundenseite gelegt und danach wieder
+ * entfernt. "Danach wieder entfernen" klappt nicht immer — und was
+ * liegenbleibt, ist von aussen aufrufbar. Deshalb zwei Riegel:
+ *
+ *  1. Sie laeuft nur zwei Stunden lang. Wer sie hochlaedt, benutzt sie in
+ *     dieser Zeit; wer sie vergisst, hinterlaesst nichts Brauchbares.
+ *  2. Das Ziel muss eine Storage Box sein. Ohne diese Pruefung waere die
+ *     Datei ein offener Portscanner: ?box=10.0.0.5 haette von der
+ *     Kundenseite aus jedes interne Ziel auf Port 22 und 23 angetastet und
+ *     dessen Begruessung ausgegeben.
+ */
+$angelegt = (int) @filemtime( __FILE__ );
+
+if ( $angelegt > 0 && time() - $angelegt > 7200 ) {
+	http_response_code( 410 );
+	exit( "Dieses Werkzeug ist abgelaufen. Bitte die Datei löschen.\n" );
+}
+
+$wirt = (string) ( $_GET['box'] ?? 'uXXXXXX.your-storagebox.de' );
+
+if ( ! preg_match( '/^u\d+(-sub\d+)?\.your-storagebox\.de$/i', $wirt ) ) {
+	http_response_code( 400 );
+	exit(
+		"Als Ziel ist nur eine Storage Box erlaubt, etwa:\n"
+		. "  ?box=u123456.your-storagebox.de\n"
+	);
+}
 
 printf( "Ziel: %s\n", $wirt );
 printf( "PHP:  %s\n\n", PHP_VERSION );

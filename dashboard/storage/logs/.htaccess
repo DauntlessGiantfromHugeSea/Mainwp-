@@ -1,1 +1,10 @@
-Deny from all
+# Apache 2.4
+<IfModule mod_authz_core.c>
+	Require all denied
+</IfModule>
+
+# Apache 2.2 — und 2.4 mit mod_access_compat. Ohne eines von beiden bricht
+# der Server mit "Invalid command 'Deny'" ab, statt zu sperren.
+<IfModule !mod_authz_core.c>
+	Deny from all
+</IfModule>

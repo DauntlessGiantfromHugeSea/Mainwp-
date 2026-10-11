@@ -51,7 +51,10 @@ if [ -z "$SCHLUESSEL" ]; then
 fi
 
 if [ -z "$SCHLUESSEL" ]; then
-	SCHLUESSEL=$( find /var/www /opt /srv /home -maxdepth 6 -path '*/storage/restic/.ssh/id_ed25519' 2>/dev/null | head -1 )
+	# /home steht bewusst nicht dabei: dieses Skript laeuft als root und baut
+	# mit dem gefundenen Schluessel eine Verbindung auf. Ein unprivilegierter
+	# Benutzer koennte dort sonst einen eigenen unterschieben.
+	SCHLUESSEL=$( find /var/www /opt /srv -maxdepth 6 -path '*/storage/restic/.ssh/id_ed25519' 2>/dev/null | head -1 )
 fi
 
 if [ -n "$SCHLUESSEL" ]; then

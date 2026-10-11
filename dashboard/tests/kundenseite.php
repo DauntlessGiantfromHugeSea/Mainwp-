@@ -522,7 +522,6 @@ check( 'Der woechentliche Takt wird angemeldet', 604800 === (int) $plaene['weekl
 
 // Ein Fehler hier ist ein weisser Bildschirm im Backend des Kunden. Die Seite
 // wird darum wirklich gerendert, nicht nur eingebunden.
-function wp_json_encode( $v, $f = 0 ) { return json_encode( $v, (int) $f ); }
 function wp_nonce_field( $a = '', $n = '_wpnonce', $r = true, $e = true ) { echo '<input type="hidden" name="' . $n . '" value="x">'; }
 function get_edit_post_link( $id = 0 ) { return 'https://kunde.de/wp-admin/post.php?post=' . (int) $id . '&action=edit'; }
 function add_menu_page( ...$a ) { $GLOBALS['menus'][] = $a; return 'toplevel_page'; }
