@@ -35,6 +35,10 @@ final class SettingsController extends BaseController {
 				'iconSource' => IconService::hasSource(),
 				'iconOwn'    => IconService::hasOwnRaster(),
 				'iconStamp'  => IconService::stamp(),
+				// Dasselbe Logo wird zum Menuesymbol im Backend der Kunden.
+				// Wie es dort aussieht, gehoert hierher — sonst sieht man es
+				// erst auf einer fremden Seite.
+				'menuGlyph'  => IconService::menuGlyph(),
 				'jobs'      => Scheduler::overview(),
 				'cronToken' => Setting::get( 'cron_token', '' ),
 				'cronUrl'   => rtrim( (string) Config::get( 'app.url', '' ), '/' ) . '/api/cron/' . Setting::get( 'cron_token', '' ),

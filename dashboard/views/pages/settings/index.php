@@ -359,6 +359,8 @@ $get = static fn( string $key, string $default = '' ): string => $settings[ $key
 				<p class="small muted">
 					Steht im Browser-Reiter, als Lesezeichen und als Symbol der installierten
 					Anwendung auf Handy und Desktop. Dunkler Grund, dein Logo darauf.
+					<strong>Dasselbe Logo</strong> wird ausserdem zum Menüsymbol im WordPress-Backend
+					deiner Kunden — dort einfarbig, als Silhouette.
 				</p>
 
 				<form method="post" action="<?= e( url( '/settings' ) ) ?>" enctype="multipart/form-data">
@@ -434,6 +436,39 @@ $get = static fn( string $key, string $default = '' ): string => $settings[ $key
 						<p class="small muted mt">
 							Farbe und Rand wirken sofort in der Vorschau. Erst „Symbole erzeugen“
 							schreibt sie fest.
+						</p>
+					<?php endif; ?>
+				</div>
+			</div>
+
+			<div class="card">
+				<div class="card-head"><h3>Im Backend deiner Kunden</h3></div>
+				<div class="card-body" style="text-align:center">
+					<?php $glyph = (array) ( $menuGlyph ?? array() ); ?>
+					<?php if ( ! empty( $glyph['ok'] ) ) : ?>
+						<!-- Genau so, wie WordPress es zeichnet: als Maske, Farbe vom Menü.
+							 Darum hier derselbe graue Ton und dieselbe Größe. -->
+						<div style="display:inline-flex;align-items:center;gap:10px;background:#1d2327;
+							border-radius:6px;padding:10px 16px 10px 10px">
+							<span style="display:block;width:20px;height:20px;background-color:#a7aaad;
+								-webkit-mask:url('<?= e( (string) $glyph['data'] ) ?>') no-repeat center/contain;
+								mask:url('<?= e( (string) $glyph['data'] ) ?>') no-repeat center/contain"></span>
+							<span style="color:#f0f0f1;font-size:14px"><?= e( (string) ( $settings['agency_name'] ?? 'NorthLab' ) ) ?></span>
+						</div>
+						<p class="small muted mt">
+							Einfarbig, weil die Farbe vom WordPress-Menü kommt — grau wie die anderen
+							Punkte, weiss wenn deiner aktiv ist. Nur die Form deines Logos zählt.
+						</p>
+					<?php else : ?>
+						<div class="notice warn" style="text-align:left">
+							<strong>Für das Menü der Kundenseiten reicht es noch nicht.</strong>
+							<?= e( (string) ( $glyph['reason'] ?? 'Es ist kein Logo hinterlegt.' ) ) ?>
+							Dort bleibt solange das mitgelieferte Schild.
+						</div>
+						<p class="small muted" style="text-align:left">
+							Am besten ein <strong>SVG</strong>: winzig, scharf in jeder Grösse. Ein PNG geht
+							auch, wenn es klein ist und einen <em>durchsichtigen</em> Hintergrund hat —
+							auf weissem Grund wird aus der Silhouette ein Klotz.
 						</p>
 					<?php endif; ?>
 				</div>

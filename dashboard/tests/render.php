@@ -810,6 +810,7 @@ $settingsPage = render(
 		'iconSource' => true,
 		'iconOwn'    => true,
 		'iconStamp'  => '1700000000',
+		'menuGlyph'  => array( 'ok' => true, 'data' => 'data:image/svg+xml;base64,' . base64_encode( '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" fill="#000"><circle cx="24" cy="24" r="20"/></svg>' ), 'reason' => '' ),
 		'jobs'      => array(),
 		'cronToken' => 'x',
 		'cronUrl'   => 'https://panel.test/api/cron/x',
@@ -868,6 +869,7 @@ $noLogo = render(
 		'iconSource' => false,
 		'iconOwn'    => false,
 		'iconStamp'  => '0',
+		'menuGlyph'  => array( 'ok' => false, 'data' => '', 'reason' => 'Es ist kein Logo hinterlegt.' ),
 		'jobs'       => array(),
 		'cronToken'  => 'x',
 		'cronUrl'    => 'https://panel.test/api/cron/x',
@@ -877,6 +879,25 @@ $noLogo = render(
 );
 check( 'Ohne Logo keine Vorschauflaeche', ! str_contains( $noLogo, 'id="icon-canvas"' ) );
 check( 'Sondern das mitgelieferte Symbol', str_contains( $noLogo, 'Noch kein eigenes Logo hinterlegt' ) );
+
+/* ------------------- Das Menuesymbol der Kundenseiten, vorab zu sehen */
+
+// Dasselbe Logo wird zum Menuepunkt im Backend der Kunden. Wie es dort
+// aussieht, gehoert hierher — sonst sieht man es erst auf einer fremden
+// Seite und kann es dort nicht mehr aendern.
+check( 'Die Seite sagt, dass das Logo auch beim Kunden landet',
+	str_contains( $settingsPage, 'Menüsymbol im WordPress-Backend' ) );
+check( 'Mit einer Vorschau davon', str_contains( $settingsPage, 'Im Backend deiner Kunden' ) );
+// Als Maske, nicht als Bild: nur so sieht man die einfarbige Fassung und
+// nicht das bunte Logo.
+check( 'Und zwar als Maske', str_contains( $settingsPage, 'mask:url(' ) );
+check( 'In der Farbe des WordPress-Menues', str_contains( $settingsPage, '#a7aaad' ) );
+check( 'Mit dem Namen der Agentur daneben', str_contains( $settingsPage, '>NorthLab<' ) );
+
+check( 'Ohne brauchbares Logo wird keine Vorschau vorgegaukelt', ! str_contains( $noLogo, 'mask:url(' ) );
+check( 'Sondern gesagt, woran es liegt', str_contains( $noLogo, 'Es ist kein Logo hinterlegt' ) );
+check( 'Und was dann im Menue steht', str_contains( $noLogo, 'bleibt solange das mitgelieferte Schild' ) );
+check( 'Dazu der Rat, es als SVG zu hinterlegen', str_contains( $noLogo, 'durchsichtigen' ) );
 check( 'Und kein Zuruecksetzen', ! str_contains( $noLogo, 'value="icon_reset"' ) );
 check( 'Push zeigt die Zahl der Geraete', str_contains( $settingsPage, '2 Gerät(e) angemeldet' ) );
 check( 'Ein- und Ausschalter sind angelegt', str_contains( $settingsPage, 'data-push-enable' ) && str_contains( $settingsPage, 'data-push-disable' ) );
