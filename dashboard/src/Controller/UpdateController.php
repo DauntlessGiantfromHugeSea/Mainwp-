@@ -6,9 +6,12 @@ namespace NorthLab\Controller;
 
 use NorthLab\Core\Auth;
 use NorthLab\Core\Request;
+use NorthLab\Core\Response;
 use NorthLab\Repository\ClientRepository;
 use NorthLab\Repository\SiteRepository;
 use NorthLab\Repository\UpdateRepository;
+use NorthLab\Service\Scheduler;
+use NorthLab\Service\UpdateQueue;
 use NorthLab\Service\UpdateService;
 
 final class UpdateController extends BaseController {
@@ -34,21 +37,39 @@ final class UpdateController extends BaseController {
 				'filters'  => $filters,
 				'sites'    => SiteRepository::all( array( 'has_updates' => true, 'site_ids' => Auth::visibleSiteIds() ) ),
 				'excludes' => UpdateService::excludes(),
+				'queue'    => UpdateQueue::status( Auth::visibleSiteIds() ),
 			)
 		);
 	}
 
 	/**
-	 * Updates einspielen — einzeln, gruppiert oder alles.
+	 * Updates vormerken — einzeln, gruppiert oder alles.
+	 *
+	 * Eingespielt wird nicht hier. Ein Update dauert auf der Kundenseite
+	 * Sekunden bis Minuten je Paket; lief das im Webaufruf, hing der Browser
+	 * so lange, ein PHP-Arbeiter war belegt, und bei "alles einspielen" ueber
+	 * neun Seiten lief die Anfrage ins Zeitlimit — danach wusste niemand, was
+	 * durchgelaufen war. Jetzt macht es der Zeitplaner, genau wie bei den
+	 * Sicherungen, und die Seite zeigt den Fortschritt.
 	 */
 	public function apply( Request $request ): void {
 		Auth::requireWrite();
+
+		if ( ! Scheduler::isCronHealthy() ) {
+			$this->respond(
+				$request,
+				false,
+				'Der Zeitplaner läuft nicht — ein vorgemerktes Update würde liegen bleiben. '
+					. 'Bitte erst den Cron-Aufruf in Ordnung bringen.',
+				$this->back( $request, '/updates' )
+			);
+		}
 
 		$mode = $request->string( 'mode', 'selected' );
 
 		switch ( $mode ) {
 			case 'all':
-				$results = UpdateService::applyEverything( Auth::visibleSiteIds() );
+				$results = UpdateQueue::requestMany( $this->sitesWithUpdates() );
 				$this->respond( $request, true, $this->summarize( $results ), $this->back( $request, '/updates' ), array( 'results' => $results ) );
 				// no break — respond() beendet die Ausführung.
 
@@ -60,7 +81,21 @@ final class UpdateController extends BaseController {
 					$this->respond( $request, false, 'Typ und Slug fehlen.', $this->back( $request, '/updates' ) );
 				}
 
-				$results = UpdateService::applyAcrossSites( $type, $slug, Auth::visibleSiteIds() );
+				$results = array();
+
+				foreach ( UpdateRepository::query( array( 'type' => $type, 'site_ids' => Auth::visibleSiteIds() ) ) as $row ) {
+					if ( (string) $row['slug'] !== $slug ) {
+						continue;
+					}
+
+					$ergebnis  = UpdateQueue::request( (int) $row['site_id'], array( array( 'type' => $type, 'slug' => $slug ) ) );
+					$results[] = array(
+						'site'    => (string) $row['site_name'],
+						'success' => $ergebnis['ok'],
+						'message' => $ergebnis['ok'] ? 'vorgemerkt' : $ergebnis['error'],
+					);
+				}
+
 				$this->respond( $request, true, $this->summarize( $results ), $this->back( $request, '/updates' ), array( 'results' => $results ) );
 
 			case 'site':
@@ -71,16 +106,15 @@ final class UpdateController extends BaseController {
 					$this->respond( $request, false, 'Seite nicht gefunden.', $this->back( $request, '/updates' ) );
 				}
 
-				$result = UpdateService::apply( $site );
+				$ergebnis = UpdateQueue::request( $siteId );
 
 				$this->respond(
 					$request,
-					$result['ok'],
-					$result['ok']
-						? sprintf( '%s: %d Update(s) eingespielt, %d fehlgeschlagen.', $site['name'], $result['succeeded'], $result['failed'] )
-						: $result['error'],
-					$this->back( $request, '/updates' ),
-					array( 'results' => $result['results'] )
+					$ergebnis['ok'],
+					$ergebnis['ok']
+						? sprintf( '%s ist vorgemerkt — der Zeitplaner spielt die Updates gleich ein.', $site['name'] )
+						: $ergebnis['error'],
+					$this->back( $request, '/updates' )
 				);
 
 			case 'selected':
@@ -110,18 +144,42 @@ final class UpdateController extends BaseController {
 						continue;
 					}
 
-					$result = UpdateService::apply( $site, $items );
+					$ergebnis = UpdateQueue::request( (int) $siteId, $items );
 
 					$results[] = array(
 						'site'    => (string) $site['name'],
-						'success' => $result['ok'] && 0 === $result['failed'],
-						'message' => $result['ok']
-							? sprintf( '%d von %d', $result['succeeded'], count( $items ) )
-							: $result['error'],
+						'success' => $ergebnis['ok'],
+						'message' => $ergebnis['ok'] ? sprintf( '%d vorgemerkt', count( $items ) ) : $ergebnis['error'],
 					);
 				}
 
 				$this->respond( $request, true, $this->summarize( $results ), $this->back( $request, '/updates' ), array( 'results' => $results ) );
 		}
+	}
+
+	/**
+	 * Stand der Warteschlange — die Seite fragt das in Abstaenden nach.
+	 */
+	public function status( Request $request ): void {
+		Auth::requireLogin();
+
+		Response::json( UpdateQueue::status( Auth::visibleSiteIds() ) );
+	}
+
+	/**
+	 * Alle sichtbaren Seiten, auf denen etwas offen ist.
+	 *
+	 * @return array<int,int>
+	 */
+	private function sitesWithUpdates(): array {
+		$ids = array();
+
+		foreach ( SiteRepository::all( array( 'has_updates' => true, 'site_ids' => Auth::visibleSiteIds() ) ) as $site ) {
+			if ( empty( $site['is_paused'] ) ) {
+				$ids[] = (int) $site['id'];
+			}
+		}
+
+		return $ids;
 	}
 }

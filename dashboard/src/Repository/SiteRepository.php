@@ -302,6 +302,9 @@ final class SiteRepository {
 		Database::delete( 'site_data', array( 'site_id' => $id ) );
 		Database::delete( 'updates', array( 'site_id' => $id ) );
 		Database::delete( 'uptime_events', array( 'site_id' => $id ) );
+		// Eine vorgemerkte Aufgabe fuer eine Seite, die es nicht mehr gibt,
+		// wuerde der Zeitplaner bei jedem Durchgang erneut aufgreifen.
+		Database::delete( 'update_jobs', array( 'site_id' => $id ) );
 		Database::delete( 'sites', array( 'id' => $id ) );
 	}
 

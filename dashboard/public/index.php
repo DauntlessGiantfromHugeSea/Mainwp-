@@ -126,6 +126,7 @@ $router->post( '/sites/{id:\d+}/login', array( SiteUserController::class, 'login
 // Updates
 $router->get( '/updates', array( UpdateController::class, 'index' ) );
 $router->post( '/updates/apply', array( UpdateController::class, 'apply' ) );
+$router->get( '/updates/status', array( UpdateController::class, 'status' ) );
 
 // Sicherungen
 $router->get( '/backups', array( BackupController::class, 'index' ) );

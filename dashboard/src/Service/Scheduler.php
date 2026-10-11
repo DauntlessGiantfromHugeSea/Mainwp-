@@ -33,6 +33,9 @@ final class Scheduler {
 		// und eine von Hand angestossene Sicherung soll nicht erst in fuenf
 		// Minuten loslaufen.
 		'backups'      => array( 'label' => 'Sicherungen', 'interval' => 60 ),
+		// Wie bei den Sicherungen jede Minute nachsehen: ein von Hand
+		// angestossenes Update soll gleich loslaufen, nicht in fuenf Minuten.
+		'updates'      => array( 'label' => 'Vorgemerkte Updates', 'interval' => 60 ),
 		'cleanup'      => array( 'label' => 'Aufräumen', 'interval' => 86400 ),
 	);
 
@@ -46,7 +49,7 @@ final class Scheduler {
 	 * halbe Stunde ist dafür nichts. Liefe die Sperre vorher ab, startete der
 	 * nächste Durchgang dieselbe Sicherung ein zweites Mal.
 	 */
-	private const LOCK_TIMEOUTS = array( 'backups' => 21600 );
+	private const LOCK_TIMEOUTS = array( 'backups' => 21600, 'updates' => 3600 );
 
 	/**
 	 * Alle fälligen Aufgaben ausführen.
@@ -190,11 +193,15 @@ final class Scheduler {
 			case 'backups':
 				return BackupService::runWindow();
 
+			case 'updates':
+				return UpdateQueue::runDue();
+
 			case 'cleanup':
 				$activity = ActivityRepository::prune( Setting::getInt( 'activity_retention', 180 ) );
 				$uptime   = UptimeRepository::prune( Setting::getInt( 'uptime_retention', 365 ) );
 				$hooks    = WebhookRepository::prune( 30 );
 				$sessions = Auth::pruneSessions();
+				$jobs     = UpdateQueue::prune();
 
 				// Ein täglicher Gesamtstand fängt auf, wenn einzelne Ereignisse
 				// unterwegs verloren gegangen sind.
@@ -203,11 +210,12 @@ final class Scheduler {
 					: 0;
 
 				return sprintf(
-					'%d Protokoll, %d Uptime, %d Zustellungen, %d Sitzungen entfernt, %d Gesamtstand',
+					'%d Protokoll, %d Uptime, %d Zustellungen, %d Sitzungen, %d Update-Aufträge entfernt, %d Gesamtstand',
 					$activity,
 					$uptime,
 					$hooks,
 					$sessions,
+					$jobs,
 					$snapshot
 				);
 		}

@@ -24,7 +24,7 @@ use NorthLab\Service\MaintenanceService;
 use NorthLab\Service\SiteService;
 use NorthLab\Service\VulnerabilityService;
 use NorthLab\Service\SyncService;
-use NorthLab\Service\UpdateService;
+use NorthLab\Service\UpdateQueue;
 
 final class SiteController extends BaseController {
 
@@ -559,11 +559,13 @@ final class SiteController extends BaseController {
 					break;
 
 				case 'update':
-					$outcome   = UpdateService::apply( $site );
+					// Vormerken, nicht einspielen: eine Sammelaktion ueber ein
+					// Dutzend Seiten im Webaufruf lief frueher ins Zeitlimit.
+					$outcome   = UpdateQueue::request( $siteId );
 					$results[] = array(
 						'site'    => $site['name'],
-						'success' => $outcome['ok'] && 0 === $outcome['failed'],
-						'message' => $outcome['ok'] ? sprintf( '%d Update(s)', $outcome['succeeded'] ) : $outcome['error'],
+						'success' => $outcome['ok'],
+						'message' => $outcome['ok'] ? 'vorgemerkt' : $outcome['error'],
 					);
 					break;
 

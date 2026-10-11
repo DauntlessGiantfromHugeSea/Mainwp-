@@ -358,7 +358,7 @@ $links    = (array) ( $payload['links'] ?? array() );
 					<?= csrf_field() ?>
 					<input type="hidden" name="mode" value="site">
 					<input type="hidden" name="site_id" value="<?= e( (string) $site['id'] ) ?>">
-					<button class="btn primary sm" data-busy="läuft…">Alle einspielen</button>
+					<button class="btn primary sm" data-busy="…">Alle vormerken</button>
 				</form>
 			<?php endif; ?>
 		</div>

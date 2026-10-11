@@ -9,7 +9,7 @@ namespace NorthLab\Core;
  */
 final class Migrator {
 
-	public const SCHEMA_VERSION = 16;
+	public const SCHEMA_VERSION = 17;
 
 	/**
 	 * Alle Tabellen anlegen (idempotent).
@@ -337,6 +337,29 @@ final class Migrator {
 				PRIMARY KEY (`id`),
 				KEY `site_time` (`site_id`, `started_at`),
 				KEY `status` (`status`)
+			) {$charset}",
+
+			// Schema 17: vorgemerkte Updates. Ein Update lief frueher im
+			// Webaufruf — der Browser wartete, bis die Kundenseite fertig war,
+			// und ein PHP-Arbeiter war die ganze Zeit belegt. Bei "alles
+			// einspielen" ueber neun Seiten waren das Minuten bis zum Zeitlimit.
+			// Jetzt wird vorgemerkt und der Zeitplaner arbeitet ab.
+			"CREATE TABLE IF NOT EXISTS `{$p}update_jobs` (
+				`id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+				`site_id` BIGINT UNSIGNED NOT NULL,
+				`items` TEXT NULL,
+				`status` VARCHAR(20) NOT NULL DEFAULT 'wartet',
+				`requested_at` DATETIME NOT NULL,
+				`requested_by` BIGINT UNSIGNED NULL DEFAULT NULL,
+				`started_at` DATETIME NULL DEFAULT NULL,
+				`finished_at` DATETIME NULL DEFAULT NULL,
+				`total` SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+				`succeeded` SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+				`failed` SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+				`note` TEXT NULL,
+				PRIMARY KEY (`id`),
+				KEY `offen` (`status`, `requested_at`),
+				KEY `site_id` (`site_id`)
 			) {$charset}",
 
 			"CREATE TABLE IF NOT EXISTS `{$p}user_sites` (

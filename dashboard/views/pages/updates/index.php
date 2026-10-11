@@ -7,6 +7,7 @@
  * @var array<string,mixed>               $filters
  * @var array<int,array<string,mixed>>    $sites
  * @var array<int,string>                 $excludes
+ * @var array<string,mixed>               $queue
  */
 
 use NorthLab\Core\Auth;
@@ -24,7 +25,7 @@ if ( $canWrite && $total > 0 ) {
 		. 'data-confirm="Wirklich alle offenen Updates auf allen Seiten einspielen?">'
 		. csrf_field()
 		. '<input type="hidden" name="mode" value="all">'
-		. '<button class="btn primary" data-busy="Läuft…">Alles aktualisieren</button></form>'
+		. '<button class="btn primary" data-busy="…">Alles vormerken</button></form>'
 	);
 }
 ?>
@@ -38,6 +39,31 @@ if ( $canWrite && $total > 0 ) {
 	<div class="stat"><div class="label">WordPress-Core</div><div class="value"><?= e( (string) $counts['core'] ) ?></div></div>
 	<div class="stat"><div class="label">Plugins</div><div class="value"><?= e( (string) $counts['plugin'] ) ?></div></div>
 	<div class="stat"><div class="label">Themes</div><div class="value"><?= e( (string) $counts['theme'] ) ?></div></div>
+</div>
+
+<div class="card" id="update-queue" data-status-url="<?= e( url( '/updates/status' ) ) ?>">
+	<div class="card-head">
+		<h2>Warteschlange</h2>
+		<span class="muted small">Updates laufen im Hintergrund, nicht im Browser</span>
+	</div>
+	<div class="card-body" data-status-out>
+		<?php
+		// Erster Stand direkt aus dem Aufruf, damit die Karte nicht leer
+		// aufblitzt, bevor die erste Nachfrage zurueck ist.
+		$laufend = $queue['laufend'] ?? null;
+		$offen   = (array) ( $queue['offen'] ?? array() );
+		?>
+		<?php if ( empty( $queue['cron'] ) ) : ?>
+			<p class="notice bad">Der Zeitplaner läuft nicht — es wird nichts abgearbeitet.</p>
+		<?php elseif ( null !== $laufend ) : ?>
+			<p class="small"><strong><?= e( (string) $laufend['name'] ) ?></strong> — wird gerade aktualisiert</p>
+		<?php elseif ( ! $offen ) : ?>
+			<p class="small muted">Es ist nichts vorgemerkt.</p>
+		<?php endif; ?>
+		<?php if ( $offen ) : ?>
+			<p class="small muted"><?= e( (string) count( $offen ) ) ?> Seite(n) warten.</p>
+		<?php endif; ?>
+	</div>
 </div>
 
 <?php if ( $excludes ) : ?>
@@ -207,3 +233,5 @@ if ( $canWrite && $total > 0 ) {
 		</div>
 	</form>
 </div>
+
+<script src="<?= e( nl_asset( '/assets/js/update-queue.js' ) ) ?>" defer></script>
