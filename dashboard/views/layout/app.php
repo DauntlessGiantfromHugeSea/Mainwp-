@@ -88,7 +88,9 @@ $navKey = static fn( string $prefix ): string => str_starts_with( $nav, $prefix 
 			<div class="nav-label">Agentur</div>
 			<a href="<?= e( url( '/clients' ) ) ?>" class="<?= e( $navKey( 'clients' ) ) ?>">Kunden</a>
 			<a href="<?= e( url( '/reports' ) ) ?>" class="<?= e( $navKey( 'reports' ) ) ?>">Berichte</a>
-			<a href="<?= e( url( '/webhooks' ) ) ?>" class="<?= e( $navKey( 'webhooks' ) ) ?>">Webhooks</a>
+			<?php if ( \NorthLab\Core\Auth::isAdmin() ) : ?>
+				<a href="<?= e( url( '/webhooks' ) ) ?>" class="<?= e( $navKey( 'webhooks' ) ) ?>">Webhooks</a>
+			<?php endif; ?>
 			<a href="<?= e( url( '/activity' ) ) ?>" class="<?= e( $navKey( 'activity' ) ) ?>">Protokoll</a>
 
 			<div class="nav-label">System</div>

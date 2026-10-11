@@ -4,6 +4,7 @@ declare( strict_types = 1 );
 
 namespace NorthLab\Service;
 
+use NorthLab\Core\Http;
 use NorthLab\Repository\ActivityRepository;
 use NorthLab\Repository\SiteRepository;
 
@@ -235,6 +236,17 @@ final class SiteUserService {
 				'ok'    => false,
 				'url'   => '',
 				'error' => (string) ( $data['error'] ?? 'Die Seite hat keine Anmeldeadresse geliefert.' ),
+			);
+		}
+
+		// Das Panel leitet den Browser gleich dorthin weiter — und zwar genau
+		// in dem Moment, in dem jemand eine WordPress-Anmeldemaske erwartet.
+		// Eine fremde Adresse waere eine perfekte Phishing-Gelegenheit.
+		if ( ! Http::sameHost( (string) $data['url'], (string) $site['url'] ) ) {
+			return array(
+				'ok'    => false,
+				'url'   => '',
+				'error' => 'Die Seite hat eine Anmeldeadresse auf einem fremden Host geliefert. Das Panel folgt ihr nicht.',
 			);
 		}
 

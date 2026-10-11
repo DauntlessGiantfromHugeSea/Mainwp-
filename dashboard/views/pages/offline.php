@@ -27,4 +27,6 @@ View::set( 'pageTitle', 'Keine Verbindung' );
 	deiner Anmeldung, und ein veralteter Überblick wäre schlimmer als gar keiner.
 </p>
 
-<button class="btn primary" type="button" onclick="location.reload()">Erneut versuchen</button>
+<!-- Ein Link statt eines Knopfes mit Inline-Skript: diese Seite kommt aus dem
+     Service Worker und laedt bewusst kein JavaScript. -->
+<a class="btn primary" href="<?= e( url( '/' ) ) ?>">Erneut versuchen</a>

@@ -40,9 +40,11 @@ final class DashboardController extends BaseController {
 				'attention'     => array_slice( $attention, 0, 12 ),
 				'updateCounts'  => UpdateRepository::countsByType( $visible ),
 				'topUpdates'    => array_slice( UpdateRepository::grouped( array( 'site_ids' => $visible ) ), 0, 8, true ),
-				'clients'       => ClientRepository::all(),
+				'clients'       => ClientRepository::all( $visible ),
 				'activity'      => ActivityRepository::query( array( 'limit' => 12, 'site_ids' => $visible ) ),
-				'uptimeFeed'    => UptimeRepository::feed( 8 ),
+				// Mit $visible: sonst stehen Name, Kennung und Zustand fremder
+				// Seiten auf der Startseite eines eingeschraenkten Kontos.
+				'uptimeFeed'    => UptimeRepository::feed( 8, $visible ),
 				'queue'         => WebhookRepository::queueStats(),
 				'jobs'          => Scheduler::overview(),
 				'lastCron'      => Scheduler::lastHeartbeat(),

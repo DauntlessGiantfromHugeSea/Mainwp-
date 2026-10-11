@@ -4,6 +4,7 @@ declare( strict_types = 1 );
 
 namespace NorthLab\Service;
 
+use NorthLab\Core\Http;
 use NorthLab\Core\Logger;
 use NorthLab\Repository\ActivityRepository;
 use NorthLab\Repository\SiteRepository;
@@ -83,7 +84,14 @@ final class SyncService {
 				'wp_version'      => (string) ( $payload['environment']['wp_version'] ?? '' ),
 				'php_version'     => (string) ( $payload['environment']['php_version'] ?? '' ),
 				'child_version'   => (string) ( $payload['child_version'] ?? '' ),
-				'admin_url'       => (string) ( $payload['site']['admin_url'] ?? '' ),
+				// Die Backend-Adresse wird zu einem Knopf in der Seitenansicht.
+				// Sie kommt aus der Antwort der Kundenseite — also pruefen:
+				// Schema und Wirt muessen zur eingetragenen Adresse passen,
+				// sonst zeigt der Knopf "WP-Admin" dorthin, wo eine
+				// uebernommene Seite ihn haben will.
+				'admin_url'       => Http::sameHost( (string) ( $payload['site']['admin_url'] ?? '' ), (string) $site['url'] )
+					? (string) $payload['site']['admin_url']
+					: '',
 				'pending_updates' => $count,
 				'security_score'  => $securityScore,
 			)

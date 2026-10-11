@@ -113,5 +113,14 @@ final class IconController extends BaseController {
 		// Der Inhalt kommt aus einem Upload — der Browser soll nicht raten.
 		header( 'X-Content-Type-Options: nosniff' );
 		header( 'Cache-Control: public, max-age=86400' );
+
+		// Ein SVG ist ein Dokument, kein Bild: direkt aufgerufen rendert der
+		// Browser es mit allem, was drinsteht, und zwar im Ursprung des
+		// Panels. Die Saeuberung in IconService arbeitet mit vier regulaeren
+		// Ausdruecken, und daran kommt man mit genug Geduld vorbei
+		// (selbstschliessendes <script>, Entitaeten, <animate>). Die Sandbox
+		// nimmt dem Dokument den Ursprung — als Bild eingebunden aendert sie
+		// nichts, als Seite aufgerufen bleibt nichts uebrig.
+		header( "Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'; sandbox" );
 	}
 }

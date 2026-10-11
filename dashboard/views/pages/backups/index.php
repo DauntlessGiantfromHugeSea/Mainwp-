@@ -102,7 +102,13 @@ $needsSsh = in_array( $targetType, array( 'storagebox', 'sftp' ), true );
 	<div class="stat">
 		<div class="label">Ziel</div>
 		<div class="value" style="font-size:15px;margin-top:8px;word-break:break-all">
-			<?= '' !== $repository ? e( \NorthLab\Service\Restic::mask( $repository ) ) : '<span class="muted">nicht gesetzt</span>' ?>
+			<?php if ( '' !== $repository ) : ?>
+				<?= e( \NorthLab\Service\Restic::mask( $repository ) ) ?>
+			<?php elseif ( $isAdmin ) : ?>
+				<span class="muted">nicht gesetzt</span>
+			<?php else : ?>
+				<span class="muted">eingerichtet — die Adresse sehen nur Administratoren</span>
+			<?php endif; ?>
 		</div>
 	</div>
 </div>
@@ -269,7 +275,7 @@ $needsSsh = in_array( $targetType, array( 'storagebox', 'sftp' ), true );
 							<?php if ( '' === $publicKey ) : ?>
 								<em>— erst unten unter „SSH-Zugang“ ein Schlüsselpaar erzeugen.</em>
 							<?php else : ?>
-								<textarea class="mono mt" rows="3" readonly onclick="this.select()"><?= e( $publicKey ) ?></textarea>
+								<textarea class="mono mt" rows="3" readonly data-select-all><?= e( $publicKey ) ?></textarea>
 							<?php endif; ?>
 						</li>
 						<li>Hier oben auf <em>Jetzt einrichten</em> klicken und das Passwortfeld
@@ -508,7 +514,7 @@ $needsSsh = in_array( $targetType, array( 'storagebox', 'sftp' ), true );
 						<?php else : ?>
 							<div class="field">
 								<label for="pub">Öffentlicher Schlüssel</label>
-								<textarea id="pub" class="mono" rows="3" readonly onclick="this.select()"><?= e( $publicKey ) ?></textarea>
+								<textarea id="pub" class="mono" rows="3" readonly data-select-all><?= e( $publicKey ) ?></textarea>
 								<div class="hint">Dieser Teil darf heraus. Der private bleibt auf dem Server.</div>
 							</div>
 

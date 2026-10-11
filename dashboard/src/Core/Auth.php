@@ -301,6 +301,24 @@ final class Auth {
 	}
 
 	/**
+	 * Alle Sitzungen ausser der laufenden beenden.
+	 *
+	 * Fuer den Passwortwechsel im eigenen Profil: wer sein Passwort aendert,
+	 * weil er jemanden in seinem Konto vermutet, erwartet, dass dessen Zugang
+	 * damit endet. Das tat er bisher nicht — die fremde Sitzung lief bis zu
+	 * zwoelf Stunden weiter. Die eigene bleibt bestehen, sonst wirft der
+	 * Wechsel einen aus dem eigenen Panel.
+	 *
+	 * @return int Beendete Sitzungen.
+	 */
+	public static function logoutOthers( int $userId ): int {
+		return Database::run(
+			'DELETE FROM `' . Database::table( 'sessions' ) . '` WHERE `user_id` = :uid AND `id` <> :eigene',
+			array( 'uid' => $userId, 'eigene' => hash( 'sha256', Session::id() ) )
+		)->rowCount();
+	}
+
+	/**
 	 * Abgelaufene Sitzungen entfernen.
 	 */
 	public static function pruneSessions(): int {

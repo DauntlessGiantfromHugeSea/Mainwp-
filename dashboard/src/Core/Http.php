@@ -207,4 +207,23 @@ final class Http {
 
 		return in_array( $scheme, array( 'http', 'https' ), true ) && '' !== $host;
 	}
+
+	/**
+	 * Gehoert diese Adresse zum selben Wirt wie jene?
+	 *
+	 * Fuer alles, was aus der Antwort einer Kundenseite kommt und danach als
+	 * Adresse benutzt wird. Die Signatur schuetzt die Anfrage, nicht die
+	 * Antwort — eine uebernommene Kundenseite besitzt den Schluessel selbst
+	 * und kann damit jede Adresse liefern, die sie will.
+	 */
+	public static function sameHost( string $url, string $referenz ): bool {
+		if ( ! self::isValidUrl( $url ) ) {
+			return false;
+		}
+
+		$a = strtolower( (string) parse_url( $url, PHP_URL_HOST ) );
+		$b = strtolower( (string) parse_url( $referenz, PHP_URL_HOST ) );
+
+		return '' !== $a && $a === $b;
+	}
 }

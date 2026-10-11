@@ -48,7 +48,9 @@ final class UptimeController extends BaseController {
 				'rows'      => $rows,
 				'feed'      => UptimeRepository::feed( 60, Auth::visibleSiteIds() ),
 				'days'      => $days,
-				'globalUrl' => '' !== $globalToken ? self::baseUrl() . '/api/uptime/' . $globalToken : '',
+				// Wer diese Adresse hat, kann ohne Anmeldung fuer jede Seite
+				// Stoerungen melden — Alarm, Push, Verfuegbarkeitsverlauf.
+				'globalUrl' => '' !== $globalToken && Auth::isAdmin() ? self::baseUrl() . '/api/uptime/' . $globalToken : '',
 			)
 		);
 	}

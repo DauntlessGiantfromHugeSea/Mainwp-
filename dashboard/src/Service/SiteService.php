@@ -7,6 +7,7 @@ namespace NorthLab\Service;
 use NorthLab\Core\Config;
 use NorthLab\Core\Crypto;
 use NorthLab\Core\Http;
+use NorthLab\Repository\ActivityRepository;
 use NorthLab\Repository\SiteRepository;
 
 /**
@@ -251,7 +252,31 @@ final class SiteService {
 			ChildClient::post( $site, '/disconnect', array(), 20 );
 		}
 
+		// Erst die Sicherungen, dann die Zeile — purge() braucht die Seite
+		// noch. Bisher blieb beim Entfernen alles liegen: der Spiegel unter
+		// storage/backups/site-<id> mit dem Datenbankabzug des Kunden und
+		// (bei "komplette Installation") dessen wp-config.php, dazu die
+		// Sicherungspunkte im Speicherziel. Im Panel war die Seite weg, die
+		// Daten des Kunden waren es nicht — und niemand sah sie mehr, also
+		// fiel es auch nicht auf. Kein --prune: das Umpacken erledigt ohnehin
+		// das Ende des naechsten Sicherungsfensters.
+		$aufgeraeumt = BackupService::purge( $siteId, false );
+
 		SiteRepository::delete( $siteId );
+
+		if ( ! $aufgeraeumt['ok'] ) {
+			// Die Seite ist weg, die Sicherung nicht — das muss jemand wissen,
+			// statt es stillschweigend liegen zu lassen.
+			ActivityRepository::log(
+				'site.backup_left',
+				sprintf(
+					'Seite "%s" entfernt, aber die Sicherung blieb stehen: %s',
+					(string) $site['name'],
+					$aufgeraeumt['error']
+				),
+				array( 'level' => 'warning' )
+			);
+		}
 
 		EventBus::dispatch(
 			'site.disconnected',

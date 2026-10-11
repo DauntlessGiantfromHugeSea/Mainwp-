@@ -107,7 +107,7 @@ View::set( 'pageTitle', 'Benutzer' );
 									<button class="btn sm danger" type="submit"
 										formaction="<?= e( url( '/users/' . $user['id'] . '/delete' ) ) ?>"
 										formnovalidate
-										onclick="return confirm('Konto <?= e( (string) $user['email'] ) ?> wirklich löschen?')">Löschen</button>
+										data-confirm="Konto <?= e( (string) $user['email'] ) ?> wirklich löschen?">Löschen</button>
 								<?php endif; ?>
 							</div>
 
@@ -116,7 +116,7 @@ View::set( 'pageTitle', 'Benutzer' );
 									<button class="btn sm" type="submit"
 										formaction="<?= e( url( '/users/' . $user['id'] . '/reset-2fa' ) ) ?>"
 										formnovalidate
-										onclick="return confirm('Zwei-Faktor-Anmeldung für <?= e( (string) $user['email'] ) ?> zurücksetzen? Das Konto muss sie danach neu einrichten.')">
+										data-confirm="Zwei-Faktor-Anmeldung für <?= e( (string) $user['email'] ) ?> zurücksetzen? Das Konto muss sie danach neu einrichten.">
 										2FA zurücksetzen
 									</button>
 								</div>

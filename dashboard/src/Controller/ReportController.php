@@ -21,7 +21,7 @@ final class ReportController extends BaseController {
 		$this->view(
 			'reports/index',
 			array(
-				'reports'  => ReportRepository::recent( 60, $request->int( 'client_id' ) ),
+				'reports'  => ReportRepository::recent( 60, $request->int( 'client_id' ), Auth::visibleSiteIds() ),
 				'clients'  => ClientRepository::all( Auth::visibleSiteIds() ),
 				'sites'    => SiteRepository::all( array_filter( array( 'site_ids' => Auth::visibleSiteIds() ), static fn( $v ): bool => null !== $v ) ),
 				'pdfReady' => PdfService::available(),
@@ -59,13 +59,32 @@ final class ReportController extends BaseController {
 		);
 	}
 
+	/**
+	 * Bericht laden und dabei pruefen, ob dieses Konto ihn sehen darf.
+	 *
+	 * Bricht selbst ab, wenn nicht — der Aufrufer bekommt dann nie etwas
+	 * zurueck. Absichtlich dieselbe Antwort wie fuer einen Bericht, den es
+	 * nicht gibt: sonst verraet die Unterscheidung, welche Nummern belegt sind.
+	 *
+	 * @return array<string,mixed>|null
+	 */
+	private function reportForUser( Request $request ): ?array {
+		$report = ReportRepository::find( (int) $request->params['id'] );
+
+		if ( null === $report || ! ReportRepository::visibleTo( $report, Auth::visibleSiteIds() ) ) {
+			Response::notFound( 'Bericht nicht gefunden.' );
+			return null;
+		}
+
+		return $report;
+	}
+
 	public function show( Request $request ): void {
 		Auth::requireLogin();
 
-		$report = ReportRepository::find( (int) $request->params['id'] );
+		$report = $this->reportForUser( $request );
 
 		if ( null === $report ) {
-			Response::notFound( 'Bericht nicht gefunden.' );
 			return;
 		}
 
@@ -119,10 +138,9 @@ final class ReportController extends BaseController {
 	public function download( Request $request ): void {
 		Auth::requireLogin();
 
-		$report = ReportRepository::find( (int) $request->params['id'] );
+		$report = $this->reportForUser( $request );
 
 		if ( null === $report ) {
-			Response::notFound( 'Bericht nicht gefunden.' );
 			return;
 		}
 
@@ -142,10 +160,9 @@ final class ReportController extends BaseController {
 	public function pdf( Request $request ): void {
 		Auth::requireLogin();
 
-		$report = ReportRepository::find( (int) $request->params['id'] );
+		$report = $this->reportForUser( $request );
 
 		if ( null === $report ) {
-			Response::notFound( 'Bericht nicht gefunden.' );
 			return;
 		}
 
@@ -182,7 +199,13 @@ final class ReportController extends BaseController {
 	public function destroy( Request $request ): void {
 		Auth::requireWrite();
 
-		ReportRepository::delete( (int) $request->params['id'] );
+		$report = $this->reportForUser( $request );
+
+		if ( null === $report ) {
+			return;
+		}
+
+		ReportRepository::delete( (int) $report['id'] );
 
 		$this->respond( $request, true, 'Bericht gelöscht.', '/reports' );
 	}

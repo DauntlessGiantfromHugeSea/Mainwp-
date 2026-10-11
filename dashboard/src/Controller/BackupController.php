@@ -39,6 +39,18 @@ final class BackupController extends BaseController {
 		}
 
 		$available = Restic::available();
+		$istAdmin  = Auth::isAdmin();
+
+		// Der Verlauf nennt Namen, Datei- und Bytemengen und die Fehlertexte
+		// von restic. Die Zeilenliste darueber war immer schon eingeschraenkt,
+		// diese Abfrage nicht.
+		$verlaufWo     = '';
+		$verlaufParams = array();
+
+		if ( null !== $visible ) {
+			[ $in, $verlaufParams ] = Database::inClause( $visible, 'vis' );
+			$verlaufWo              = ' WHERE b.site_id IN ' . $in;
+		}
 
 		$this->view(
 			'backups/index',
@@ -46,8 +58,10 @@ final class BackupController extends BaseController {
 				'rows'        => $rows,
 				'history'     => Database::select(
 					'SELECT b.*, s.name AS site_name FROM `' . Database::table( 'backups' ) . '` b
-					 INNER JOIN `' . Database::table( 'sites' ) . '` s ON s.id = b.site_id
-					 ORDER BY b.id DESC LIMIT 40'
+					 INNER JOIN `' . Database::table( 'sites' ) . '` s ON s.id = b.site_id'
+					 . $verlaufWo . '
+					 ORDER BY b.id DESC LIMIT 40',
+					$verlaufParams
 				),
 				'enabled'     => Setting::getBool( 'backup_enabled', false ),
 				'configured'  => Restic::configured(),
@@ -57,7 +71,11 @@ final class BackupController extends BaseController {
 				'cronHealthy'   => \NorthLab\Service\Scheduler::isCronHealthy(),
 				'cronLast'      => \NorthLab\Service\Scheduler::lastHeartbeat(),
 				'scheduleWarning' => BackupService::scheduleWarning(),
-				'repository'  => Restic::repository(),
+				// Die Adresse nennt Benutzer, Wirt und Port des Sicherungsziels
+				// aller Kunden. mask() entfernt nur ein eingebettetes Passwort
+				// — bei einer sftp-Adresse also nichts. Das gehoert zur
+				// Einrichtung und damit zu den Administratoren.
+				'repository'  => $istAdmin ? Restic::repository() : '',
 				'targetType'  => Restic::type(),
 				'checks'      => Restic::diagnose(),
 				'publicKey'   => Restic::publicKey(),
@@ -165,7 +183,7 @@ final class BackupController extends BaseController {
 
 		$punkte = array();
 
-		foreach ( Restic::snapshots( BackupService::hostFor( $site ) ) as $eintrag ) {
+		foreach ( Restic::snapshots( BackupService::hostFor( $site ), BackupService::tagFor( (int) $site['id'] ) ) as $eintrag ) {
 			$punkte[] = array(
 				'id'   => (string) ( $eintrag['short_id'] ?? '' ),
 				'zeit' => (string) ( $eintrag['time'] ?? '' ),

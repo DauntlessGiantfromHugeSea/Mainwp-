@@ -1116,13 +1116,26 @@ final class Restic {
 	 *
 	 * @return array{ok:bool,output:string}
 	 */
-	public static function forget( string $host, bool $prune = false ): array {
+	public static function forget( string $host, bool $prune = false, string $tag = '' ): array {
 		$args = array(
 			'forget',
 			'--host', $host,
-			'--keep-daily', (string) max( 1, Setting::getInt( 'backup_keep_daily', 7 ) ),
-			'--keep-weekly', (string) max( 0, Setting::getInt( 'backup_keep_weekly', 4 ) ),
-			'--keep-monthly', (string) max( 0, Setting::getInt( 'backup_keep_monthly', 6 ) ),
+		);
+
+		// Ohne das Kennzeichen wuerde die Aufbewahrungsregel einer Seite ueber
+		// die Sicherungspunkte einer anderen mit demselben Wirt laufen.
+		if ( '' !== $tag ) {
+			$args[] = '--tag';
+			$args[] = $tag;
+		}
+
+		$args = array_merge(
+			$args,
+			array(
+				'--keep-daily', (string) max( 1, Setting::getInt( 'backup_keep_daily', 7 ) ),
+				'--keep-weekly', (string) max( 0, Setting::getInt( 'backup_keep_weekly', 4 ) ),
+				'--keep-monthly', (string) max( 0, Setting::getInt( 'backup_keep_monthly', 6 ) ),
+			)
 		);
 
 		if ( $prune ) {
@@ -1148,12 +1161,25 @@ final class Restic {
 	 *
 	 * @return array<int,array<string,mixed>>
 	 */
-	public static function snapshots( string $host = '' ): array {
+	public static function snapshots( string $host = '', string $tag = '' ): array {
 		$args = array( 'snapshots', '--json' );
 
 		if ( '' !== $host ) {
 			$args[] = '--host';
 			$args[] = $host;
+		}
+
+		// Der Wirtsname allein ist kein Schluessel: er kommt aus der Adresse
+		// der Seite, und zwei betreute Installationen koennen denselben Wirt
+		// haben (kunde.de/shop und kunde.de/blog). Die Eigensicherung des
+		// Panels liegt sogar unter dem festen Wirt "panel" — wer eine Seite
+		// mit der Adresse https://panel anlegt, bekaeme sonst deren
+		// Sicherungspunkte zu sehen, und darin steht die config.php mit dem
+		// Hauptschluessel. Das Kennzeichen site-<id> wird seit jeher
+		// mitgeschrieben; hier wird es endlich auch benutzt.
+		if ( '' !== $tag ) {
+			$args[] = '--tag';
+			$args[] = $tag;
 		}
 
 		$result = self::run( $args, true, 120 );

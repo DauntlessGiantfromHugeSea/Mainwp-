@@ -252,12 +252,34 @@ final class UserController extends BaseController {
 					$this->respond( $request, false, 'Ersatzcodes gibt es erst mit aktiver Zwei-Faktor-Anmeldung.', '/profile/2fa' );
 				}
 
+				// Ersatzcodes ueberleben eine beendete Sitzung — wer sie sich
+				// ausstellen laesst, hat danach einen dauerhaften zweiten
+				// Faktor in der Hand. Also auch hier das eigene Passwort.
+				if ( ! password_verify( (string) $request->post( 'password', '' ), (string) $user['password_hash'] ) ) {
+					$this->respond( $request, false, 'Für neue Ersatzcodes bitte das eigene Passwort bestätigen.', '/profile/2fa' );
+				}
+
 				Session::set( '_fresh_recovery', UserRepository::regenerateRecoveryCodes( $userId ) );
 
 				$this->respond( $request, true, 'Neue Ersatzcodes erzeugt. Die alten gelten nicht mehr.', '/profile/2fa' );
 
 			case 'restart':
+				// Derselbe Zustandsuebergang wie 'disable' — also derselbe
+				// Nachweis. Ohne ihn konnte, wer eine fremde Sitzung in der
+				// Hand hatte, die Zwei-Faktor-Anmeldung samt Ersatzcodes
+				// abraeumen und danach den eigenen Authenticator eintragen.
+				// Nur solange noch gar nichts bestaetigt ist, gibt es nichts
+				// zu schuetzen: dann ist es wirklich ein Neuanfang.
+				if ( ! empty( $user['totp_enabled'] )
+					&& ! password_verify( (string) $request->post( 'password', '' ), (string) $user['password_hash'] ) ) {
+					$this->respond( $request, false, 'Zum Zurücksetzen bitte das eigene Passwort bestätigen.', '/profile/2fa' );
+				}
+
 				UserRepository::disableTotp( $userId );
+
+				if ( ! empty( $user['totp_enabled'] ) ) {
+					ActivityRepository::log( 'user.2fa_disabled', 'Zwei-Faktor-Anmeldung zurückgesetzt.', array( 'level' => 'warning' ) );
+				}
 
 				$this->respond( $request, true, 'Einrichtung zurückgesetzt.', '/profile/2fa' );
 		}
@@ -291,6 +313,22 @@ final class UserController extends BaseController {
 				$error = 'Das aktuelle Passwort ist falsch.';
 			} else {
 				$error = UserRepository::updatePassword( $userId, $new );
+
+				if ( null === $error ) {
+					// Wer sein Passwort aendert, will damit fremde Zugaenge
+					// beenden. Der Administratorpfad macht das schon immer
+					// (siehe update()), der eigene bisher nicht — eine
+					// uebernommene Sitzung lief einfach weiter.
+					$beendet = Auth::logoutOthers( $userId );
+
+					if ( $beendet > 0 ) {
+						ActivityRepository::log(
+							'user.sessions_ended',
+							sprintf( 'Passwort geändert — %d weitere Sitzung(en) beendet.', $beendet ),
+							array( 'level' => 'warning' )
+						);
+					}
+				}
 			}
 		}
 

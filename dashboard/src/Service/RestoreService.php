@@ -35,13 +35,26 @@ final class RestoreService {
 			return false;
 		}
 
-		foreach ( Restic::snapshots( BackupService::hostFor( $site ) ) as $eintrag ) {
+		// Gebunden an das Kennzeichen der Seite, nicht nur an den Wirtsnamen.
+		// Der Wirt kommt aus der Adresse und ist kein Schluessel: zwei
+		// Installationen unter kunde.de/shop und kunde.de/blog ergeben
+		// denselben, und die Eigensicherung des Panels liegt unter "panel".
+		$eigen = 'site-' . (int) $site['id'];
+
+		foreach ( Restic::snapshots( BackupService::hostFor( $site ), BackupService::tagFor( (int) $site['id'] ) ) as $eintrag ) {
 			$id    = (string) ( $eintrag['id'] ?? '' );
 			$kurz  = (string) ( $eintrag['short_id'] ?? '' );
 
-			if ( 0 === strcasecmp( $snapshot, $id ) || 0 === strcasecmp( $snapshot, $kurz ) ) {
-				return true;
+			if ( 0 !== strcasecmp( $snapshot, $id ) && 0 !== strcasecmp( $snapshot, $kurz ) ) {
+				continue;
 			}
+
+			// Zweiter Riegel, unabhaengig vom Kennzeichen: der Punkt muss den
+			// Spiegel genau dieser Seite enthalten. Das faengt auch die alten
+			// Punkte ab, die noch ohne Kennzeichen geschrieben wurden. Nur der
+			// letzte Teil des Pfades wird verglichen — das Speicherverzeichnis
+			// darf umziehen, ohne dass alte Sicherungen unlesbar werden.
+			return basename( rtrim( (string) ( $eintrag['paths'][0] ?? '' ), '/' ) ) === $eigen;
 		}
 
 		return false;

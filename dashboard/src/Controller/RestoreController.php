@@ -31,7 +31,7 @@ final class RestoreController extends BaseController {
 		}
 
 		$snapshots = Restic::configured() && Restic::available()
-			? Restic::snapshots( BackupService::hostFor( $site ) )
+			? Restic::snapshots( BackupService::hostFor( $site ), BackupService::tagFor( (int) $site['id'] ) )
 			: array();
 
 		// Neueste zuerst — danach sucht man.

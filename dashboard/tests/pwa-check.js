@@ -75,7 +75,13 @@ const BASE = 'http://127.0.0.1:8099';
 	const text = await page.locator('body').innerText().catch(() => '');
 	check('Ohne Netz kommt die Hinweisseite', text.includes('Keine Verbindung'));
 	check('Und sie erklärt, warum nichts Altes gezeigt wird', text.includes('hängt an'));
-	check('Mit einem Knopf zum erneuten Versuch', await page.locator('button').isVisible());
+	// Ein Link, kein Knopf: diese Seite kommt aus dem Service Worker und laedt
+	// bewusst kein JavaScript, und seit die Content-Security-Policy steht,
+	// fuehrt der Browser ein onclick im Attribut ohnehin nicht mehr aus.
+	const zurueck = page.locator('a.btn');
+	check('Mit einem Weg zurück ins Panel', await zurueck.isVisible());
+	const ziel = String(await zurueck.getAttribute('href') || '');
+	check('Und er zeigt wirklich ins Panel (' + ziel + ')', ziel === BASE + '/' || ziel === '/');
 
 	const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
 	check('Hinweisseite läuft auf dem Handy nicht über (' + overflow + 'px)', overflow <= 0);

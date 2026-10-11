@@ -17,13 +17,20 @@ use NorthLab\Service\WebhookService;
 final class WebhookController extends BaseController {
 
 	public function index( Request $request ): void {
-		Auth::requireLogin();
+		// Webhooks sind Agentur-Infrastruktur, keine Seitenarbeit: hier stehen
+		// das HMAC-Geheimnis jedes Endpunkts und die Empfangsadresse fuers
+		// Monitoring. Mit Letzterer kann man ohne Anmeldung fuer jede Seite
+		// Stoerungen melden, mit Ersterem gegenueber dem Empfaenger gueltig
+		// signierte Nachrichten faelschen. Beides hat in einem Lesekonto
+		// nichts zu suchen, und ein Endpunkt ohne Kundenbindung bekommt die
+		// Ereignisse aller Kunden — wer einen anlegen darf, liest alles mit.
+		Auth::requireAdmin();
 
 		// Die Empfangs-URL fürs Monitoring soll einfach da sein, wenn man die
 		// Seite aufruft — ein zusätzlicher Klick vorher bringt niemandem etwas.
 		$token = trim( Setting::get( 'uptime_global_token', '' ) );
 
-		if ( '' === $token && Auth::isAdmin() ) {
+		if ( '' === $token ) {
 			$token = Crypto::monitorToken();
 			Setting::set( 'uptime_global_token', $token );
 		}
@@ -40,14 +47,14 @@ final class WebhookController extends BaseController {
 				'incomingUrl' => '' !== $token
 					? rtrim( (string) Config::get( 'app.url', '' ), '/' ) . '/api/uptime/' . $token
 					: '',
-				'apiToken'    => Auth::isAdmin() ? Setting::get( 'api_token', '' ) : '',
+				'apiToken'    => Setting::get( 'api_token', '' ),
 				'panelUrl'    => rtrim( (string) Config::get( 'app.url', '' ), '/' ),
 			)
 		);
 	}
 
 	public function store( Request $request ): void {
-		Auth::requireWrite();
+		Auth::requireAdmin();
 
 		[ $id, $error ] = WebhookRepository::create( $this->payload( $request ) );
 
@@ -55,7 +62,7 @@ final class WebhookController extends BaseController {
 	}
 
 	public function update( Request $request ): void {
-		Auth::requireWrite();
+		Auth::requireAdmin();
 
 		$error = WebhookRepository::update( (int) $request->params['id'], $this->payload( $request ) );
 
@@ -63,7 +70,7 @@ final class WebhookController extends BaseController {
 	}
 
 	public function destroy( Request $request ): void {
-		Auth::requireWrite();
+		Auth::requireAdmin();
 
 		WebhookRepository::delete( (int) $request->params['id'] );
 
@@ -71,7 +78,7 @@ final class WebhookController extends BaseController {
 	}
 
 	public function test( Request $request ): void {
-		Auth::requireWrite();
+		Auth::requireAdmin();
 
 		$result = WebhookService::test( (int) $request->params['id'] );
 
@@ -89,7 +96,7 @@ final class WebhookController extends BaseController {
 	 * Erstbefüllung: den kompletten Stand an alle Endpunkte schicken.
 	 */
 	public function snapshot( Request $request ): void {
-		Auth::requireWrite();
+		Auth::requireAdmin();
 
 		$queued = WebhookService::sendSnapshot(
 			max( 1, min( 365, $request->int( 'days', 30 ) ) ),
@@ -115,7 +122,7 @@ final class WebhookController extends BaseController {
 	}
 
 	public function retry( Request $request ): void {
-		Auth::requireWrite();
+		Auth::requireAdmin();
 
 		WebhookRepository::retry( (int) $request->params['id'] );
 

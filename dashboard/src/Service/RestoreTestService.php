@@ -82,7 +82,7 @@ final class RestoreTestService {
 			return self::result( $siteId, false, 'Seite nicht gefunden.' );
 		}
 
-		$punkte = Restic::snapshots( BackupService::hostFor( $site ) );
+		$punkte = Restic::snapshots( BackupService::hostFor( $site ), BackupService::tagFor( $siteId ) );
 
 		if ( ! $punkte ) {
 			return self::result( $siteId, false, 'Es gibt keinen Sicherungspunkt zum Prüfen.' );

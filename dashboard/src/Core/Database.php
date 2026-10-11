@@ -240,7 +240,15 @@ final class Database {
 	public static function inClause( array $ids, string $prefix = 'in' ): array {
 		if ( ! $ids ) {
 			// Leere Liste heisst "nichts sichtbar" — niemals "alles".
-			return array( '1=0', array() );
+			//
+			// Das Ergebnis wird von allen Aufrufern hinter ein IN gehaengt
+			// ("WHERE s.id IN " . $in). Hier stand frueher '1=0' — und
+			// "s.id IN 1=0" ist kein falscher Vergleich, sondern ein
+			// Syntaxfehler. Ein Konto mit Seitenbindung, dem noch keine Seite
+			// zugeordnet ist, bekam deshalb auf Startseite, Seitenliste,
+			// Protokoll und Verfuegbarkeit einen Serverfehler statt einer
+			// leeren Liste. "IN (NULL)" ist gueltiges SQL und nie wahr.
+			return array( '(NULL)', array() );
 		}
 
 		$placeholders = array();

@@ -63,6 +63,8 @@ final class ChildPackager {
 			throw new RuntimeException( 'Quellverzeichnis des Child-Plugins fehlt: ' . $source );
 		}
 
+		self::requireLock( $source );
+
 		$target = NL_STORAGE . '/tmp/' . self::filename();
 
 		if ( ! $force && is_file( $target ) && filemtime( $target ) >= self::newestSourceTime( $source ) ) {
@@ -82,6 +84,78 @@ final class ChildPackager {
 		}
 
 		return $target;
+	}
+
+	/**
+	 * Nur ausliefern, was jemand bewusst festgeschrieben hat.
+	 *
+	 * Das Panel signiert die Pruefsumme des Pakets mit dem Schluessel der
+	 * Verbindung, und die Kundenseite installiert, was dazu passt. Gebildet
+	 * wird die Pruefsumme aber ueber das Verzeichnis, wie es gerade auf der
+	 * Platte liegt — wer dort schreiben kann, bekommt gueltig signierten Code
+	 * auf jede betreute Seite. Die Sperrdatei version.lock gab es schon, nur
+	 * las sie ausser einem Pruflauf niemand. Jetzt ist sie das Tor.
+	 */
+	private static function requireLock( string $source ): void {
+		$lock = dirname( $source ) . '/version.lock';
+
+		if ( ! is_file( $lock ) ) {
+			throw new RuntimeException(
+				'Es fehlt die Datei version.lock neben dem Child-Plugin. Ohne sie wird nichts ausgeliefert. '
+					. 'Anlegen mit: php dashboard/tests/childlock.php --update'
+			);
+		}
+
+		$teile = preg_split( '/\s+/', trim( (string) file_get_contents( $lock ) ) ) ?: array();
+
+		$festVersion = (string) ( $teile[0] ?? '' );
+		$festSumme   = (string) ( $teile[1] ?? '' );
+		$version     = self::version();
+		$summe       = self::sourceChecksum( $source );
+
+		if ( $version !== $festVersion || ! hash_equals( $festSumme, $summe ) ) {
+			throw new RuntimeException(
+				sprintf(
+					'Das Child-Plugin stimmt nicht mit version.lock überein (festgehalten %s, gefunden %s). '
+						. 'Es wird nichts ausgeliefert. Nach einer bewussten Änderung: '
+						. 'php dashboard/tests/childlock.php --update',
+					$festVersion,
+					$version
+				)
+			);
+		}
+	}
+
+	/**
+	 * Pruefsumme ueber alle Dateien des Quellverzeichnisses.
+	 *
+	 * Muss Zeichen fuer Zeichen dasselbe rechnen wie tests/childlock.php —
+	 * Pfade gehen mit ein, damit auch eine umbenannte oder geloeschte Datei
+	 * auffaellt.
+	 */
+	public static function sourceChecksum( string $verzeichnis ): string {
+		$dateien = array();
+
+		$lauf = new \RecursiveIteratorIterator(
+			new \RecursiveDirectoryIterator( $verzeichnis, \FilesystemIterator::SKIP_DOTS )
+		);
+
+		foreach ( $lauf as $datei ) {
+			/** @var \SplFileInfo $datei */
+			if ( $datei->isFile() ) {
+				$dateien[ substr( $datei->getPathname(), strlen( $verzeichnis ) + 1 ) ] = (string) $datei->getPathname();
+			}
+		}
+
+		ksort( $dateien );
+
+		$zusammen = '';
+
+		foreach ( $dateien as $relativ => $absolut ) {
+			$zusammen .= $relativ . "\0" . hash_file( 'sha256', $absolut ) . "\n";
+		}
+
+		return hash( 'sha256', $zusammen );
 	}
 
 	/**

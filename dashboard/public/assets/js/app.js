@@ -6,7 +6,13 @@
 	/** Bestätigungsdialog für zerstörerische Aktionen. */
 	document.addEventListener('submit', function (event) {
 		var form = event.target;
-		var message = form.getAttribute('data-confirm');
+
+		// Erst der Knopf, dann das Formular: in manchen Listen haengen mehrere
+		// Aktionen mit eigenem formaction am selben Formular, und jede braucht
+		// ihre eigene Rueckfrage.
+		var message =
+			(event.submitter && event.submitter.getAttribute('data-confirm')) ||
+			form.getAttribute('data-confirm');
 
 		if (message && !window.confirm(message)) {
 			event.preventDefault();
@@ -22,6 +28,21 @@
 					button.textContent = button.dataset.busy;
 				}
 			}, 10);
+		}
+	});
+
+	/*
+	 * Beim Klick den ganzen Inhalt markieren.
+	 *
+	 * Stand frueher als onclick im Attribut. Inline-Skript ist genau das, was
+	 * die Content-Security-Policy nicht mehr zulaesst — und sie ist die zweite
+	 * Linie, falls doch einmal fremder Text in eine Seite geraet.
+	 */
+	document.addEventListener('click', function (event) {
+		var feld = event.target;
+
+		if (feld && feld.matches && feld.matches('[data-select-all]') && feld.select) {
+			feld.select();
 		}
 	});
 

@@ -172,7 +172,8 @@ $canWrite = Auth::canWrite();
 										</div>
 										<div class="field full">
 											<label>Secret <span class="muted">— zum Prüfen der Signatur beim Empfänger</span></label>
-											<input type="text" name="secret" class="mono" value="<?= e( (string) $webhook['secret'] ) ?>">
+											<input type="password" name="secret" class="mono" value="" autocomplete="new-password"
+							placeholder="<?= '' !== (string) $webhook['secret'] ? 'gesetzt — leer lassen für unverändert' : 'leer lassen, dann wird eines erzeugt' ?>">
 										</div>
 									</div>
 
@@ -200,7 +201,7 @@ $canWrite = Auth::canWrite();
 										<?php if ( $canWrite ) : ?>
 											<button class="btn sm danger" type="submit"
 												formaction="<?= e( url( '/webhooks/' . $webhook['id'] . '/delete' ) ) ?>" formnovalidate
-												onclick="return confirm('Endpunkt wirklich löschen?')">Löschen</button>
+												data-confirm="Endpunkt wirklich löschen?">Löschen</button>
 										<?php endif; ?>
 									</div>
 								</form>

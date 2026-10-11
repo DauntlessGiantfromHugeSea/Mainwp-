@@ -122,7 +122,7 @@ final class BackupService {
 
 			// Nur die Sicherungspunkte ausbuchen. Das Umschreiben der Pakete
 			// kommt einmal am Ende des Laufs — siehe runWindow().
-			Restic::forget( self::hostFor( $site ) );
+			Restic::forget( self::hostFor( $site ), false, self::tagFor( $siteId ) );
 
 			// Der Spiegel ist eine Arbeitskopie, keine zweite Sicherung. Wer
 			// den Platz nicht hat, kann ihn verwerfen — dann holt der naechste
@@ -314,15 +314,21 @@ final class BackupService {
 		$entfernt  = 0;
 
 		if ( Restic::configured() && Restic::available() ) {
-			$punkte = Restic::snapshots( $host );
+			$tag    = self::tagFor( $siteId );
+			$punkte = Restic::snapshots( $host, $tag );
 			$ids    = array();
 
 			foreach ( $punkte as $punkt ) {
 				$id = (string) ( $punkt['id'] ?? '' );
 
-				// Nur, was wirklich zu diesem Wirt gehoert. snapshots() filtert
-				// bereits, aber bei einem Loeschlauf wird nichts angenommen.
-				if ( '' !== $id && $host === (string) ( $punkt['hostname'] ?? '' ) ) {
+				// Nur, was wirklich zu dieser Seite gehoert. snapshots()
+				// filtert bereits, aber bei einem Loeschlauf wird nichts
+				// angenommen — und das Kennzeichen muss stimmen, nicht nur der
+				// Wirt: zwei Seiten koennen sich einen Wirt teilen, und dann
+				// loeschte ein Purge die Sicherungen der anderen gleich mit.
+				if ( '' !== $id
+					&& $host === (string) ( $punkt['hostname'] ?? '' )
+					&& in_array( $tag, (array) ( $punkt['tags'] ?? array() ), true ) ) {
 					$ids[] = $id;
 				}
 			}
@@ -1360,8 +1366,31 @@ final class BackupService {
 	 */
 	public static function hostFor( array $site ): string {
 		$host = (string) ( parse_url( (string) $site['url'], PHP_URL_HOST ) ?: 'site-' . $site['id'] );
+		$host = preg_replace( '/[^a-z0-9.\-]/i', '-', $host ) ?? (string) $site['id'];
 
-		return preg_replace( '/[^a-z0-9.\-]/i', '-', $host ) ?? (string) $site['id'];
+		// "panel" gehoert der Eigensicherung des Panels, und in der liegen die
+		// config.php mit dem Hauptschluessel und der vollstaendige Datenbank-
+		// Abzug. Eine Seite mit der Adresse https://panel ergaebe genau diesen
+		// Wirtsnamen — und wer sie anlegen darf, kaeme ueber die Wieder-
+		// herstellungsansicht an die Geheimnisse der ganzen Flotte.
+		if ( self::PANEL_HOST === strtolower( $host ) ) {
+			$host = 'site-' . $site['id'];
+		}
+
+		return $host;
+	}
+
+	/** Wirtsname der Eigensicherung. Fuer eine betreute Seite gesperrt. */
+	public const PANEL_HOST = 'panel';
+
+	/**
+	 * Das Kennzeichen, mit dem die Sicherungspunkte einer Seite gebunden sind.
+	 *
+	 * Der Wirtsname allein reicht nicht: er kommt aus der Adresse, und zwei
+	 * betreute Installationen koennen denselben Wirt haben.
+	 */
+	public static function tagFor( int $siteId ): string {
+		return 'site-' . $siteId;
 	}
 
 	/**

@@ -625,8 +625,12 @@ $rsId = Database::insert( 'sites', array(
 ) );
 $rsSite = SiteRepository::find( $rsId );
 
-// Ein Baum, wie ihn eine WordPress-Sicherung hat.
-$spiegel = $tmp . '/spiegel-blaettern';
+// Ein Baum, wie ihn eine WordPress-Sicherung hat — und an der Stelle, an der
+// das Panel ihn wirklich anlegt. Der Wiederherstellungspfad bindet den
+// Sicherungspunkt an die Seite, und zwar ueber das Kennzeichen site-<id> und
+// den Spiegelpfad. Ein Punkt aus einem beliebigen Ordner ist deshalb kein
+// gueltiges Abbild dessen, was im Betrieb entsteht.
+$spiegel = BackupService::mirrorPath( $rsId );
 @mkdir( $spiegel . '/wp-content/uploads/2026', 0700, true );
 @mkdir( $spiegel . '/wp-content/plugins', 0700, true );
 
@@ -636,7 +640,7 @@ file_put_contents( $spiegel . '/wp-content/uploads/2026/bild.jpg', str_repeat( "
 file_put_contents( $spiegel . '/wp-content/plugins/liesmich.txt', 'Plugin' );
 
 $rsHost = BackupService::hostFor( $rsSite );
-$rsBack = Restic::backup( $spiegel, $rsHost, array( 'northlab' ) );
+$rsBack = Restic::backup( $spiegel, $rsHost, array( 'northlab', BackupService::tagFor( $rsId ) ) );
 
 check( 'Die Sicherung zum Bloettern steht', $rsBack['ok'], trim( $rsBack['output'] ) );
 
@@ -690,6 +694,85 @@ check( 'Eine erfundene Kennung wird abgewiesen', ! $erfunden['ok'] );
 
 $unsinn = RestoreService::browse( $rsId, '; rm -rf /', '' );
 check( 'Eine Kennung mit Sonderzeichen wird abgewiesen', ! $unsinn['ok'] );
+
+/* -------------------------------- Derselbe Wirt, zwei verschiedene Kunden */
+
+// Der Wirtsname kommt aus der Adresse und ist kein Schluessel: zwei betreute
+// Installationen koennen sich einen Wirt teilen. Frueher band die
+// Zugehoerigkeitspruefung nur daran — wer eine der beiden sehen durfte,
+// konnte aus den Sicherungen der anderen herunterladen.
+$shopId = Database::insert( 'sites', array(
+	'name' => 'Shop auf geteilt.example', 'url' => 'https://geteilt.example/shop', 'status' => 'connected',
+	'created_at' => nl_utc(), 'updated_at' => nl_utc(),
+) );
+$blogId = Database::insert( 'sites', array(
+	'name' => 'Blog auf geteilt.example', 'url' => 'https://geteilt.example/blog', 'status' => 'connected',
+	'created_at' => nl_utc(), 'updated_at' => nl_utc(),
+) );
+
+$shop = (array) SiteRepository::find( $shopId );
+$blog = (array) SiteRepository::find( $blogId );
+
+check( 'Beide Seiten liegen wirklich auf demselben Wirt',
+	BackupService::hostFor( $shop ) === BackupService::hostFor( $blog ),
+	BackupService::hostFor( $shop ) . ' / ' . BackupService::hostFor( $blog ) );
+
+foreach ( array( $shopId => 'shop-geheim.txt', $blogId => 'blog-geheim.txt' ) as $id => $datei ) {
+	$ordner = BackupService::mirrorPath( (int) $id );
+	@mkdir( $ordner, 0750, true );
+	file_put_contents( $ordner . '/' . $datei, 'Daten von ' . $datei );
+}
+
+$shopBack = Restic::backup( BackupService::mirrorPath( $shopId ), BackupService::hostFor( $shop ), array( 'northlab', BackupService::tagFor( $shopId ) ) );
+$blogBack = Restic::backup( BackupService::mirrorPath( $blogId ), BackupService::hostFor( $blog ), array( 'northlab', BackupService::tagFor( $blogId ) ) );
+
+check( 'Beide Sicherungen stehen', $shopBack['ok'] && $blogBack['ok'] );
+
+$shopPunkt = (string) $shopBack['snapshot'];
+$blogPunkt = (string) $blogBack['snapshot'];
+
+check( 'Der Shop sieht seinen eigenen Punkt', RestoreService::belongsToSite( $shop, $shopPunkt ) );
+check( 'Aber nicht den des Blogs', ! RestoreService::belongsToSite( $shop, $blogPunkt ) );
+check( 'Und umgekehrt ebenso wenig', ! RestoreService::belongsToSite( $blog, $shopPunkt ) );
+
+$ueberGrenze = RestoreService::browse( $shopId, $blogPunkt, '' );
+check( 'Bloettern ueber die Grenze geht nicht',
+	! $ueberGrenze['ok'] && false !== strpos( $ueberGrenze['error'], 'gehört nicht' ), $ueberGrenze['error'] );
+
+$liste = RestoreService::browse( $shopId, $shopPunkt, '' );
+check( 'Die eigene Sicherung laesst sich lesen', $liste['ok'], $liste['error'] );
+check( 'Und zeigt die eigene Datei',
+	in_array( 'shop-geheim.txt', array_column( $liste['entries'] ?? array(), 'name' ), true ) );
+
+/* ------------------------------- Die Eigensicherung des Panels ist tabu */
+
+// In ihr liegen die config.php mit dem Hauptschluessel und der vollstaendige
+// Datenbankabzug — also jeder private Schluessel jeder Kundenseite. Sie wird
+// unter dem festen Wirt "panel" abgelegt. Wer eine Seite anlegen darf, haette
+// mit der Adresse https://panel genau diesen Wirtsnamen erzeugt.
+$panelOrdner = $tmp . '/panel-spiegel';
+@mkdir( $panelOrdner, 0700, true );
+file_put_contents( $panelOrdner . '/config.php', "<?php return array( 'app' => array( 'key' => 'GEHEIM' ) );\n" );
+
+$panelBack = Restic::backup( $panelOrdner, 'panel', array( 'northlab', 'panel' ) );
+check( 'Die Eigensicherung steht', $panelBack['ok'], trim( $panelBack['output'] ) );
+
+$falleId = Database::insert( 'sites', array(
+	'name' => 'Falle', 'url' => 'https://panel', 'status' => 'connected',
+	'created_at' => nl_utc(), 'updated_at' => nl_utc(),
+) );
+$falle = (array) SiteRepository::find( $falleId );
+
+check( 'Eine Seite namens panel bekommt nicht den Wirt der Eigensicherung',
+	'panel' !== BackupService::hostFor( $falle ), BackupService::hostFor( $falle ) );
+check( 'Sie sieht die Eigensicherung nicht',
+	! RestoreService::belongsToSite( $falle, (string) $panelBack['snapshot'] ) );
+
+$versuch = RestoreService::browse( $falleId, (string) $panelBack['snapshot'], '' );
+check( 'Und kommt auch nicht an deren Inhalt', ! $versuch['ok'], $versuch['error'] );
+
+$holen = RestoreService::download( $falleId, (string) $panelBack['snapshot'], 'config.php', false, static function (): void {} );
+check( 'Herunterladen scheitert ebenso', ! $holen['ok'], $holen['error'] );
 
 /* ====================================== Wirklich herunterladen */
 
@@ -861,16 +944,16 @@ $pB = Database::insert( 'sites', array(
 $siteA = SiteRepository::find( $pA );
 $siteB = SiteRepository::find( $pB );
 
-$ordnerA = $tmp . '/spiegel-a';
-$ordnerB = $tmp . '/spiegel-b';
-@mkdir( $ordnerA, 0700, true );
-@mkdir( $ordnerB, 0700, true );
+$ordnerA = BackupService::mirrorPath( $pA );
+$ordnerB = BackupService::mirrorPath( $pB );
+@mkdir( $ordnerA, 0750, true );
+@mkdir( $ordnerB, 0750, true );
 file_put_contents( $ordnerA . '/a.txt', 'Daten von A' );
 file_put_contents( $ordnerB . '/b.txt', 'Daten von B' );
 
-Restic::backup( $ordnerA, BackupService::hostFor( $siteA ), array( 'northlab' ) );
-Restic::backup( $ordnerA, BackupService::hostFor( $siteA ), array( 'northlab' ) );
-Restic::backup( $ordnerB, BackupService::hostFor( $siteB ), array( 'northlab' ) );
+Restic::backup( $ordnerA, BackupService::hostFor( $siteA ), array( 'northlab', BackupService::tagFor( $pA ) ) );
+Restic::backup( $ordnerA, BackupService::hostFor( $siteA ), array( 'northlab', BackupService::tagFor( $pA ) ) );
+Restic::backup( $ordnerB, BackupService::hostFor( $siteB ), array( 'northlab', BackupService::tagFor( $pB ) ) );
 
 Database::insert( 'backups', array(
 	'site_id' => $pA, 'status' => 'success', 'started_at' => nl_utc(), 'finished_at' => nl_utc(),
@@ -880,9 +963,8 @@ Database::insert( 'backups', array(
 ) );
 SiteRepository::update( $pA, array( 'last_backup_at' => nl_utc() ) );
 
-// Einen Spiegel anlegen, damit sich pruefen laesst, dass er mitgeht.
+// Im Spiegel liegt eine Kundendatei — sie muss beim Loeschen mitgehen.
 $spiegelA = BackupService::mirrorPath( $pA );
-@mkdir( $spiegelA, 0750, true );
 file_put_contents( $spiegelA . '/kundendatei.txt', 'liegt auf der Platte' );
 
 // Der Loeschlauf verlaesst sich darauf, dass snapshots() nach Wirt filtert.

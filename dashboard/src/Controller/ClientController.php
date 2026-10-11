@@ -75,7 +75,12 @@ final class ClientController extends BaseController {
 		Auth::requireWrite();
 
 		$clientId = (int) $request->params['id'];
-		$error    = ClientRepository::update( $clientId, $this->payload( $request ) );
+
+		if ( ! $this->mayTouch( $clientId ) ) {
+			return;
+		}
+
+		$error = ClientRepository::update( $clientId, $this->payload( $request ) );
 
 		$this->respond( $request, null === $error, $error ?? 'Kunde gespeichert.', '/clients/' . $clientId );
 	}
@@ -83,9 +88,40 @@ final class ClientController extends BaseController {
 	public function destroy( Request $request ): void {
 		Auth::requireWrite();
 
-		ClientRepository::delete( (int) $request->params['id'] );
+		$clientId = (int) $request->params['id'];
+
+		if ( ! $this->mayTouch( $clientId ) ) {
+			return;
+		}
+
+		ClientRepository::delete( $clientId );
 
 		$this->respond( $request, true, 'Kunde entfernt. Die zugeordneten Seiten bleiben bestehen.', '/clients' );
+	}
+
+	/**
+	 * Dieselbe Zuordnungspruefung wie beim Ansehen — nur fehlte sie beim
+	 * Schreiben.
+	 *
+	 * Das war keine blosse Rechtefrage: ueber report_webhook_url laesst sich
+	 * der Berichtsversand eines fremden Kunden umbiegen, und der Bericht
+	 * enthaelt dessen Kontaktdaten, Seitenadressen und offene
+	 * Sicherheitsbefunde. Der Schreibzugriff war damit ein Lesekanal.
+	 *
+	 * Bricht selbst ab, wenn nicht erlaubt.
+	 */
+	private function mayTouch( int $clientId ): bool {
+		if ( Auth::seesAllSites() ) {
+			return true;
+		}
+
+		if ( SiteRepository::all( array( 'client_id' => $clientId, 'site_ids' => Auth::visibleSiteIds() ) ) ) {
+			return true;
+		}
+
+		Response::forbidden( 'Dieser Kunde ist deinem Konto nicht zugeordnet.' );
+
+		return false;
 	}
 
 	/**

@@ -58,14 +58,17 @@ View::set( 'pageTitle', 'Zwei-Faktor-Anmeldung' );
 					</dd>
 				</dl>
 
-				<div class="btn-row mt">
-					<form method="post" action="<?= e( url( '/profile/2fa' ) ) ?>"
-						data-confirm="Neue Ersatzcodes erzeugen? Die bisherigen verlieren sofort ihre Gültigkeit.">
-						<?= csrf_field() ?>
-						<input type="hidden" name="action" value="recovery">
-						<button class="btn">Neue Ersatzcodes</button>
-					</form>
-				</div>
+				<form method="post" action="<?= e( url( '/profile/2fa' ) ) ?>" class="mt"
+					data-confirm="Neue Ersatzcodes erzeugen? Die bisherigen verlieren sofort ihre Gültigkeit.">
+					<?= csrf_field() ?>
+					<input type="hidden" name="action" value="recovery">
+					<div class="field" style="max-width:320px">
+						<label for="pw-recovery">Zur Bestätigung dein Passwort</label>
+						<input type="password" id="pw-recovery" name="password" required autocomplete="current-password">
+						<p class="hint">Ersatzcodes gelten dauerhaft — deshalb nicht auf Knopfdruck allein.</p>
+					</div>
+					<button class="btn">Neue Ersatzcodes</button>
+				</form>
 
 				<hr style="border:0;border-top:1px solid var(--line);margin:22px 0">
 
