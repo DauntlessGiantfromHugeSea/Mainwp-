@@ -204,13 +204,47 @@ check( 'Und mit dem Zaehlerstand',
 check( 'Die laufende Seite steht nicht zugleich unter den wartenden',
 	! in_array( 1, array_column( $stand['offen'], 'id' ), true ) );
 
-// Ein Lauf ohne Lebenszeichen ist kein laufender Lauf.
-Database::update( 'backups', array( 'heartbeat_at' => gmdate( 'Y-m-d H:i:s', time() - 1800 ) ), array( 'id' => $laufId ) );
+// Nach zehn Minuten Stille wird gewarnt — aber noch nicht abgeraeumt. Der
+// Lauf koennte an einer langen Uebertragung haengen.
+Database::update( 'backups', array( 'heartbeat_at' => gmdate( 'Y-m-d H:i:s', time() - 900 ) ), array( 'id' => $laufId ) );
 
 $stand = BackupService::status();
 
 check( 'Ein Lauf ohne Lebenszeichen wird als solcher benannt',
 	'ohne Lebenszeichen' === ( $stand['laufend']['phase'] ?? '' ), (string) ( $stand['laufend']['phase'] ?? '' ) );
+check( 'Er gilt aber noch als laufend', null !== $stand['laufend'] );
+
+// Nach einer halben Stunde nicht mehr. Hier lag der Fehler: die Zeile blieb
+// fuer immer auf "running" stehen, und der Kasten "Stand des Laufs" zeigte
+// monatelang einen Lauf, den es nicht mehr gab.
+Database::update(
+	'backups',
+	array( 'heartbeat_at' => gmdate( 'Y-m-d H:i:s', time() - BackupService::PULS_TOT - 60 ) ),
+	array( 'id' => $laufId )
+);
+
+$stand = BackupService::status();
+
+check( 'Ein toter Lauf wird abgeraeumt', null === $stand['laufend'] );
+
+$tot = Database::selectOne( 'SELECT * FROM `' . Database::table( 'backups' ) . '` WHERE `id` = :i', array( 'i' => $laufId ) );
+
+check( 'Er steht als Fehler da, nicht als Erfolg', 'failed' === ( $tot['status'] ?? '' ), (string) ( $tot['status'] ?? '' ) );
+check( 'Und ist abgeschlossen', ! empty( $tot['finished_at'] ) );
+// Ehrlich bleiben: ob auf dem Speicher etwas angekommen ist, weiss hier
+// niemand.
+check( 'Der Vermerk behauptet nichts ueber den Speicher',
+	str_contains( (string) $tot['message'], 'lässt sich von hier nicht sagen' ), (string) $tot['message'] );
+check( 'Die Phase ist weg', '' === (string) $tot['phase'], (string) $tot['phase'] );
+// Nicht sofort noch einmal: ein abgebrochener Lauf zaehlt fuer dieses
+// Fenster als erledigt, genau wie ein normal fehlgeschlagener. Sonst liefe
+// eine Seite, die zuverlaessig abstuerzt, im Kreis. Im naechsten Fenster ist
+// sie wieder dran.
+check( 'Sie wird nicht sofort noch einmal versucht',
+	! in_array( 1, array_column( $stand['offen'], 'id' ), true ) );
+
+// Ein zweiter Durchgang findet nichts mehr — es gibt nichts zu schliessen.
+check( 'Ein zweiter Durchlauf raeumt nichts doppelt ab', 0 === BackupService::closeStale() );
 
 Database::run( 'DELETE FROM `' . Database::table( 'backups' ) . '` WHERE `id` = :i', array( 'i' => $laufId ) );
 

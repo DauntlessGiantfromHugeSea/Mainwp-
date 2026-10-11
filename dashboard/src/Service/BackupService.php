@@ -907,8 +907,14 @@ final class BackupService {
 	 * selbst, ob gerade etwas zu tun ist.
 	 */
 	public static function runWindow(): string {
+		// Zuerst aufraeumen, auch wenn der Zeitplan aus ist: eine Zeile, die
+		// auf "running" haengengeblieben ist, geht sonst nie weg.
+		$tote = self::closeStale();
+
 		if ( ! Setting::getBool( 'backup_enabled', false ) ) {
-			return 'deaktiviert';
+			return $tote > 0
+				? sprintf( 'deaktiviert, %d hängengebliebene(n) Lauf abgeräumt', $tote )
+				: 'deaktiviert';
 		}
 
 		// Von Hand angestossene Sicherungen zuerst, und ohne auf den Abstand zu
@@ -987,7 +993,69 @@ final class BackupService {
 	 *
 	 * @return array<string,mixed>
 	 */
+	/**
+	 * Ein Lauf gilt nach dieser Zeit ohne Lebenszeichen als tot.
+	 *
+	 * Grosszuegiger als die zehn Minuten, nach denen die Anzeige schon
+	 * "ohne Lebenszeichen" meldet: erst warnen, dann abraeumen.
+	 */
+	public const PULS_TOT = 1800;
+
+	/**
+	 * Haengengebliebene Laeufe schliessen.
+	 *
+	 * Stirbt der Prozess mitten im Lauf — Zeitlimit, OOM-Killer, Neustart,
+	 * abgebrochene Verbindung zum Speicher —, bleibt die Zeile auf "running"
+	 * stehen. Die Anzeige schrieb bisher nur "ohne Lebenszeichen" daneben und
+	 * liess sie liegen: der Kasten "Stand des Laufs" zeigte danach monatelang
+	 * einen Lauf, den es nicht mehr gab, und die naechste Sicherung derselben
+	 * Seite hielt sich fuer die zweite.
+	 *
+	 * Es wird ehrlich als Fehler vermerkt, nicht stillschweigend geloescht —
+	 * ob auf dem Speicher etwas angekommen ist, weiss hier niemand.
+	 *
+	 * @return int Geschlossene Laeufe.
+	 */
+	public static function closeStale(): int {
+		$grenze = gmdate( 'Y-m-d H:i:s', time() - self::PULS_TOT );
+
+		$tote = Database::select(
+			'SELECT `id`, `site_id` FROM `' . Database::table( 'backups' ) . "`
+			 WHERE `status` = 'running'
+			   AND COALESCE(`heartbeat_at`, `started_at`) < :grenze",
+			array( 'grenze' => $grenze )
+		);
+
+		foreach ( $tote as $zeile ) {
+			Database::update(
+				'backups',
+				array(
+					'status'      => 'failed',
+					'finished_at' => nl_utc(),
+					'phase'       => '',
+					'message'     => 'Abgebrochen — der Lauf hat sich nicht mehr gemeldet. '
+						. 'Ob auf dem Speicher etwas angekommen ist, lässt sich von hier nicht sagen.',
+				),
+				array( 'id' => (int) $zeile['id'] )
+			);
+
+			// Das Banner auf der Kundenseite braucht hier nichts: es laeuft
+			// mit eigener Frist von selbst aus — genau fuer diesen Fall.
+			ActivityRepository::log(
+				'backup.stale',
+				'Ein Sicherungslauf wurde ohne Abschluss beendet und als Fehler vermerkt.',
+				array( 'site_id' => (int) $zeile['site_id'], 'level' => 'warning' )
+			);
+		}
+
+		return count( $tote );
+	}
+
 	public static function status(): array {
+		// Vor dem Anzeigen aufraeumen: sonst zeigt der Kasten weiter einen
+		// Lauf, den es nicht mehr gibt.
+		self::closeStale();
+
 		$laufend = Database::selectOne(
 			'SELECT b.*, s.name AS site_name FROM `' . Database::table( 'backups' ) . '` b
 			 INNER JOIN `' . Database::table( 'sites' ) . "` s ON s.id = b.site_id

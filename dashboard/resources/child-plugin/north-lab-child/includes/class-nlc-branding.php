@@ -54,6 +54,9 @@ class NLC_Branding {
 			'login_logo_height' => 72,
 			'login_logo_link'   => '',
 
+			// Das Logo der Agentur als einfarbige Silhouette fuers Menue.
+			'menu_icon'         => '',
+
 			// Gemeinsame Farben
 			'accent'            => '#e8917a',
 			'tint'              => '#fdf3f0',
@@ -84,6 +87,7 @@ class NLC_Branding {
 		$state['login_logo']      = self::url( $state['login_logo'] );
 		$state['login_logo_link'] = self::url( $state['login_logo_link'] );
 
+		$state['menu_icon']      = self::glyph( (string) $state['menu_icon'] );
 		$state['email']          = sanitize_email( (string) $state['email'] );
 		$state['phone']          = self::phone( (string) $state['phone'] );
 		$state['text']           = sanitize_text_field( (string) $state['text'] );
@@ -107,6 +111,38 @@ class NLC_Branding {
 	 * @param mixed $value
 	 * @return string
 	 */
+	/**
+	 * Der Glyph fuers Menue — eine Daten-URI und sonst nichts.
+	 *
+	 * Er kommt vom Panel und wird als CSS-Maske benutzt. Ein Bild als Maske
+	 * wird nie ausgefuehrt, egal was darin steht; gefaehrlich waere nur, hier
+	 * etwas anderes als eine Daten-URI durchzulassen — eine fremde Adresse
+	 * etwa, die bei jedem Backend-Aufruf nach Hause telefoniert.
+	 *
+	 * Deshalb: fester Anfang, nur Base64-Zeichen dahinter, Laenge gedeckelt.
+	 *
+	 * @param string $value
+	 * @return string
+	 */
+	public static function glyph( $value ) {
+		$value = trim( (string) $value );
+
+		if ( '' === $value ) {
+			return '';
+		}
+
+		if ( strlen( $value ) > 16384 ) {
+			return '';
+		}
+
+		if ( ! preg_match( '#^data:image/(svg\+xml|png|webp|gif|jpeg);base64,([A-Za-z0-9+/]+={0,2})$#', $value, $m ) ) {
+			return '';
+		}
+
+		// Und es muss sich wirklich dekodieren lassen.
+		return false === base64_decode( $m[2], true ) ? '' : $value;
+	}
+
 	protected static function url( $value ) {
 		$value = trim( (string) $value );
 

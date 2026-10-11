@@ -27,6 +27,42 @@ class NLC_Status {
 		add_action( 'admin_post_nlc_links_scan', array( $this, 'handle_scan' ) );
 		add_action( 'wp_ajax_nlc_fortschritt', array( $this, 'handle_progress' ) );
 		add_action( 'wp_dashboard_setup', array( $this, 'widget' ) );
+		add_action( 'admin_head', array( $this, 'menu_style' ) );
+	}
+
+	/**
+	 * Das Logo der Agentur als Menuesymbol — einfarbig.
+	 *
+	 * Als CSS-Maske, nicht als Bild: dabei zaehlt nur, wo etwas
+	 * undurchsichtig ist, die Farbe kommt von WordPress selbst. Dadurch ist
+	 * das Symbol grau wie die anderen und weiss, wenn der Punkt aktiv ist,
+	 * statt als buntes Logo danebenzustehen. Ein Bild als Maske wird
+	 * ausserdem nie ausgefuehrt.
+	 *
+	 * Ohne hinterlegtes Logo bleibt das Schild aus dem Dashicons-Satz.
+	 */
+	public function menu_style() {
+		$glyph = (string) NLC_Branding::state()['menu_icon'];
+
+		if ( '' === $glyph ) {
+			return;
+		}
+
+		$bild = sprintf( 'url("%s")', esc_url_raw( $glyph ) );
+
+		printf(
+			'<style id="nlc-menu-symbol">'
+				. '#adminmenu .toplevel_page_%1$s .wp-menu-image::before{content:"";display:block;'
+				. 'width:20px;height:20px;margin:7px auto 0;background-color:currentColor;'
+				. '-webkit-mask:%2$s no-repeat center/contain;mask:%2$s no-repeat center/contain}'
+				. '</style>',
+			esc_attr( self::SLUG ),
+			// Die Daten-URI ist bereits geprueft (NLC_Branding::glyph) und
+			// enthaelt nur Base64-Zeichen — in einem CSS-Wert kann sie nichts
+			// anrichten. esc_url_raw oben nimmt zusaetzlich alles heraus, was
+			// aus dem url() ausbrechen koennte.
+			$bild // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+		);
 	}
 
 	/**
@@ -141,7 +177,9 @@ class NLC_Status {
 			'manage_options',
 			self::SLUG,
 			array( $this, 'render' ),
-			'dashicons-shield-alt',
+			// Liegt ein Logo vor, zeichnet menu_style() es per Maske in die
+			// leere Flaeche. Sonst bleibt das Schild.
+			'' !== (string) NLC_Branding::state()['menu_icon'] ? 'none' : 'dashicons-shield-alt',
 			3
 		);
 	}

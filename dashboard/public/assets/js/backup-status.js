@@ -63,8 +63,20 @@
 							' Dateien'
 					)
 				);
-			} else {
-				out.appendChild(balken(100));
+			}
+
+			// Ohne Gesamtzahl gibt es keinen Anteil. Hier stand frueher ein
+			// voller Balken — der sah nach "fertig" aus, obwohl gar nichts
+			// bekannt war, und bei einem haengengebliebenen Lauf blieb er
+			// voll stehen. Lieber kein Balken als ein falscher.
+			if (d.laufend.phase === 'ohne Lebenszeichen') {
+				out.appendChild(
+					zeile(
+						'small muted',
+						'Seit über zehn Minuten kam keine Meldung. Der Lauf wird in Kürze als ' +
+							'abgebrochen vermerkt und die Seite beim nächsten Durchgang erneut gesichert.'
+					)
+				);
 			}
 		} else if (!d.enabled) {
 			out.appendChild(zeile('small muted', 'Der Zeitplan ist aus. Es läuft nichts und es ist nichts geplant.'));

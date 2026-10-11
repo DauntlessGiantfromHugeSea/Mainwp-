@@ -40,6 +40,9 @@ final class BrandingService {
 			'capability'     => Setting::get( 'branding_capability', 'read' ),
 			'accent'         => Setting::get( 'branding_accent', '#e8917a' ),
 			'tint'           => Setting::get( 'branding_tint', '#fdf3f0' ),
+			// Das Logo als einfarbige Silhouette fuer den Menuepunkt im
+			// Backend der Kundenseite. Leer heisst: dort bleibt das Schild.
+			'menu_icon'      => IconService::menuGlyph()['data'],
 		);
 	}
 

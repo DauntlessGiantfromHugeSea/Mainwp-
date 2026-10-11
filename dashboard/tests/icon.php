@@ -149,6 +149,73 @@ check( 'Und die erzeugten Fassungen', ! IconService::hasOwnRaster() );
 check( 'Danach kommt wieder das mitgelieferte Symbol',
 	str_contains( (string) IconService::rasterPath( 'icon-192' ), '/public/assets/icons/' ) );
 
+/* ======================= Das Logo als einfarbiges Menuesymbol */
+
+// Benutzt wird es als CSS-Maske. Dabei zaehlt nur, wo etwas undurchsichtig
+// ist — die Farbe kommt vom WordPress-Menue. Deshalb muss hier nur die Form
+// uebrig bleiben, und zwar wirklich nur die.
+
+IconService::reset();
+check( 'Ohne Logo gibt es kein Menuesymbol', ! IconService::menuGlyph()['ok'] );
+check( 'Und einen Grund dafuer', '' !== IconService::menuGlyph()['reason'] );
+
+$boese = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" onload="alert(1)">'
+	. '<script>alert(2)</script>'
+	. '<style>path{fill:red}</style>'
+	. '<a href="javascript:alert(3)"><path d="M4 4h40v40H4z" fill="#f00" stroke="blue"/></a>'
+	. '<image href="http://angreifer.example/x.png" x="0" y="0" width="10" height="10"/>'
+	. '<foreignObject><b>hi</b></foreignObject>'
+	. '<circle cx="24" cy="24" r="10" fill="url(#verweis)"/>'
+	. '<text x="0" y="10">NorthLab</text>'
+	. '</svg>';
+
+$form = IconService::silhouette( $boese );
+
+check( 'Die Form bleibt erhalten', str_contains( $form, '<circle' ) && str_contains( $form, 'r="10"' ), $form );
+check( 'Die viewBox auch — ohne sie waere die Groesse geraten', str_contains( $form, 'viewBox="0 0 48 48"' ) );
+
+foreach ( array(
+	'ein Skript'            => 'script',
+	'ein Ereignis'          => 'onload',
+	'ein Stilblock'         => 'style',
+	'eine javascript-Adresse' => 'javascript',
+	'ein nachgeladenes Bild'  => 'image',
+	'ein foreignObject'     => 'foreignObject',
+	'Text'                  => 'NorthLab',
+	'eine Kontur'           => 'stroke',
+	'ein Verweis als Farbe' => 'url(',
+) as $was => $nadel ) {
+	check( "Aus der Silhouette faellt $was heraus", ! str_contains( $form, $nadel ), $nadel );
+}
+
+// Eine Farbe fuer alles — fuer die Maske zaehlt sie ohnehin nicht.
+check( 'Es bleibt genau eine Farbe uebrig', 1 === substr_count( $form, 'fill=' ), $form );
+check( 'Und die rote aus der Vorlage ist es nicht', ! str_contains( $form, '#f00' ) );
+
+// Ohne viewBox weiss der Browser nicht, wie gross die Form gemeint war.
+check( 'Ohne viewBox lieber gar nichts',
+	'' === IconService::silhouette( '<svg xmlns="http://www.w3.org/2000/svg"><circle r="5"/></svg>' ) );
+check( 'Und was kein SVG ist, ergibt auch keins',
+	'' === IconService::silhouette( '<html><body>kein SVG</body></html>' ) );
+
+// Jetzt wirklich hinterlegen und den Glyph abholen.
+$store->invoke( null, '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><circle cx="24" cy="24" r="20"/></svg>', 'image/svg+xml' );
+
+$glyph = IconService::menuGlyph();
+
+check( 'Mit Logo gibt es ein Menuesymbol', $glyph['ok'], $glyph['reason'] );
+check( 'Als Daten-URI', str_starts_with( $glyph['data'], 'data:image/svg+xml;base64,' ) );
+check( 'Es laedt nichts von aussen nach', ! str_contains( $glyph['data'], 'http' ) );
+check( 'Und ist klein genug fuers Backend', strlen( $glyph['data'] ) <= IconService::GLYPH_MAX_BYTES );
+
+// Ein grosses Rasterlogo gehoert nicht in jede Backend-Seite.
+$store->invoke( null, str_repeat( "\x89PNG\r\n", 4000 ), 'image/png' );
+$gross = IconService::menuGlyph();
+check( 'Ein zu grosses Logo wird abgelehnt', ! $gross['ok'] );
+check( 'Mit einem Grund, der weiterhilft', str_contains( $gross['reason'], 'SVG' ), $gross['reason'] );
+
+IconService::reset();
+
 printf( "%d Prüfungen, %d Fehler\n", $n, $fails );
 exit( $fails ? 1 : 0 );
 

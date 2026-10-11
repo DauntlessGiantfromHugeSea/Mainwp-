@@ -696,5 +696,53 @@ check( 'Und was dabei passiert ist', false !== strpos( $widget, '1 Aktualisierun
 check( 'Sie verlinkt die ausfuehrliche Seite', false !== strpos( $widget, 'page=north-lab' ) );
 check( 'Und bietet einen Kontakt an', false !== strpos( $widget, 'mailto:hallo@north-lab.de' ) );
 
+/* ============================ Das Menuesymbol: Logo statt Schild */
+
+require_once dirname( __DIR__ ) . '/resources/child-plugin/north-lab-child/includes/class-nlc-branding.php';
+
+$logo = 'data:image/svg+xml;base64,' . base64_encode(
+	'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" fill="#000"><circle cx="24" cy="24" r="20"/></svg>'
+);
+
+// Was keine saubere Daten-URI ist, kommt gar nicht erst an. Eine fremde
+// Adresse im Menue wuerde bei jedem Backend-Aufruf nach Hause telefonieren.
+check( 'Eine fremde Adresse wird abgewiesen', '' === NLC_Branding::glyph( 'https://angreifer.example/logo.svg' ) );
+check( 'javascript: ebenso', '' === NLC_Branding::glyph( 'javascript:alert(1)' ) );
+check( 'Ein anderes Schema auch', '' === NLC_Branding::glyph( 'data:text/html;base64,' . base64_encode( '<b>x</b>' ) ) );
+check( 'Kaputtes Base64 faellt durch', '' === NLC_Branding::glyph( 'data:image/png;base64,###' ) );
+check( 'Etwas aus dem url() auszubrechen geht nicht', '' === NLC_Branding::glyph( 'data:image/png;base64,AAA") ; x:url("y' ) );
+check( 'Und zu gross ist zu gross', '' === NLC_Branding::glyph( 'data:image/png;base64,' . str_repeat( 'A', 20000 ) ) );
+check( 'Eine saubere Daten-URI kommt durch', $logo === NLC_Branding::glyph( $logo ) );
+
+// Ohne Logo bleibt das Schild.
+NLC_Branding::save( array( 'menu_icon' => '' ) );
+$GLOBALS['menus'] = array();
+NLC_Status::instance()->menu();
+
+check( 'Ohne Logo bleibt das Schild', 'dashicons-shield-alt' === ( $GLOBALS['menus'][0][5] ?? '' ), (string) ( $GLOBALS['menus'][0][5] ?? '' ) );
+
+ob_start();
+NLC_Status::instance()->menu_style();
+check( 'Und es wird kein Stil ausgegeben', '' === trim( (string) ob_get_clean() ) );
+
+// Mit Logo: leere Flaeche im Menue, gefuellt per Maske.
+NLC_Branding::save( array( 'menu_icon' => $logo ) );
+$GLOBALS['menus'] = array();
+NLC_Status::instance()->menu();
+
+check( 'Mit Logo wird die Flaeche freigeraeumt', 'none' === ( $GLOBALS['menus'][0][5] ?? '' ), (string) ( $GLOBALS['menus'][0][5] ?? '' ) );
+
+ob_start();
+NLC_Status::instance()->menu_style();
+$stil = (string) ob_get_clean();
+
+check( 'Der Stil kommt', str_contains( $stil, 'nlc-menu-symbol' ) );
+// Als Maske, nicht als Hintergrundbild: nur so nimmt das Symbol die Farbe
+// des Menues an — grau, weiss wenn der Punkt aktiv ist.
+check( 'Das Logo wird als Maske gesetzt', str_contains( $stil, 'mask:url(' ) || str_contains( $stil, 'mask:url("' ) , $stil );
+check( 'Auch mit Praefix fuer aeltere Browser', str_contains( $stil, '-webkit-mask:' ) );
+check( 'Die Farbe kommt vom Menue', str_contains( $stil, 'background-color:currentColor' ) );
+check( 'Und es trifft den richtigen Menuepunkt', str_contains( $stil, 'toplevel_page_north-lab' ) );
+
 echo "$n Prüfungen, $fails Fehler\n";
 exit( $fails > 0 ? 1 : 0 );

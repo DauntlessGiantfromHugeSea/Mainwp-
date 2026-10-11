@@ -272,6 +272,163 @@ final class IconService {
 	 *
 	 * @return string|null Fehlermeldung oder null bei Erfolg.
 	 */
+	/**
+	 * So gross darf der Glyph fuers Menue werden.
+	 *
+	 * Er haengt als Daten-URI in jeder Backend-Seite der Kundenseite. Ein
+	 * Logo, das ein Viertel davon ausmacht, gehoert dort nicht hinein.
+	 */
+	public const GLYPH_MAX_BYTES = 12288;
+
+	/**
+	 * Das Logo als einfarbige Silhouette fuers Menue der Kundenseite.
+	 *
+	 * Verwendet wird es als CSS-Maske: dabei zaehlt nur, wo etwas
+	 * undurchsichtig ist, nicht welche Farbe es hat. Dadurch nimmt das Symbol
+	 * von selbst die Farbe des WordPress-Menues an — grau, weiss wenn der
+	 * Punkt aktiv ist — statt als Fremdkoerper danebenzustehen. Und weil ein
+	 * Bild als Maske nie ausgefuehrt wird, ist das zugleich der sichere Weg,
+	 * fremdes SVG zu benutzen.
+	 *
+	 * @return array{ok:bool,data:string,reason:string}
+	 */
+	public static function menuGlyph(): array {
+		$pfad = self::sourcePath();
+
+		if ( null === $pfad ) {
+			return self::keinGlyph( 'Es ist kein Logo hinterlegt.' );
+		}
+
+		$mime = self::sourceMime();
+
+		if ( 'image/svg+xml' === $mime ) {
+			$svg = self::silhouette( (string) file_get_contents( $pfad ) );
+
+			if ( '' === $svg ) {
+				return self::keinGlyph( 'Aus dem Logo liess sich keine Form gewinnen.' );
+			}
+
+			return self::glyph( 'image/svg+xml', $svg );
+		}
+
+		$roh = (string) file_get_contents( $pfad );
+
+		// Ohne SVG bleibt nur die Datei selbst. Ihr Alphakanal ist die Maske —
+		// ein Logo mit durchsichtigem Hintergrund wird dadurch zur Silhouette,
+		// eines auf weissem Grund zu einem Klotz. Das lauft hier nicht auf,
+		// weil es keine Bildbibliothek voraussetzen soll; zu gross ist es
+		// ohnehin meistens.
+		if ( strlen( $roh ) > self::GLYPH_MAX_BYTES ) {
+			// Bewusst ohne den Anzeige-Helfer: ein Dienst soll nicht von den
+			// Ansichten abhaengen, nur um eine Zahl huebsch zu machen.
+			return self::keinGlyph( sprintf(
+				'Das Logo ist mit %d KB zu gross für das Menü. Als SVG hinterlegt wäre es winzig.',
+				(int) ceil( strlen( $roh ) / 1024 )
+			) );
+		}
+
+		return self::glyph( $mime, $roh );
+	}
+
+	/**
+	 * @return array{ok:bool,data:string,reason:string}
+	 */
+	private static function glyph( string $mime, string $inhalt ): array {
+		$daten = 'data:' . $mime . ';base64,' . base64_encode( $inhalt );
+
+		if ( strlen( $daten ) > self::GLYPH_MAX_BYTES ) {
+			return self::keinGlyph( 'Das Logo ist für das Menü zu gross.' );
+		}
+
+		return array( 'ok' => true, 'data' => $daten, 'reason' => '' );
+	}
+
+	/**
+	 * @return array{ok:bool,data:string,reason:string}
+	 */
+	private static function keinGlyph( string $grund ): array {
+		return array( 'ok' => false, 'data' => '', 'reason' => $grund );
+	}
+
+	/**
+	 * Ein SVG auf seine blosse Form bringen.
+	 *
+	 * Alles raus, was nicht Geometrie ist: Skripte, Verweise, Stile, Farben,
+	 * Schrift. Uebrig bleiben die Umrisse — und genau die will eine Maske.
+	 * Das ist strenger als cleanSvg(), weil hier nichts gebraucht wird ausser
+	 * Pfaden; was nicht auf der Liste steht, fliegt raus statt gefiltert zu
+	 * werden.
+	 */
+	public static function silhouette( string $svg ): string {
+		$erlaubt  = array( 'svg', 'g', 'path', 'circle', 'ellipse', 'rect', 'line', 'polygon', 'polyline' );
+		$attribute = array(
+			'd', 'cx', 'cy', 'r', 'rx', 'ry', 'x', 'y', 'x1', 'y1', 'x2', 'y2',
+			'width', 'height', 'points', 'transform', 'viewBox', 'fill-rule', 'clip-rule',
+		);
+
+		$vorher = libxml_use_internal_errors( true );
+		$doc    = new \DOMDocument();
+
+		// LIBXML_NONET: keine externen Entitaeten nachladen, auch nicht,
+		// wenn das Dokument danach fragt.
+		$geladen = $doc->loadXML( $svg, LIBXML_NONET | LIBXML_NOERROR | LIBXML_NOWARNING );
+
+		libxml_clear_errors();
+		libxml_use_internal_errors( $vorher );
+
+		if ( ! $geladen || null === $doc->documentElement || 'svg' !== strtolower( $doc->documentElement->nodeName ) ) {
+			return '';
+		}
+
+		self::prune( $doc->documentElement, $erlaubt, $attribute );
+
+		$wurzel = $doc->documentElement;
+
+		// Ohne viewBox weiss der Browser nicht, wie gross die Form gemeint
+		// war — dann lieber nichts als etwas Verzerrtes.
+		if ( ! $wurzel->hasAttribute( 'viewBox' ) ) {
+			return '';
+		}
+
+		$wurzel->setAttribute( 'xmlns', 'http://www.w3.org/2000/svg' );
+
+		// Eine Farbe fuer alles. Fuer die Maske zaehlt ohnehin nur, dass es
+		// undurchsichtig ist.
+		$wurzel->setAttribute( 'fill', '#000' );
+
+		return (string) $doc->saveXML( $wurzel );
+	}
+
+	/**
+	 * @param array<int,string> $erlaubt
+	 * @param array<int,string> $attribute
+	 */
+	private static function prune( \DOMElement $element, array $erlaubt, array $attribute ): void {
+		foreach ( iterator_to_array( $element->childNodes ) as $kind ) {
+			if ( $kind instanceof \DOMElement ) {
+				if ( ! in_array( strtolower( $kind->nodeName ), $erlaubt, true ) ) {
+					$element->removeChild( $kind );
+					continue;
+				}
+
+				self::prune( $kind, $erlaubt, $attribute );
+				continue;
+			}
+
+			// Text, Kommentare, Verarbeitungsanweisungen: nichts davon
+			// beschreibt eine Form.
+			if ( ! $kind instanceof \DOMElement ) {
+				$element->removeChild( $kind );
+			}
+		}
+
+		foreach ( iterator_to_array( $element->attributes ) as $attr ) {
+			if ( ! in_array( $attr->nodeName, $attribute, true ) ) {
+				$element->removeAttribute( $attr->nodeName );
+			}
+		}
+	}
+
 	public static function saveRaster( string $name, string $dataUrl ): ?string {
 		if ( ! isset( self::SIZES[ $name ] ) ) {
 			return 'Unbekannte Grösse.';
