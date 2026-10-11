@@ -80,6 +80,7 @@ $GLOBALS['wpdb'] = new NLC_Test_WPDB();
 require_once dirname( __DIR__ ) . '/resources/child-plugin/north-lab-child/includes/class-nlc-cache.php';
 require_once dirname( __DIR__ ) . '/resources/child-plugin/north-lab-child/includes/class-nlc-maintenance-mode.php';
 require_once dirname( __DIR__ ) . '/resources/child-plugin/north-lab-child/includes/class-nlc-backuplog.php';
+require_once dirname( __DIR__ ) . '/resources/child-plugin/north-lab-child/includes/class-nlc-maintlog.php';
 require_once dirname( __DIR__ ) . '/resources/child-plugin/north-lab-child/includes/class-nlc-banner.php';
 require_once dirname( __DIR__ ) . '/resources/child-plugin/north-lab-child/includes/class-nlc-links.php';
 
@@ -592,6 +593,108 @@ check( 'Ohne Berechtigung keine Auskunft', 403 === ( $GLOBALS['json_error'] ?? 0
 $GLOBALS['current'] = 9;
 
 NLC_Backuplog::stop();
+
+/* ================================= Wartung: was die Agentur getan hat */
+
+// Das Panel ist die Quelle, die Kundenseite haelt nur eine Kopie. Alles, was
+// hier ankommt, wird vorher beschnitten — auch wenn es signiert war.
+NLC_Maintlog::replace( array(
+	array(
+		'at'    => gmdate( 'c', time() - 2 * 86400 ),
+		'ok'    => true,
+		'items' => array(
+			array( 'type' => 'plugin', 'name' => 'Contact Form 7', 'from' => '5.9', 'to' => '6.0' ),
+			array( 'type' => 'core', 'name' => 'WordPress', 'from' => '6.6', 'to' => '6.7' ),
+		),
+	),
+	array( 'at' => gmdate( 'c', time() - 30 * 86400 ), 'ok' => false, 'note' => 'Sicherung schlug fehl', 'items' => array() ),
+) );
+
+NLC_Maintlog::set_state( array(
+	'ssl_days'  => 9,
+	'pending'   => 3,
+	'contact'   => 'hallo@north-lab.de',
+	'backup_at' => gmdate( 'c' ),
+) );
+
+$w = seite();
+
+check( 'Die Wartungstabelle ist da', false !== strpos( $w, 'Was wurde aktualisiert' ) );
+check( 'Mit dem Namen des Pakets', false !== strpos( $w, 'Contact Form 7 6.0' ), '' );
+check( 'Und der Zusammenfassung', false !== strpos( $w, '2 Aktualisierungen eingespielt' ) );
+check( 'Ein Fehlschlag wird nicht beschoenigt', false !== strpos( $w, 'Mit Fehler' ) );
+
+// Die Kacheln oben: was ein Kunde liest, ohne zu scrollen.
+check( 'Die Kachel nennt die letzte Wartung', false !== strpos( $w, 'Zuletzt gewartet' ) );
+check( 'Die offenen Updates stehen da', false !== strpos( $w, 'Offene Updates' ) );
+check( 'Und die Restlaufzeit des Zertifikats', false !== strpos( $w, '9 Tage' ) );
+// Neun Tage sind knapp — das muss anders aussehen als neunzig.
+check( 'Knapp wird farblich hervorgehoben', false !== strpos( $w, '#b32d2e' ) );
+
+// Ohne den fehlgeschlagenen Eintrag ist die Kachel die einzige Stelle, die
+// die Warnfarbe setzen koennte — sonst prueft man die Tabelle mit.
+NLC_Maintlog::replace( array(
+	array( 'at' => gmdate( 'c' ), 'ok' => true, 'items' => array( array( 'type' => 'core', 'name' => 'WordPress', 'to' => '6.7' ) ) ),
+) );
+NLC_Maintlog::set_state( array( 'ssl_days' => 80, 'pending' => 0 ) );
+$ruhiger = seite();
+check( 'Bei viel Restlaufzeit keine Warnfarbe', false === strpos( $ruhiger, '#b32d2e' ) );
+check( 'Sie steht aber trotzdem da', false !== strpos( $ruhiger, '80 Tage' ) );
+check( 'Und "alles aktuell" statt einer Zahl', false !== strpos( $ruhiger, 'alles aktuell' ) );
+
+// Fehlt eine Angabe, steht ein Strich da — keine erfundene Null.
+NLC_Maintlog::set_state( array() );
+$leer = seite();
+check( 'Ohne Angabe wird nichts erfunden', false !== strpos( $leer, 'wird überwacht' ) );
+
+/* ----------------------------------------- Was von aussen kommt, wird beschnitten */
+
+NLC_Maintlog::replace( array(
+	array(
+		'at'    => '<script>alert(1)</script>',
+		'ok'    => true,
+		'count' => -5,
+		'items' => array(
+			array( 'type' => 'boese', 'name' => '<img src=x onerror=alert(2)>', 'to' => '1.0"><b>' ),
+			// Eine echte Vorabversion muss durchkommen — Buchstaben gehoeren
+			// in eine Versionsangabe.
+			array( 'type' => 'plugin', 'name' => 'WooCommerce', 'to' => '9.4.0-beta2' ),
+		),
+	),
+) );
+
+$eintrag = NLC_Maintlog::latest();
+
+check( 'Ein unbekannter Typ wird zu "plugin"', 'plugin' === $eintrag['items'][0]['type'], (string) $eintrag['items'][0]['type'] );
+check( 'Ein Name aus Markup bleibt nichts uebrig', '' === $eintrag['items'][0]['name'], (string) $eintrag['items'][0]['name'] );
+check( 'Aus der Version verschwinden Anfuehrungszeichen und Klammern',
+	! preg_match( '/[<>"\']/', (string) $eintrag['items'][0]['to'] ), (string) $eintrag['items'][0]['to'] );
+check( 'Eine echte Vorabversion bleibt unangetastet', '9.4.0-beta2' === $eintrag['items'][1]['to'], (string) $eintrag['items'][1]['to'] );
+check( 'Eine negative Anzahl wird zu null', 0 === (int) $eintrag['count'], (string) $eintrag['count'] );
+
+$boese = seite();
+check( 'Kein Skript landet auf der Seite', false === strpos( $boese, '<script>alert(1)' ) );
+check( 'Und kein Bild-Handler', false === strpos( $boese, 'onerror=alert(2)' ) );
+// Namenlos heisst: faellt ganz aus der Aufzaehlung. Besser als maskiert
+// anzuzeigen, was ohnehin niemand lesen will.
+check( 'Der unbrauchbare Name taucht gar nicht erst auf', false === strpos( $boese, 'img src=x' ) );
+check( 'Der brauchbare daneben schon', false !== strpos( $boese, 'WooCommerce 9.4.0-beta2' ) );
+
+/* ------------------------------------------------- Die Kachel im Dashboard */
+
+NLC_Maintlog::replace( array(
+	array( 'at' => gmdate( 'c', time() - 3600 ), 'ok' => true, 'items' => array( array( 'type' => 'plugin', 'name' => 'Yoast', 'to' => '22.1' ) ) ),
+) );
+NLC_Maintlog::set_state( array( 'pending' => 0, 'contact' => 'hallo@north-lab.de' ) );
+
+ob_start();
+NLC_Status::instance()->render_widget();
+$widget = (string) ob_get_clean();
+
+check( 'Die Kachel nennt die letzte Wartung', false !== strpos( $widget, 'Zuletzt gewartet' ) );
+check( 'Und was dabei passiert ist', false !== strpos( $widget, '1 Aktualisierung eingespielt' ) );
+check( 'Sie verlinkt die ausfuehrliche Seite', false !== strpos( $widget, 'page=north-lab' ) );
+check( 'Und bietet einen Kontakt an', false !== strpos( $widget, 'mailto:hallo@north-lab.de' ) );
 
 echo "$n Prüfungen, $fails Fehler\n";
 exit( $fails > 0 ? 1 : 0 );

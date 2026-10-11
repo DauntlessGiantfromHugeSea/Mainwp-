@@ -101,6 +101,12 @@ final class UpdateService {
 			);
 		}
 
+		// Der Kunde sieht in seinem eigenen Backend, was gerade passiert ist —
+		// ohne dass jemand dafuer einen Bericht verschicken muss. Schlaegt das
+		// fehl, ist das Update trotzdem gelaufen: eine Anzeige haelt keine
+		// Wartung auf.
+		MaintLogService::push( $site );
+
 		return array(
 			'ok'        => true,
 			'error'     => '',

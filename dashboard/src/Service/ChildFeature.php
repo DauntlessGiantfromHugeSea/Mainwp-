@@ -32,6 +32,7 @@ final class ChildFeature {
 		'cleanup'    => array( 'min' => '1.0.0', 'flag' => 'allow_maintenance', 'label' => 'Die Wartungsaufgaben' ),
 		'branding'   => array( 'min' => '1.4.0', 'flag' => 'allow_branding', 'label' => 'Das Agentur-Branding' ),
 		'links'      => array( 'min' => '1.5.0', 'flag' => 'allow_links', 'label' => 'Die Link-Prüfung' ),
+		'maintlog'   => array( 'min' => '1.7.0', 'flag' => 'allow_maintlog', 'label' => 'Die Wartungsübersicht auf der Kundenseite' ),
 		'backuplog'  => array( 'min' => '1.6.0', 'flag' => 'allow_backup', 'label' => 'Die Sicherungsübersicht auf der Kundenseite' ),
 	);
 

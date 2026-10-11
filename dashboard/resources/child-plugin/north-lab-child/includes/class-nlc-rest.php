@@ -57,6 +57,7 @@ class NLC_REST {
 			'/security'    => array( 'POST', 'security' ),
 			'/backup'      => array( 'POST', 'backup' ),
 			'/links'       => array( 'POST', 'links' ),
+			'/maintlog'    => array( 'POST', 'maintlog' ),
 			'/disconnect'  => array( 'POST', 'disconnect' ),
 		);
 
@@ -649,6 +650,47 @@ class NLC_REST {
 				'config'   => NLC_Links::config(),
 			)
 		);
+	}
+
+	/**
+	 * Das Wartungsprotokoll fuer die Kundenseite.
+	 *
+	 * Das Panel ist die Quelle — hier liegt nur eine Kopie zum Anzeigen.
+	 *
+	 * @param WP_REST_Request $request
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function maintlog( WP_REST_Request $request ) {
+		if ( ! NLC_Options::setting( 'allow_maintlog' ) ) {
+			return new WP_Error(
+				'nlc_maintlog_disabled',
+				'Die Wartungsübersicht ist auf dieser Seite abgeschaltet.',
+				array( 'status' => 403 )
+			);
+		}
+
+		$aktion = sanitize_key( (string) $this->signed( $request, 'action', 'set' ) );
+
+		if ( 'get' === $aktion ) {
+			return rest_ensure_response(
+				array( 'log' => NLC_Maintlog::entries(), 'stand' => NLC_Maintlog::state() )
+			);
+		}
+
+		$log   = NLC_Maintlog::entries();
+		$stand = NLC_Maintlog::state();
+
+		$eintraege = $this->signed( $request, 'entries' );
+		if ( is_array( $eintraege ) ) {
+			$log = NLC_Maintlog::replace( $eintraege );
+		}
+
+		$neuerStand = $this->signed( $request, 'stand' );
+		if ( is_array( $neuerStand ) ) {
+			$stand = NLC_Maintlog::set_state( $neuerStand );
+		}
+
+		return rest_ensure_response( array( 'log' => $log, 'stand' => $stand ) );
 	}
 
 	/**

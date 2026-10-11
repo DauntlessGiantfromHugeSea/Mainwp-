@@ -26,6 +26,73 @@ class NLC_Status {
 		add_action( 'admin_menu', array( $this, 'menu' ) );
 		add_action( 'admin_post_nlc_links_scan', array( $this, 'handle_scan' ) );
 		add_action( 'wp_ajax_nlc_fortschritt', array( $this, 'handle_progress' ) );
+		add_action( 'wp_dashboard_setup', array( $this, 'widget' ) );
+	}
+
+	/**
+	 * Eine Kachel auf der Startseite des Backends.
+	 *
+	 * Das eigene Menue findet, wer danach sucht. Hier landet jeder, der sich
+	 * anmeldet — und genau da gehoert die Antwort auf "wird meine Seite
+	 * eigentlich betreut?" hin, in einem Satz.
+	 */
+	public function widget() {
+		if ( ! current_user_can( 'edit_posts' ) ) {
+			return;
+		}
+
+		wp_add_dashboard_widget(
+			'nlc_betreuung',
+			sprintf( 'Betreut von %s', self::agency() ),
+			array( $this, 'render_widget' )
+		);
+	}
+
+	public function render_widget() {
+		$wartung = NLC_Maintlog::latest();
+		$sicher  = NLC_Backuplog::latest();
+		$stand   = NLC_Maintlog::state();
+		$laeuft  = NLC_Backuplog::running();
+
+		echo '<ul style="margin:0">';
+
+		if ( $laeuft ) {
+			printf(
+				'<li><strong>%s</strong></li>',
+				esc_html( 'Es läuft gerade eine Sicherung.' )
+			);
+		}
+
+		printf(
+			'<li>Zuletzt gewartet: <strong>%s</strong>%s</li>',
+			esc_html( null !== $wartung ? self::seit( (string) $wartung['at'] ) : 'noch nicht' ),
+			null !== $wartung ? ' — ' . esc_html( NLC_Maintlog::summary( $wartung ) ) : ''
+		);
+
+		printf(
+			'<li>Zuletzt gesichert: <strong>%s</strong></li>',
+			esc_html( null !== $sicher ? self::seit( (string) $sicher['at'] ) : 'noch nicht' )
+		);
+
+		if ( isset( $stand['pending'] ) ) {
+			$offen = (int) $stand['pending'];
+
+			printf(
+				'<li>Offene Updates: <strong>%d</strong>%s</li>',
+				$offen,
+				$offen > 0 ? esc_html( ' — wir kümmern uns darum' ) : esc_html( ' — alles aktuell' )
+			);
+		}
+
+		echo '</ul>';
+
+		printf(
+			'<p style="margin-bottom:0"><a href="%s">Alle Einzelheiten</a>%s</p>',
+			esc_url( admin_url( 'admin.php?page=' . self::SLUG ) ),
+			'' !== (string) ( $stand['contact'] ?? '' )
+				? ' &middot; <a href="mailto:' . esc_attr( (string) $stand['contact'] ) . '">Kontakt</a>'
+				: ''
+		);
 	}
 
 	/**
@@ -111,11 +178,97 @@ class NLC_Status {
 		);
 	}
 
+	/**
+	 * Vier Kacheln ganz oben: was ein Kunde wissen will, ohne zu scrollen.
+	 *
+	 * Die Zahlen kommen aus zwei Quellen — was WordPress selbst weiss, und
+	 * was das Panel geschickt hat. Die Restlaufzeit des Zertifikats etwa
+	 * kennt nur das Panel, weil sie aus der Ueberwachung kommt. Fehlt eine
+	 * Angabe, steht ein Strich da und keine erfundene Null.
+	 *
+	 * @param array<string,mixed>            $stand
+	 * @param array<int,array<string,mixed>> $log
+	 * @param array<int,array<string,mixed>> $wartung
+	 */
+	protected function stand_karten( array $stand, array $log, array $wartung ) {
+		$letzteWartung = $wartung ? $wartung[0] : null;
+		$letzteSicher  = $log ? $log[0] : null;
+		$tage          = isset( $stand['ssl_days'] ) && null !== $stand['ssl_days'] ? (int) $stand['ssl_days'] : null;
+		$offen         = isset( $stand['pending'] ) ? (int) $stand['pending'] : null;
+
+		$kachel = static function ( $titel, $wert, $zusatz = '', $farbe = '' ) {
+			printf(
+				'<div style="flex:1 1 180px;min-width:180px;background:#fff;border:1px solid #c3c4c7;border-radius:4px;padding:12px 14px">'
+					. '<div style="font-size:12px;color:#646970;text-transform:uppercase;letter-spacing:.04em">%s</div>'
+					. '<div style="font-size:20px;font-weight:600;margin-top:4px%s">%s</div>'
+					. '<div style="font-size:12px;color:#646970;margin-top:2px">%s</div></div>',
+				esc_html( $titel ),
+				'' !== $farbe ? ';color:' . esc_attr( $farbe ) : '',
+				esc_html( $wert ),
+				esc_html( $zusatz )
+			);
+		};
+		?>
+		<div style="display:flex;flex-wrap:wrap;gap:12px;margin:16px 0 24px;max-width:860px">
+			<?php
+			$kachel(
+				'Zuletzt gewartet',
+				null !== $letzteWartung ? self::seit( (string) $letzteWartung['at'] ) : '—',
+				null !== $letzteWartung ? NLC_Maintlog::summary( $letzteWartung ) : 'noch nichts eingespielt'
+			);
+
+			$kachel(
+				'Zuletzt gesichert',
+				null !== $letzteSicher ? self::seit( (string) $letzteSicher['at'] ) : '—',
+				null !== $letzteSicher ? NLC_Backuplog::size( (int) ( $letzteSicher['bytes'] ?? 0 ) ) : 'noch keine Sicherung'
+			);
+
+			$kachel(
+				'Offene Updates',
+				null === $offen ? '—' : (string) $offen,
+				null === $offen ? 'wird beim nächsten Abgleich gemeldet'
+					: ( 0 === $offen ? 'alles aktuell' : 'wir kümmern uns darum' ),
+				null !== $offen && $offen > 0 ? '#996800' : ''
+			);
+
+			$kachel(
+				'Zertifikat',
+				null === $tage ? '—' : sprintf( '%d Tage', $tage ),
+				null === $tage ? 'wird überwacht' : ( $tage > 21 ? 'läuft automatisch weiter' : 'erneuert sich demnächst' ),
+				null !== $tage && $tage <= 14 ? '#b32d2e' : ''
+			);
+			?>
+		</div>
+		<?php
+	}
+
+	/**
+	 * "vor 3 Tagen" — oder ein Strich, wenn der Zeitpunkt nicht lesbar ist.
+	 *
+	 * @param string $iso
+	 * @return string
+	 */
+	protected static function seit( $iso ) {
+		$ts = strtotime( (string) $iso );
+
+		if ( ! $ts ) {
+			return '—';
+		}
+
+		if ( time() - $ts < 90 ) {
+			return 'gerade eben';
+		}
+
+		return 'vor ' . human_time_diff( $ts );
+	}
+
 	public function render() {
 		$laeuft  = NLC_Backuplog::running();
 		$log     = NLC_Backuplog::entries();
 		$links   = NLC_Links::result_last();
 		$fortsch = NLC_Links::progress();
+		$wartung = NLC_Maintlog::entries();
+		$stand   = NLC_Maintlog::state();
 		?>
 		<div class="wrap">
 			<h1><?php echo esc_html( self::agency() ); ?></h1>
@@ -193,6 +346,50 @@ class NLC_Status {
 					setInterval(hole, 20000);
 				})();
 				</script>
+			<?php endif; ?>
+
+			<?php $this->stand_karten( $stand, $log, $wartung ); ?>
+
+			<h2 class="title">Wartung</h2>
+			<?php if ( ! $wartung ) : ?>
+				<p>
+					Hier steht, was wir an dieser Website aktualisiert haben, sobald das erste Mal
+					etwas eingespielt wurde.
+				</p>
+			<?php else : ?>
+				<table class="widefat striped" style="max-width:860px">
+					<thead>
+						<tr>
+							<th style="width:230px">Zeitpunkt</th>
+							<th style="width:150px">Ergebnis</th>
+							<th>Was wurde aktualisiert</th>
+						</tr>
+					</thead>
+					<tbody>
+					<?php foreach ( $wartung as $eintrag ) : ?>
+						<tr>
+							<td><?php echo esc_html( self::moment( (string) $eintrag['at'] ) ); ?></td>
+							<td>
+								<?php if ( empty( $eintrag['ok'] ) ) : ?>
+									<span style="color:#b32d2e;font-weight:600">Mit Fehler</span>
+								<?php else : ?>
+									<span style="color:#1a7f37;font-weight:600"><?php echo esc_html( NLC_Maintlog::summary( $eintrag ) ); ?></span>
+								<?php endif; ?>
+							</td>
+							<td class="description">
+								<?php
+								$namen = NLC_Maintlog::names( $eintrag );
+								echo '' !== $namen ? esc_html( $namen ) : '&mdash;';
+								?>
+							</td>
+						</tr>
+					<?php endforeach; ?>
+					</tbody>
+				</table>
+				<p class="description">
+					Vor jeder Aktualisierung wird gesichert. Geht dabei etwas schief, lässt sich der
+					Stand davor wiederherstellen.
+				</p>
 			<?php endif; ?>
 
 			<h2 class="title">Sicherungen</h2>

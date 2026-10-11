@@ -40,6 +40,7 @@ class NLC_Options {
 			'allow_self_update' => true,
 			'allow_branding'    => true,
 			'allow_links'       => true,
+			'allow_maintlog'    => true,
 			'ip_allowlist'      => '',
 			'require_ssl'       => false,
 		);

@@ -29,6 +29,7 @@ final class Scheduler {
 		'certificates' => array( 'label' => 'Zertifikatslaufzeiten', 'interval' => 21600 ),
 		'restore_test' => array( 'label' => 'Wiederherstellung prüfen', 'interval' => 86400 ),
 		'vulnerabilities' => array( 'label' => 'Sicherheitslücken abgleichen', 'interval' => 86400 ),
+		'maintlog'     => array( 'label' => 'Wartungsübersicht auf den Kundenseiten', 'interval' => 86400 ),
 		// Jede Minute nachsehen. Der Durchgang ist billig, wenn nichts ansteht,
 		// und eine von Hand angestossene Sicherung soll nicht erst in fuenf
 		// Minuten loslaufen.
@@ -195,6 +196,9 @@ final class Scheduler {
 
 			case 'updates':
 				return UpdateQueue::runDue();
+
+			case 'maintlog':
+				return MaintLogService::pushAll();
 
 			case 'cleanup':
 				$activity = ActivityRepository::prune( Setting::getInt( 'activity_retention', 180 ) );
