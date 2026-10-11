@@ -40,6 +40,13 @@ if ( $managed ) {
 		$actions .= '<form method="post" action="' . e( $siteUrl . '/login' ) . '" style="display:inline">'
 			. csrf_field()
 			. '<button class="btn primary" data-busy="Öffne…">Ein-Klick-Anmeldung</button></form>';
+
+		// Wenn sie nicht greift, soll das Panel sagen warum — und nicht
+		// derjenige raten muessen, der davorsitzt.
+		$actions .= '<form method="post" action="' . e( $siteUrl . '/login-check' ) . '" style="display:inline">'
+			. csrf_field()
+			. '<button class="btn ghost" data-busy="Prüfe…" '
+			. 'title="Geht die Anmeldung die ganze Kette durch? Verbraucht einen Token.">Anmeldung prüfen</button></form>';
 	}
 }
 

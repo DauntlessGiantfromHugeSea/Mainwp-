@@ -209,6 +209,95 @@ final class Http {
 	}
 
 	/**
+	 * Eine Adresse antasten, ohne einer Weiterleitung zu folgen.
+	 *
+	 * request() folgt Weiterleitungen und behaelt pro Kopfzeile nur die
+	 * letzte — fuer eine Diagnose ist genau das Gegenteil noetig: der erste
+	 * Statuscode, das Weiterleitungsziel und alle gesetzten Cookies. Daran
+	 * laesst sich ablesen, ob WordPress die Anmeldung wirklich angenommen hat
+	 * oder ob unterwegs etwas anderes geantwortet hat.
+	 *
+	 * @return array{ok:bool,status:int,location:string,cookies:array<int,string>,body:string,error:string}
+	 */
+	public static function probe( string $url, int $timeout = 20, bool $verifySsl = true ): array {
+		$handle  = curl_init();
+		$cookies = array();
+		$ziel    = '';
+
+		curl_setopt_array(
+			$handle,
+			array(
+				CURLOPT_URL            => $url,
+				CURLOPT_RETURNTRANSFER => true,
+				CURLOPT_FOLLOWLOCATION => false,
+				CURLOPT_TIMEOUT        => $timeout,
+				CURLOPT_CONNECTTIMEOUT => min( 10, $timeout ),
+				CURLOPT_SSL_VERIFYPEER => $verifySsl,
+				CURLOPT_SSL_VERIFYHOST => $verifySsl ? 2 : 0,
+				CURLOPT_USERAGENT      => 'NorthLabPanel/' . NL_VERSION . ' (Diagnose)',
+				CURLOPT_HEADERFUNCTION => static function ( $ch, string $line ) use ( &$cookies, &$ziel ): int {
+					$teile = explode( ':', $line, 2 );
+
+					if ( 2 === count( $teile ) ) {
+						$name = strtolower( trim( $teile[0] ) );
+
+						if ( 'set-cookie' === $name ) {
+							$cookies[] = trim( $teile[1] );
+						}
+						if ( 'location' === $name && '' === $ziel ) {
+							$ziel = trim( $teile[1] );
+						}
+					}
+
+					return strlen( $line );
+				},
+			)
+		);
+
+		$body   = curl_exec( $handle );
+		$status = (int) curl_getinfo( $handle, CURLINFO_RESPONSE_CODE );
+		$fehler = (string) curl_error( $handle );
+
+		curl_close( $handle );
+
+		return array(
+			'ok'       => '' === $fehler && $status > 0,
+			'status'   => $status,
+			'location' => $ziel,
+			'cookies'  => $cookies,
+			// Nur der Anfang: hier wird nur nach Merkmalen gesucht, nicht gelesen.
+			'body'     => is_string( $body ) ? substr( $body, 0, 4096 ) : '',
+			'error'    => $fehler,
+		);
+	}
+
+	/**
+	 * Der Wirt einer Adresse, vergleichbar gemacht.
+	 *
+	 * Klein geschrieben, ohne Schlusspunkt und ohne "www." — denn "www." ist
+	 * keine andere Seite. Genau das war hier der Fehler: das Panel speichert
+	 * die Adresse so, wie sie jemand eingetragen hat, WordPress antwortet mit
+	 * dem, was home_url() liefert. Steht im Panel "kunde.de" und laeuft die
+	 * Installation auf "www.kunde.de", sind das zwei Zeichenketten und
+	 * dieselbe Seite.
+	 */
+	public static function host( string $url ): string {
+		$url = trim( $url );
+
+		if ( '' === $url ) {
+			return '';
+		}
+
+		if ( ! preg_match( '#^[a-z][a-z0-9+.-]*://#i', $url ) ) {
+			$url = 'https://' . $url;
+		}
+
+		$host = strtolower( rtrim( (string) ( parse_url( $url, PHP_URL_HOST ) ?: '' ), '.' ) );
+
+		return preg_replace( '/^www\./', '', $host ) ?? $host;
+	}
+
+	/**
 	 * Gehoert diese Adresse zum selben Wirt wie jene?
 	 *
 	 * Fuer alles, was aus der Antwort einer Kundenseite kommt und danach als
@@ -221,8 +310,8 @@ final class Http {
 			return false;
 		}
 
-		$a = strtolower( (string) parse_url( $url, PHP_URL_HOST ) );
-		$b = strtolower( (string) parse_url( $referenz, PHP_URL_HOST ) );
+		$a = self::host( $url );
+		$b = self::host( $referenz );
 
 		return '' !== $a && $a === $b;
 	}

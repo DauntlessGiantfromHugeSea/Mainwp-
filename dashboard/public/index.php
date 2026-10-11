@@ -134,6 +134,7 @@ $router->post( '/sites/{id:\d+}/vulnerabilities', array( SiteController::class, 
 $router->get( '/sites/{id:\d+}/users', array( SiteUserController::class, 'index' ) );
 $router->post( '/sites/{id:\d+}/users', array( SiteUserController::class, 'store' ) );
 $router->post( '/sites/{id:\d+}/login', array( SiteUserController::class, 'login' ) );
+$router->post( '/sites/{id:\d+}/login-check', array( SiteUserController::class, 'loginCheck' ) );
 
 // Updates
 $router->get( '/updates', array( UpdateController::class, 'index' ) );

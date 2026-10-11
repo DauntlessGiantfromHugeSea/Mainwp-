@@ -135,6 +135,37 @@ final class SiteUserController extends BaseController {
 	}
 
 	/**
+	 * Die Ein-Klick-Anmeldung durchmessen statt raten.
+	 */
+	public function loginCheck( Request $request ): void {
+		Auth::requireWrite();
+
+		$siteId = (int) $request->params['id'];
+		Auth::requireSite( $siteId );
+
+		$ergebnis = SiteUserService::diagnose( $siteId );
+
+		if ( $request->wantsJson() ) {
+			Response::json( $ergebnis );
+			exit;
+		}
+
+		// Als eine Meldung, damit man sie kopieren und weitergeben kann.
+		$zeilen = array();
+
+		foreach ( $ergebnis['schritte'] as $schritt ) {
+			$zeilen[] = sprintf( '%s %s: %s', $schritt['ok'] ? '✓' : '✗', $schritt['name'], $schritt['text'] );
+		}
+
+		$this->respond(
+			$request,
+			$ergebnis['ok'],
+			implode( ' · ', $zeilen ),
+			$this->back( $request, '/sites/' . $siteId )
+		);
+	}
+
+	/**
 	 * Erzeugte Zugangsdaten genau einmal an die nächste Seite reichen.
 	 *
 	 * @param array{login:string,password:string,expires_at:?int} $result

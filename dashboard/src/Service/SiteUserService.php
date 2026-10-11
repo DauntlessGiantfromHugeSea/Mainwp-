@@ -326,4 +326,186 @@ final class SiteUserService {
 
 		return substr( $login, 0, 60 );
 	}
+
+	/* ------------------------------------------------------------ Diagnose */
+
+	/**
+	 * Die ganze Kette der Ein-Klick-Anmeldung einmal durchlaufen und sagen,
+	 * wo sie reisst.
+	 *
+	 * "Klappt nicht" ist keine Fehlermeldung. Die Kette hat sechs Glieder —
+	 * Child erreichbar, Funktion eingeschaltet, Adresse geliefert, Adresse
+	 * plausibel, Adresse abrufbar, Anmeldung angenommen — und bisher musste
+	 * man raten, welches davon gerissen ist. Hier wird jedes einzeln
+	 * angefasst und benannt.
+	 *
+	 * Der dabei erzeugte Token wird verbraucht: die Pruefung meldet sich
+	 * wirklich an, statt es zu behaupten. Danach einmal auf den richtigen
+	 * Knopf druecken.
+	 *
+	 * @return array{ok:bool,schritte:array<int,array{name:string,ok:bool,text:string}>}
+	 */
+	public static function diagnose( int $siteId ): array {
+		$schritte = array();
+
+		$merke = static function ( string $name, bool $ok, string $text ) use ( &$schritte ): void {
+			$schritte[] = array( 'name' => $name, 'ok' => $ok, 'text' => $text );
+		};
+
+		$site = SiteRepository::find( $siteId );
+
+		if ( null === $site ) {
+			$merke( 'Seite', false, 'Seite nicht gefunden.' );
+
+			return array( 'ok' => false, 'schritte' => $schritte );
+		}
+
+		$merke(
+			'Child-Plugin',
+			'' !== (string) $site['child_version'],
+			'' !== (string) $site['child_version']
+				? 'Version ' . $site['child_version']
+				: 'Keine Version bekannt — die Seite hat sich noch nie gemeldet.'
+		);
+
+		// --- Funktion eingeschaltet? -------------------------------------
+		$gesperrt = ChildFeature::unavailable( $site, 'autologin' );
+
+		$merke( 'Funktion freigegeben', null === $gesperrt, $gesperrt ?? 'Die Ein-Klick-Anmeldung ist auf dieser Seite erlaubt.' );
+
+		if ( null !== $gesperrt ) {
+			return array( 'ok' => false, 'schritte' => $schritte );
+		}
+
+		// --- Liefert die Seite eine Adresse? ------------------------------
+		$antwort = ChildClient::post( $site, '/login-link', array( 'data' => array() ) );
+
+		if ( ! $antwort['ok'] ) {
+			$merke( 'Adresse angefordert', false, $antwort['error'] );
+
+			return array( 'ok' => false, 'schritte' => $schritte );
+		}
+
+		$daten = (array) $antwort['data'];
+		$url   = (string) ( $daten['url'] ?? '' );
+
+		if ( empty( $daten['ok'] ) || '' === $url ) {
+			$merke( 'Adresse angefordert', false, (string) ( $daten['error'] ?? 'Die Seite hat keine Adresse geliefert.' ) );
+
+			return array( 'ok' => false, 'schritte' => $schritte );
+		}
+
+		$merke( 'Adresse angefordert', true, 'Die Seite hat eine Einmal-Adresse geliefert.' );
+
+		// --- Passt der Wirt? ----------------------------------------------
+		// Genau hier hat es einmal geklemmt: im Panel stand "kunde.de", die
+		// Installation laeuft auf "www.kunde.de". Das ist dieselbe Seite,
+		// waren aber zwei Zeichenketten.
+		$gleich = Http::sameHost( $url, (string) $site['url'] );
+
+		$merke(
+			'Wirt stimmt überein',
+			$gleich,
+			$gleich
+				? 'Die Adresse liegt auf ' . Http::host( $url ) . '.'
+				: sprintf(
+					'Die Seite antwortet mit "%s", im Panel steht "%s". Das Panel folgt dorthin nicht. '
+						. 'Bitte die Adresse der Seite im Panel angleichen.',
+					Http::host( $url ),
+					Http::host( (string) $site['url'] )
+				)
+		);
+
+		if ( ! $gleich ) {
+			return array( 'ok' => false, 'schritte' => $schritte );
+		}
+
+		// --- Was antwortet die Adresse wirklich? --------------------------
+		$probe = Http::probe( $url, 20, ChildClient::verifiesSsl( $site ) );
+
+		if ( ! $probe['ok'] ) {
+			$merke( 'Adresse abrufbar', false, '' !== $probe['error'] ? $probe['error'] : 'Keine Antwort.' );
+
+			return array( 'ok' => false, 'schritte' => $schritte );
+		}
+
+		$merke( 'Adresse abrufbar', true, sprintf( 'Status %d.', $probe['status'] ) );
+
+		// --- Hat WordPress die Anmeldung angenommen? ----------------------
+		// Das ist der eigentliche Beweis. Setzt WordPress das
+		// Anmeldecookie, hat der Token gegriffen — alles andere ist
+		// Vermutung.
+		$angemeldet = false;
+
+		foreach ( $probe['cookies'] as $cookie ) {
+			if ( 0 === strpos( $cookie, 'wordpress_logged_in_' ) ) {
+				$angemeldet = true;
+				break;
+			}
+		}
+
+		if ( $angemeldet ) {
+			$merke( 'Anmeldung angenommen', true, 'WordPress hat das Anmeldecookie gesetzt. Die Ein-Klick-Anmeldung funktioniert.' );
+
+			return array( 'ok' => true, 'schritte' => $schritte );
+		}
+
+		// Kein Cookie — also nachsehen, was stattdessen passiert ist.
+		$merke( 'Anmeldung angenommen', false, self::erklaerung( $probe, (string) $site['url'], (array) ( $daten['caches'] ?? array() ) ) );
+
+		return array( 'ok' => false, 'schritte' => $schritte );
+	}
+
+	/**
+	 * Aus dem, was zurueckkam, einen brauchbaren Satz machen.
+	 *
+	 * Oeffentlich, weil genau das der Teil ist, der stimmen muss: die
+	 * Fehlersuche ist nur so viel wert wie der Satz am Ende. Der laesst sich
+	 * so einzeln pruefen, ohne eine ganze Kundenseite nachzubauen.
+	 *
+	 * @param array{status:int,location:string,cookies:array<int,string>,body:string} $probe
+	 * @param array<int,mixed>                                                        $caches
+	 */
+	public static function erklaerung( array $probe, string $siteUrl, array $caches = array() ): string {
+		$status = (int) $probe['status'];
+		$ziel   = (string) $probe['location'];
+
+		if ( 404 === $status || 403 === $status ) {
+			return sprintf(
+				'wp-login.php antwortet mit %d. Auf der Seite läuft vermutlich ein Plugin, das die '
+					. 'Anmeldeseite versteckt oder sperrt (WPS Hide Login, Wordfence, iThemes). '
+					. 'Dort eine Ausnahme eintragen oder die Ein-Klick-Anmeldung abschalten.',
+				$status
+			);
+		}
+
+		if ( '' !== $ziel && ! Http::sameHost( $ziel, $siteUrl ) ) {
+			return 'Die Adresse leitet auf einen fremden Wirt weiter: ' . $ziel;
+		}
+
+		if ( '' !== $ziel && false === strpos( $ziel, 'wp-admin' ) ) {
+			return sprintf(
+				'Statt ins Backend wird nach "%s" weitergeleitet. %s',
+				$ziel,
+				$caches
+					? 'Auf der Seite läuft ein Cache (' . implode( ', ', array_map( 'strval', $caches ) ) . '). '
+						. 'Er liefert fertiges HTML aus, bevor WordPress den Token sieht — dort wp-login.php ausnehmen.'
+					: 'Das sieht nach einer Weiterleitung aus, die vor WordPress greift (Webserver, Reverse Proxy, Sicherheits-Plugin).'
+			);
+		}
+
+		if ( 200 === $status && false !== strpos( $probe['body'], 'loginform' ) ) {
+			return 'Es kommt das Anmeldeformular zurück, der Token wurde also nicht eingelöst. '
+				. 'Entweder ist das Child-Plugin zu alt für diese Seite, oder etwas räumt den '
+				. 'Transient weg, in dem der Token steht (aggressives Object-Caching).';
+		}
+
+		if ( $caches ) {
+			return 'Kein Anmeldecookie. Auf der Seite läuft ein Cache ('
+				. implode( ', ', array_map( 'strval', $caches ) ) . ') — dort wp-login.php ausnehmen.';
+		}
+
+		return sprintf( 'Kein Anmeldecookie, Status %d%s. Das Panel kann von hier aus nicht weiter eingrenzen.',
+			$status, '' !== $ziel ? ', Weiterleitung nach ' . $ziel : '' );
+	}
 }

@@ -102,10 +102,8 @@ final class SiteRepository {
 			$url = 'https://' . $url;
 		}
 
-		$host = (string) ( parse_url( $url, PHP_URL_HOST ) ?: '' );
-		$host = strtolower( rtrim( $host, '.' ) );
-
-		return preg_replace( '/^www\./', '', $host ) ?? $host;
+		// Dieselbe Regel wie ueberall sonst — sie steht genau einmal.
+		return \NorthLab\Core\Http::host( $url );
 	}
 
 	/**

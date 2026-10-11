@@ -335,6 +335,16 @@ final class ChildClient {
 	/**
 	 * @param array<string,mixed> $site
 	 */
+	/**
+	 * Nach aussen sichtbar fuer die Diagnose: sie muss die Kundenseite genau
+	 * so antasten, wie das Panel es sonst tut.
+	 *
+	 * @param array<string,mixed> $site
+	 */
+	public static function verifiesSsl( array $site ): bool {
+		return self::verifySsl( $site );
+	}
+
 	private static function verifySsl( array $site ): bool {
 		if ( ! Config::get( 'http.verify_ssl', true ) ) {
 			return false;
