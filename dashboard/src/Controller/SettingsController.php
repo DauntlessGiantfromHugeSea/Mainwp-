@@ -14,6 +14,7 @@ use NorthLab\Service\BrandingService;
 use NorthLab\Service\CertificateService;
 use NorthLab\Service\EventBus;
 use NorthLab\Service\IconService;
+use NorthLab\Service\MenuGlyphService;
 use NorthLab\Service\PushService;
 use NorthLab\Service\Scheduler;
 use NorthLab\Service\VulnerabilityService;
@@ -162,16 +163,23 @@ final class SettingsController extends BaseController {
 				if ( null !== $glyphFehler ) {
 					Session::flash( 'error', $glyphFehler );
 				} else {
-					Session::flash(
-						'success',
-						'Zeichen übernommen. Es geht beim nächsten Branding-Durchgang an die Kundenseiten.'
-					);
+					Session::flash( 'success', $this->glyphVerteilt( 'Zeichen übernommen.' ) );
 				}
 				break;
 
 			case 'glyph_reset':
 				IconService::clearGlyph();
-				Session::flash( 'success', 'Im Kundenmenü steht wieder das mitgelieferte Schild.' );
+				Session::flash( 'success', $this->glyphVerteilt( 'Im Kundenmenü steht wieder das mitgelieferte Schild.' ) );
+				break;
+
+			case 'icon_shipped':
+				$mitFehler = IconService::useShipped();
+
+				if ( null !== $mitFehler ) {
+					Session::flash( 'error', $mitFehler );
+				} else {
+					Session::flash( 'info', 'Die mitgelieferte Welle ist übernommen. Bitte unten die Vorschau prüfen und die Symbole erzeugen.' );
+				}
 				break;
 
 			case 'icon_reset':
@@ -310,6 +318,39 @@ final class SettingsController extends BaseController {
 		}
 
 		$this->respond( $request, true, 'Einstellungen gespeichert.', '/settings' );
+	}
+
+	/**
+	 * Das Zeichen gleich an alle Seiten schicken und sagen, was ankam.
+	 *
+	 * Nicht erst beim naechsten Durchgang: wer gerade etwas hochgeladen
+	 * hat, will es wirken sehen. Und es haengt an keiner anderen Funktion —
+	 * wer das Plugin hat, bekommt das Symbol.
+	 */
+	private function glyphVerteilt( string $vorne ): string {
+		$stand = MenuGlyphService::pushAll();
+
+		$teile = array();
+
+		if ( $stand['sent'] > 0 ) {
+			$teile[] = sprintf( '%d übertragen', $stand['sent'] );
+		}
+		if ( $stand['failed'] > 0 ) {
+			$teile[] = sprintf( '%d nicht erreicht', $stand['failed'] );
+		}
+		if ( $stand['skipped'] > 0 ) {
+			$teile[] = sprintf( '%d brauchen erst das Plugin-Update', $stand['skipped'] );
+		}
+
+		if ( ! $teile ) {
+			return $vorne . ' Es war nichts zu übertragen.';
+		}
+
+		$satz = $vorne . ' ' . implode( ', ', $teile ) . '.';
+
+		return $stand['failed'] > 0 || $stand['skipped'] > 0
+			? $satz . ' Der Rest zieht beim nächsten Sync nach.'
+			: $satz;
 	}
 
 	private function policy( string $value ): string {

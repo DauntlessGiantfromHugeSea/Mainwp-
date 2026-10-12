@@ -3,7 +3,7 @@
  * Plugin Name:       NorthLab Child
  * Plugin URI:        https://north-lab.de/
  * Description:       Verbindet diese WordPress-Seite mit dem NorthLab Control Panel. Erlaubt zentrale Updates, Status-Abfragen, Wartung, Sicherheitschecks und Reports.
- * Version:           1.8.0
+ * Version:           1.9.0
  * Requires at least: 6.0
  * Requires PHP:      7.4
  * Author:            NorthLab
@@ -14,7 +14,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'NLC_VERSION', '1.8.0' );
+define( 'NLC_VERSION', '1.9.0' );
 define( 'NLC_FILE', __FILE__ );
 define( 'NLC_PATH', plugin_dir_path( __FILE__ ) );
 define( 'NLC_URL', plugin_dir_url( __FILE__ ) );
@@ -32,6 +32,7 @@ require_once NLC_PATH . 'includes/class-nlc-maintenance-mode.php';
 require_once NLC_PATH . 'includes/class-nlc-login.php';
 require_once NLC_PATH . 'includes/class-nlc-selfupdate.php';
 require_once NLC_PATH . 'includes/class-nlc-branding.php';
+require_once NLC_PATH . 'includes/class-nlc-symbol.php';
 require_once NLC_PATH . 'includes/class-nlc-backup.php';
 require_once NLC_PATH . 'includes/class-nlc-backuplog.php';
 require_once NLC_PATH . 'includes/class-nlc-restore.php';
@@ -86,6 +87,15 @@ function nlc_boot() {
 add_action( 'plugins_loaded', 'nlc_boot' );
 
 /**
+ * Nach einer neuen Fassung einmal aufraeumen.
+ *
+ * Laeuft bei jedem Aufruf durch eine Zahlenvergleich-Abfrage und tut nur dann
+ * etwas, wenn die gespeicherte Fassung aelter ist als die laufende. Das ist
+ * noetig, weil ein Plugin-Update den Aktivierungs-Haken nicht ausloest.
+ */
+add_action( 'plugins_loaded', array( 'NLC_Options', 'upgrade' ), 1 );
+
+/**
  * Stuendlich abgelaufene befristete Konten entfernen.
  */
 function nlc_schedule_purge() {
@@ -102,6 +112,7 @@ add_action( 'nlc_purge_expired_users', array( 'NLC_Actions', 'purge_expired_user
  */
 function nlc_activate() {
 	NLC_Options::bootstrap_defaults();
+	NLC_Options::upgrade();
 	nlc_schedule_purge();
 	NLC_Links::schedule();
 }

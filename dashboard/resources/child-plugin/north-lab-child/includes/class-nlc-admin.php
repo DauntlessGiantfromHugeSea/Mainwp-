@@ -176,7 +176,7 @@ class NLC_Admin {
 						'allow_branding'    => 'Support-Leiste und Login-Branding der Agentur zeigen',
 						'allow_links'       => 'Einmal pro Woche nach toten Links suchen',
 						'allow_maintlog'    => 'Zeigen, wann zuletzt gewartet wurde',
-						'allow_restore'     => 'Eine Sicherung zurückspielen dürfen (überschreibt diese Website)',
+						'allow_restore'     => 'Eine Sicherung zurückspielen dürfen (nur mit Freigabecode der Agentur)',
 						'require_ssl'       => 'Nur HTTPS-Requests akzeptieren',
 					);
 					foreach ( $labels as $key => $label ) :

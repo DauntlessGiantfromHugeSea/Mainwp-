@@ -59,6 +59,7 @@ class NLC_REST {
 			'/links'       => array( 'POST', 'links' ),
 			'/maintlog'    => array( 'POST', 'maintlog' ),
 			'/restore'     => array( 'POST', 'restore' ),
+			'/symbol'      => array( 'POST', 'symbol' ),
 			'/disconnect'  => array( 'POST', 'disconnect' ),
 		);
 
@@ -692,6 +693,28 @@ class NLC_REST {
 		}
 
 		return rest_ensure_response( array( 'log' => $log, 'stand' => $stand ) );
+	}
+
+	/**
+	 * Das Zeichen der Agentur fürs eigene Menü.
+	 *
+	 * Ohne Schalter: das ist ein Bild für den eigenen Menüpunkt, nicht mehr.
+	 * Wer das Plugin hat, bekommt es — darum hängt es auch nicht am
+	 * Branding, das man je Kunde an- und abschaltet.
+	 *
+	 * @param WP_REST_Request $request
+	 * @return WP_REST_Response
+	 */
+	public function symbol( WP_REST_Request $request ) {
+		$gesetzt = NLC_Symbol::set( (string) $this->signed( $request, 'glyph', '' ) );
+
+		return rest_ensure_response(
+			array(
+				'symbol' => '' !== $gesetzt,
+				// Das Dashboard merkt sich daran, ob es nochmal schicken muss.
+				'stamp'  => (string) $this->signed( $request, 'stamp', '' ),
+			)
+		);
 	}
 
 	/**

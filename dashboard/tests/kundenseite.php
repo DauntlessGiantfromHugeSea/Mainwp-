@@ -7,6 +7,15 @@ declare( strict_types = 1 );
 
 require __DIR__ . '/child-stubs.php';
 
+// Die echte Fassung aus dem Plugin, nicht eine abgeschriebene: so prueft
+// der Nachzieh-Lauf gegen das, was wirklich ausgeliefert wird.
+preg_match(
+	"/define\\( 'NLC_VERSION', '([^']+)' \\)/",
+	(string) file_get_contents( dirname( __DIR__ ) . '/resources/child-plugin/north-lab-child/north-lab-child.php' ),
+	$fassung
+);
+define( 'NLC_VERSION', $fassung[1] ?? '0' );
+
 define( 'WEEK_IN_SECONDS', 604800 );
 define( 'MINUTE_IN_SECONDS', 60 );
 define( 'ARRAY_A', 'ARRAY_A' );
@@ -292,6 +301,7 @@ check( 'Ein Logo mit javascript: wird nicht eingebunden', false === strpos( $boe
 /* ------------------------------------------- Logo kommt aus dem Branding */
 
 require_once dirname( __DIR__ ) . '/resources/child-plugin/north-lab-child/includes/class-nlc-branding.php';
+require_once dirname( __DIR__ ) . '/resources/child-plugin/north-lab-child/includes/class-nlc-symbol.php';
 
 delete_option( NLC_Banner::OPTION );
 NLC_Branding::save( array( 'logo' => 'https://agentur.de/logo.png', 'accent' => '#00aaff' ) );
@@ -537,6 +547,12 @@ function wp_send_json_error( $d = null, $c = 0 ) { $GLOBALS['json_error'] = $c; 
 
 require_once dirname( __DIR__ ) . '/resources/child-plugin/north-lab-child/includes/class-nlc-options.php';
 require_once dirname( __DIR__ ) . '/resources/child-plugin/north-lab-child/includes/class-nlc-status.php';
+// Gehoeren hierher und nicht weiter unten: seit das Zurueckspielen von Haus
+// aus ansteht, zeigt die Kundenseite den Abschnitt bei jedem Aufbau — und
+// der braucht diese Klassen. Im echten Plugin sind ohnehin alle Dateien
+// geladen, bevor irgendetwas gerendert wird.
+require_once dirname( __DIR__ ) . '/resources/child-plugin/north-lab-child/includes/class-nlc-backup.php';
+require_once dirname( __DIR__ ) . '/resources/child-plugin/north-lab-child/includes/class-nlc-restore.php';
 
 $GLOBALS['options']['nlc_connection'] = array(
 	'connection_id' => 'abc', 'public_key' => 'x',
@@ -712,16 +728,24 @@ $logo = 'data:image/svg+xml;base64,' . base64_encode(
 
 // Was keine saubere Daten-URI ist, kommt gar nicht erst an. Eine fremde
 // Adresse im Menue wuerde bei jedem Backend-Aufruf nach Hause telefonieren.
-check( 'Eine fremde Adresse wird abgewiesen', '' === NLC_Branding::glyph( 'https://angreifer.example/logo.svg' ) );
-check( 'javascript: ebenso', '' === NLC_Branding::glyph( 'javascript:alert(1)' ) );
-check( 'Ein anderes Schema auch', '' === NLC_Branding::glyph( 'data:text/html;base64,' . base64_encode( '<b>x</b>' ) ) );
-check( 'Kaputtes Base64 faellt durch', '' === NLC_Branding::glyph( 'data:image/png;base64,###' ) );
-check( 'Etwas aus dem url() auszubrechen geht nicht', '' === NLC_Branding::glyph( 'data:image/png;base64,AAA") ; x:url("y' ) );
-check( 'Und zu gross ist zu gross', '' === NLC_Branding::glyph( 'data:image/png;base64,' . str_repeat( 'A', 20000 ) ) );
-check( 'Eine saubere Daten-URI kommt durch', $logo === NLC_Branding::glyph( $logo ) );
+check( 'Eine fremde Adresse wird abgewiesen', '' === NLC_Symbol::sanitize( 'https://angreifer.example/logo.svg' ) );
+check( 'javascript: ebenso', '' === NLC_Symbol::sanitize( 'javascript:alert(1)' ) );
+check( 'Ein anderes Schema auch', '' === NLC_Symbol::sanitize( 'data:text/html;base64,' . base64_encode( '<b>x</b>' ) ) );
+check( 'Kaputtes Base64 faellt durch', '' === NLC_Symbol::sanitize( 'data:image/png;base64,###' ) );
+check( 'Etwas aus dem url() auszubrechen geht nicht', '' === NLC_Symbol::sanitize( 'data:image/png;base64,AAA") ; x:url("y' ) );
+check( 'Und zu gross ist zu gross', '' === NLC_Symbol::sanitize( 'data:image/png;base64,' . str_repeat( 'A', 20000 ) ) );
+check( 'Eine saubere Daten-URI kommt durch', $logo === NLC_Symbol::sanitize( $logo ) );
+
+// Das Symbol haengt nicht am Branding: wer das Plugin hat, bekommt es.
+// Frueher stand es in der Branding-Option und kam deshalb nur dort an, wo
+// jemand Branding angewandt hatte.
+NLC_Symbol::set( $logo );
+NLC_Branding::save( array( 'bar_enabled' => false, 'login_bar_enabled' => false, 'logo' => '' ) );
+check( 'Branding abschalten nimmt das Symbol nicht mit', NLC_Symbol::has() );
+check( 'Und es ist dasselbe geblieben', $logo === NLC_Symbol::get() );
 
 // Ohne Logo bleibt das Schild.
-NLC_Branding::save( array( 'menu_icon' => '' ) );
+NLC_Symbol::set( '' );
 $GLOBALS['menus'] = array();
 NLC_Status::instance()->menu();
 
@@ -732,7 +756,7 @@ NLC_Status::instance()->menu_style();
 check( 'Und es wird kein Stil ausgegeben', '' === trim( (string) ob_get_clean() ) );
 
 // Mit Logo: leere Flaeche im Menue, gefuellt per Maske.
-NLC_Branding::save( array( 'menu_icon' => $logo ) );
+NLC_Symbol::set( $logo );
 $GLOBALS['menus'] = array();
 NLC_Status::instance()->menu();
 
@@ -760,13 +784,53 @@ $wpInhalt = sys_get_temp_dir() . '/nlc-kundenseite/wp-content';
 
 define( 'WP_CONTENT_DIR', $wpInhalt );
 
-require_once dirname( __DIR__ ) . '/resources/child-plugin/north-lab-child/includes/class-nlc-backup.php';
-require_once dirname( __DIR__ ) . '/resources/child-plugin/north-lab-child/includes/class-nlc-restore.php';
 
-// Standardmaessig aus. Das ist der einzige Schalter im Plugin, der so
-// steht — alles andere liest nur, das hier ueberschreibt die Website.
-check( 'Zurückspielen ist von Haus aus abgeschaltet',
-	false === NLC_Options::default_settings()['allow_restore'] );
+// Steht an: die Sperre ist der Freigabecode der Agentur, nicht dieser
+// Haken. Waere er aus, muesste ihn im Ernstfall erst jemand suchen.
+check( 'Zurückspielen steht von Haus aus an',
+	true === NLC_Options::default_settings()['allow_restore'] );
+
+/* -------------------------------------- Der Nachzieh-Lauf nach dem Update */
+
+// Ein Plugin-Update loest den Aktivierungs-Haken nicht aus. Ohne diesen
+// Lauf erreichte der neue Standardwert keine Installation, in der die
+// Optionen schon einmal gespeichert wurden — also keine einzige.
+$GLOBALS['options']['nlc_settings'] = array_merge(
+	NLC_Options::default_settings(),
+	array( 'allow_restore' => false )
+);
+unset( $GLOBALS['options']['nlc_upgraded'] );
+
+// Welcher Schritt wann faellig ist — daran haengt, dass ein Schritt genau
+// einmal greift und nicht bei jedem spaeteren Update erneut.
+check( 'Von alt auf 1.9.0 ist der Schritt faellig', array( 'allow_restore' ) === NLC_Options::upgrade_steps( '1.8.0', '1.9.0' ) );
+check( 'Von einer Neuinstallation aus auch', array( 'allow_restore' ) === NLC_Options::upgrade_steps( '0', '1.9.0' ) );
+check( 'Auf derselben Fassung faellt nichts an', array() === NLC_Options::upgrade_steps( '1.9.0', '1.9.0' ) );
+check( 'Und spaeter nie wieder', array() === NLC_Options::upgrade_steps( '1.9.0', '2.4.0' ) );
+check( 'Auch nicht beim uebernaechsten Mal', array() === NLC_Options::upgrade_steps( '2.0.0', '2.4.0' ) );
+check( 'Eine aeltere laufende Fassung loest nichts aus', array() === NLC_Options::upgrade_steps( '2.0.0', '1.9.0' ) );
+// Und ein Update, das den Schritt noch gar nicht kennt, auch nicht: sonst
+// stuende in den Optionen etwas, womit die laufende Fassung nichts anfaengt.
+check( 'Ein Update unterhalb des Schritts loest ihn nicht aus', array() === NLC_Options::upgrade_steps( '1.8.0', '1.8.5' ) );
+
+NLC_Options::upgrade();
+check( 'Der Nachzieh-Lauf schaltet das Zurückspielen an', true === NLC_Options::setting( 'allow_restore' ) );
+check( 'Und merkt sich die Fassung', NLC_VERSION === (string) get_option( 'nlc_upgraded', '' ) );
+
+// Wer es danach bewusst abschaltet, bei dem bleibt es aus: der Lauf
+// greift genau einmal und nicht bei jedem Seitenaufruf wieder.
+NLC_Options::save_settings( array( 'allow_restore' => false ) );
+NLC_Options::upgrade();
+check( 'Ein zweiter Lauf schaltet nichts wieder an', false === NLC_Options::setting( 'allow_restore' ) );
+
+// Eine frische Installation hat noch gar keine Optionen — da darf der
+// Lauf nichts anlegen, sonst stuende der Satz zweimal unterschiedlich da.
+unset( $GLOBALS['options']['nlc_settings'], $GLOBALS['options']['nlc_upgraded'] );
+NLC_Options::upgrade();
+check( 'Ohne gespeicherte Optionen legt der Lauf keine an', ! isset( $GLOBALS['options']['nlc_settings'] ) );
+check( 'Vermerkt aber die Fassung', NLC_VERSION === (string) get_option( 'nlc_upgraded', '' ) );
+
+NLC_Options::save_settings( array() );
 
 NLC_Options::save_settings( array( 'allow_restore' => false ) );
 $ohne = seite();

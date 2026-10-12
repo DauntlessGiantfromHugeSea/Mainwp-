@@ -43,7 +43,7 @@ class NLC_Status {
 	 * Ohne hinterlegtes Logo bleibt das Schild aus dem Dashicons-Satz.
 	 */
 	public function menu_style() {
-		$glyph = (string) NLC_Branding::state()['menu_icon'];
+		$glyph = NLC_Symbol::get();
 
 		if ( '' === $glyph ) {
 			return;
@@ -180,7 +180,7 @@ class NLC_Status {
 			array( $this, 'render' ),
 			// Liegt ein Logo vor, zeichnet menu_style() es per Maske in die
 			// leere Flaeche. Sonst bleibt das Schild.
-			'' !== (string) NLC_Branding::state()['menu_icon'] ? 'none' : 'dashicons-shield-alt',
+			NLC_Symbol::has() ? 'none' : 'dashicons-shield-alt',
 			3
 		);
 	}

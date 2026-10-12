@@ -117,6 +117,7 @@ if [ "$hat_db" -eq 1 ]; then
 	lauf "anmeldung" "php '$HIER/anmeldung.php'"
 	lauf "freigabe" "php '$HIER/freigabe.php'"
 	lauf "warteschlange" "php '$HIER/warteschlange.php'"
+	lauf "symbol" "php '$HIER/symbol.php'"
 
 	if [ "$hat_restic" -eq 1 ]; then
 		lauf "backup-e2e" "php '$HIER/backup-e2e.php'"

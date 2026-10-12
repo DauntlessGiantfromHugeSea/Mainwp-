@@ -15,6 +15,69 @@ class NLC_Options {
 	const OPT_SETTINGS     = 'nlc_settings';
 	const OPT_LAST_CONTACT = 'nlc_last_contact';
 
+	/** Fassung, auf die der letzte Aufraeum-Lauf die Optionen gebracht hat. */
+	const OPT_UPGRADED     = 'nlc_upgraded';
+
+	/**
+	 * Welche Nachzieh-Schritte zwischen zwei Fassungen anfallen.
+	 *
+	 * Eigene Methode, weil daran das Heikle haengt: ein Schritt darf genau
+	 * einmal greifen. Greift er zweimal, stellt er zurueck, was jemand
+	 * danach bewusst anders eingestellt hat.
+	 *
+	 * @param string $from Fassung, auf der die Optionen stehen.
+	 * @param string $to   Fassung, die jetzt laeuft.
+	 * @return array<int,string>
+	 */
+	public static function upgrade_steps( $from, $to ) {
+		$schritte = array();
+
+		// Jeder Schritt traegt seine eigene Fassung — und zwar beidseitig:
+		// er faellt an, wenn die Optionen darunter stehen und die laufende
+		// Fassung ihn schon kennt. Ein gemeinsamer Waechter davor waere
+		// bequemer und zugleich die Stelle, an der ein spaeterer Schritt
+		// still uebersprungen wird.
+		//
+		// 1.9.0: Das Zurueckspielen gehoert zur Betreuung und nicht an einen
+		// Haken, den im Ernstfall erst jemand suchen muss.
+		if ( version_compare( (string) $from, '1.9.0', '<' ) && version_compare( (string) $to, '1.9.0', '>=' ) ) {
+			$schritte[] = 'allow_restore';
+		}
+
+		return $schritte;
+	}
+
+	/**
+	 * Gespeicherte Optionen auf den Stand der laufenden Fassung bringen.
+	 *
+	 * Laeuft bei jedem Aufruf an, tut aber nur nach einem Update etwas: ein
+	 * Plugin-Update loest den Aktivierungs-Haken nicht aus, ein geaenderter
+	 * Standardwert erreicht also von allein keine Installation, in der die
+	 * Optionen schon einmal gespeichert wurden.
+	 */
+	public static function upgrade() {
+		$from = (string) get_option( self::OPT_UPGRADED, '0' );
+
+		// Der Normalfall: nichts zu tun. Steht hier nur, damit nicht jeder
+		// Seitenaufruf eine Option schreibt — entschieden wird in
+		// upgrade_steps().
+		if ( version_compare( $from, NLC_VERSION, '>=' ) ) {
+			return;
+		}
+
+		$schritte = self::upgrade_steps( $from, NLC_VERSION );
+		$stored   = get_option( self::OPT_SETTINGS, null );
+
+		// Eine frische Installation hat noch gar keine Optionen — die legt
+		// bootstrap_defaults() an, und zwar schon mit dem neuen Stand.
+		if ( is_array( $stored ) && in_array( 'allow_restore', $schritte, true ) ) {
+			$stored['allow_restore'] = true;
+			update_option( self::OPT_SETTINGS, $stored );
+		}
+
+		update_option( self::OPT_UPGRADED, NLC_VERSION, false );
+	}
+
 	/**
 	 * Standardwerte anlegen, ohne bestehende zu überschreiben.
 	 */
@@ -41,10 +104,11 @@ class NLC_Options {
 			'allow_branding'    => true,
 			'allow_links'       => true,
 			'allow_maintlog'    => true,
-			// Als einziger Schalter aus: das ist der einzige Weg, der
-			// in die Installation schreibt und die Datenbank
-			// ueberschreibt. Wer das will, schaltet es bewusst ein.
-			'allow_restore'     => false,
+			// Steht an, weil die eigentliche Sperre davor sitzt: ohne den
+			// Freigabecode aus dem Panel faengt kein Zurueckspielen an. Ein
+			// zweiter Haken davor haette nur bedeutet, dass im Ernstfall
+			// erst jemand diesen Haken suchen muss.
+			'allow_restore'     => true,
 			'ip_allowlist'      => '',
 			'require_ssl'       => false,
 		);

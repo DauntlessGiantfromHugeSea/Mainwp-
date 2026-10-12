@@ -192,6 +192,36 @@ final class IconService {
 		return trim( $svg );
 	}
 
+	/**
+	 * Wo das mitgelieferte Logo liegt — die Welle.
+	 *
+	 * Sie ist zugleich die Rueckfallzeichnung in mark.svg; hier steht sie
+	 * blank, also ohne Grundflaeche, damit der Zusammenbau Hintergrund und
+	 * Rand selbst bestimmen kann.
+	 */
+	public static function shippedPath(): string {
+		return NL_ROOT . '/public/assets/icons/welle.svg';
+	}
+
+	/**
+	 * Das mitgelieferte Logo als Quelle übernehmen.
+	 *
+	 * Erspart den Umweg über einen Upload: die Datei liegt ohnehin im Panel.
+	 * Denselben Weg wie ein Upload nimmt sie trotzdem, damit sie dieselbe
+	 * Prüfung durchläuft und nicht an ihr vorbei in den Ordner kommt.
+	 *
+	 * @return string|null Fehlermeldung oder null bei Erfolg.
+	 */
+	public static function useShipped(): ?string {
+		$pfad = self::shippedPath();
+
+		if ( ! is_file( $pfad ) ) {
+			return 'Das mitgelieferte Logo fehlt in dieser Installation.';
+		}
+
+		return self::store( (string) file_get_contents( $pfad ), 'image/svg+xml' );
+	}
+
 	public static function clearSource(): void {
 		foreach ( self::SOURCE_TYPES as $extension ) {
 			$path = self::directory() . '/source.' . $extension;

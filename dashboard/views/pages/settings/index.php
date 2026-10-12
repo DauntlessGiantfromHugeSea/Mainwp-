@@ -486,7 +486,8 @@ $get = static fn( string $key, string $default = '' ): string => $settings[ $key
 							<div class="hint">
 								Nur SVG — ein Pixelbild ergibt bei 20 Pixeln keine saubere Silhouette.
 								Am besten eine einzelne, kräftige Form; feine Linien verschwinden in der Grösse.
-								Das Symbol des Panels bleibt davon unberührt.
+								Das Symbol des Panels bleibt davon unberührt. Geht sofort an alle Seiten,
+								die das Plugin haben — unabhängig vom Branding.
 							</div>
 						</div>
 
@@ -520,6 +521,16 @@ $get = static fn( string $key, string $default = '' ): string => $settings[ $key
 						Panel selbst zusammen; sie braucht keinen Zeichner und bleibt bei jeder
 						Grösse scharf.
 					</p>
+					<p>
+						Mitgeliefert ist die Welle. Sie lässt sich ohne Upload übernehmen und
+						bekommt dann denselben Grund und Rand wie jedes andere Logo.
+					</p>
+					<form method="post" action="<?= e( url( '/settings' ) ) ?>" class="mt"
+						data-confirm="Die mitgelieferte Welle als Logo übernehmen? Ein bereits hochgeladenes Logo wird dabei ersetzt.">
+						<?= csrf_field() ?>
+						<input type="hidden" name="section" value="icon_shipped">
+						<button class="btn">Mitgelieferte Welle übernehmen</button>
+					</form>
 					<?php if ( $iconSource || $iconOwn ) : ?>
 						<form method="post" action="<?= e( url( '/settings' ) ) ?>" class="mt"
 							data-confirm="Eigenes Logo und alle daraus erzeugten Symbole entfernen?">

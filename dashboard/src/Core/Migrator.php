@@ -9,7 +9,7 @@ namespace NorthLab\Core;
  */
 final class Migrator {
 
-	public const SCHEMA_VERSION = 18;
+	public const SCHEMA_VERSION = 19;
 
 	/**
 	 * Alle Tabellen anlegen (idempotent).
@@ -64,6 +64,10 @@ final class Migrator {
 				'restore_test_at'   => 'DATETIME NULL DEFAULT NULL',
 				'restore_test_ok'   => 'TINYINT(1) NULL DEFAULT NULL',
 				'restore_test_note' => "VARCHAR(255) NOT NULL DEFAULT ''",
+				// Schema 19: welches Menuesymbol diese Seite schon hat.
+				// Damit wird nur geschickt, wenn sich wirklich etwas geaendert
+				// hat — nicht bei jedem Sync.
+				'glyph_stamp'       => "VARCHAR(40) NOT NULL DEFAULT ''",
 			),
 
 			// Schema 13: ein Bericht kann sich auf eine einzelne Seite beziehen.

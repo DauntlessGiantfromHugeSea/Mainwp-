@@ -145,6 +145,7 @@ class NLC_Updates {
 	}
 }
 
+require_once dirname( __DIR__ ) . '/resources/child-plugin/north-lab-child/includes/class-nlc-symbol.php';
 require_once dirname( __DIR__ ) . '/resources/child-plugin/north-lab-child/includes/class-nlc-rest.php';
 
 $rest = new NLC_REST();
@@ -254,6 +255,61 @@ check( 'Eine nur angehaengte Liste wird nicht eingespielt', array() === $GLOBALS
 $GLOBALS['nlc_update_aufrufe'] = array();
 $rest->update( new WP_REST_Request( array( 'all' => true ), array(), 'POST', '/northlab/v1/update' ) );
 check( 'Im signierten Rumpf gilt all weiterhin', count( $GLOBALS['nlc_update_aufrufe'] ) > 1, (string) count( $GLOBALS['nlc_update_aufrufe'] ) );
+
+/* ------------------------------------------------------- Das Menuesymbol */
+
+// Der Punkt: dieser Weg haengt an nichts. Weder am Branding noch an einem
+// Schalter — wer das Plugin hat, bekommt das Zeichen. Haengt es wieder an
+// einer Erlaubnis, wird dieser Block rot.
+NLC_Options::save_settings(
+	array(
+		'allow_branding'  => false,
+		'allow_updates'   => false,
+		'allow_backup'    => false,
+		'allow_restore'   => false,
+		'allow_maintlog'  => false,
+	)
+);
+
+$zeichen = 'data:image/svg+xml;base64,' . base64_encode( '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 8"><circle cx="4" cy="4" r="3"/></svg>' );
+
+$antwort = $rest->symbol(
+	new WP_REST_Request(
+		array( 'glyph' => $zeichen, 'stamp' => 'abc123' ),
+		array(),
+		'POST',
+		'/northlab/v1/symbol'
+	)
+);
+
+check( 'Das Symbol kommt auch ohne Branding-Erlaubnis an', is_array( $antwort ) && true === ( $antwort['symbol'] ?? false ) );
+check( 'Und liegt danach bereit', NLC_Symbol::has() );
+check( 'Unveraendert', $zeichen === NLC_Symbol::get() );
+check( 'Der Stand wird zurueckgemeldet', is_array( $antwort ) && 'abc123' === ( $antwort['stamp'] ?? '' ) );
+
+// Leer bedeutet: wieder weg. Sonst bliebe ein zurueckgezogenes Logo stehen.
+$weg = $rest->symbol( new WP_REST_Request( array( 'glyph' => '', 'stamp' => 'ohne' ), array(), 'POST', '/northlab/v1/symbol' ) );
+check( 'Ein leeres Zeichen raeumt auf', is_array( $weg ) && false === ( $weg['symbol'] ?? true ) );
+check( 'Danach ist nichts mehr hinterlegt', ! NLC_Symbol::has() );
+
+// Was nicht durchgeht, geht nicht durch — auch hier nicht.
+$boese = $rest->symbol(
+	new WP_REST_Request(
+		array( 'glyph' => 'data:text/html;base64,' . base64_encode( '<script>x</script>' ), 'stamp' => 'x' ),
+		array(),
+		'POST',
+		'/northlab/v1/symbol'
+	)
+);
+check( 'Ein fremdes Format wird abgewiesen', is_array( $boese ) && false === ( $boese['symbol'] ?? true ) );
+check( 'Und hinterlaesst nichts', ! NLC_Symbol::has() );
+
+// Nur der signierte Rumpf zaehlt, wie ueberall sonst auch.
+$angehaengt = $rest->symbol(
+	new WP_REST_Request( array(), array( 'glyph' => $zeichen ), 'POST', '/northlab/v1/symbol' )
+);
+check( 'Ein nur angehaengtes Zeichen wird nicht uebernommen', is_array( $angehaengt ) && false === ( $angehaengt['symbol'] ?? true ) );
+check( 'Es liegt auch nichts da', ! NLC_Symbol::has() );
 
 printf( "%d Prüfungen, %d Fehler\n", $n, $fails );
 exit( $fails ? 1 : 0 );

@@ -100,6 +100,16 @@ final class SyncService {
 		// Ein erfolgreicher Sync beweist Erreichbarkeit.
 		UptimeService::markReachable( $siteId );
 
+		// Das Menuesymbol der Agentur nachziehen, falls diese Seite noch
+		// einen anderen Stand hat. Haengt bewusst hier und nicht am
+		// Branding: wer das Plugin hat, bekommt das Symbol — Branding
+		// dagegen schaltet man je Kunde an und aus. Kostet nichts, wenn
+		// nichts anders ist, und laeuft ins Leere, wenn die Seite nicht
+		// antwortet.
+		MenuGlyphService::afterSync(
+			array_replace( $site, array( 'child_version' => (string) ( $payload['child_version'] ?? $site['child_version'] ) ) )
+		);
+
 		if ( $count > $previousUpdates ) {
 			EventBus::dispatch(
 				'updates.available',
