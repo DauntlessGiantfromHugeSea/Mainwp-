@@ -149,15 +149,21 @@ check( 'Und die erzeugten Fassungen', ! IconService::hasOwnRaster() );
 check( 'Danach kommt wieder das mitgelieferte Symbol',
 	str_contains( (string) IconService::rasterPath( 'icon-192' ), '/public/assets/icons/' ) );
 
-/* ======================= Das Logo als einfarbiges Menuesymbol */
+/* ================= Das Zeichen fuers Kundenmenue — getrennt vom Favicon */
 
-// Benutzt wird es als CSS-Maske. Dabei zaehlt nur, wo etwas undurchsichtig
-// ist — die Farbe kommt vom WordPress-Menue. Deshalb muss hier nur die Form
-// uebrig bleiben, und zwar wirklich nur die.
+// Zwei Zwecke, zwei Dateien. Das Panel-Symbol darf ein farbiges PNG mit
+// Hintergrund sein; als Silhouette im Kundenmenue taugt genau das nicht.
+// Vorher haben sich beide dieselbe Quelle geteilt — dabei konnte man das
+// eine nicht aendern, ohne das andere mitzuaendern.
 
 IconService::reset();
-check( 'Ohne Logo gibt es kein Menuesymbol', ! IconService::menuGlyph()['ok'] );
-check( 'Und einen Grund dafuer', '' !== IconService::menuGlyph()['reason'] );
+IconService::clearGlyph();
+
+check( 'Ohne Hinterlegung gibt es kein Zeichen', ! IconService::hasGlyph() );
+check( 'Und menuGlyph sagt das auch', ! IconService::menuGlyph()['ok'] );
+check( 'Mit einem Grund', str_contains( IconService::menuGlyph()['reason'], 'Kundenmenü' ) );
+
+/* ------------------------------------------- Die Form, und nur die Form */
 
 $boese = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" onload="alert(1)">'
 	. '<script>alert(2)</script>'
@@ -175,46 +181,98 @@ check( 'Die Form bleibt erhalten', str_contains( $form, '<circle' ) && str_conta
 check( 'Die viewBox auch — ohne sie waere die Groesse geraten', str_contains( $form, 'viewBox="0 0 48 48"' ) );
 
 foreach ( array(
-	'ein Skript'            => 'script',
-	'ein Ereignis'          => 'onload',
-	'ein Stilblock'         => 'style',
+	'ein Skript'              => 'script',
+	'ein Ereignis'            => 'onload',
+	'ein Stilblock'           => 'style',
 	'eine javascript-Adresse' => 'javascript',
 	'ein nachgeladenes Bild'  => 'image',
-	'ein foreignObject'     => 'foreignObject',
-	'Text'                  => 'NorthLab',
-	'eine Kontur'           => 'stroke',
-	'ein Verweis als Farbe' => 'url(',
+	'ein foreignObject'       => 'foreignObject',
+	'Text'                    => 'NorthLab',
+	'eine Kontur'             => 'stroke',
+	'ein Verweis als Farbe'   => 'url(',
 ) as $was => $nadel ) {
 	check( "Aus der Silhouette faellt $was heraus", ! str_contains( $form, $nadel ), $nadel );
 }
 
-// Eine Farbe fuer alles — fuer die Maske zaehlt sie ohnehin nicht.
 check( 'Es bleibt genau eine Farbe uebrig', 1 === substr_count( $form, 'fill=' ), $form );
 check( 'Und die rote aus der Vorlage ist es nicht', ! str_contains( $form, '#f00' ) );
 
-// Ohne viewBox weiss der Browser nicht, wie gross die Form gemeint war.
 check( 'Ohne viewBox lieber gar nichts',
 	'' === IconService::silhouette( '<svg xmlns="http://www.w3.org/2000/svg"><circle r="5"/></svg>' ) );
 check( 'Und was kein SVG ist, ergibt auch keins',
 	'' === IconService::silhouette( '<html><body>kein SVG</body></html>' ) );
 
-// Jetzt wirklich hinterlegen und den Glyph abholen.
-$store->invoke( null, '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><circle cx="24" cy="24" r="20"/></svg>', 'image/svg+xml' );
+/* ----------------------------------- Hinterlegen — und was dabei abprallt */
+
+/** Einen Upload nachstellen. is_uploaded_file() gilt nur fuer echte. */
+$hochladen = static function ( string $inhalt ): ?string {
+	$tmp = tempnam( sys_get_temp_dir(), 'nlc' );
+	file_put_contents( (string) $tmp, $inhalt );
+
+	$m = new ReflectionMethod( IconService::class, 'sniff' );
+	$m->setAccessible( true );
+
+	if ( 'image/svg+xml' !== $m->invoke( null, $tmp ) ) {
+		unlink( (string) $tmp );
+		return 'kein SVG';
+	}
+
+	$form = IconService::silhouette( $inhalt );
+	unlink( (string) $tmp );
+
+	if ( '' === $form ) {
+		return 'keine Form';
+	}
+
+	file_put_contents( IconService::directory() . '/glyph.svg', $form );
+	IconService::touch();
+
+	return null;
+};
+
+check( 'Ein Pixelbild wird abgewiesen', 'kein SVG' === $hochladen( "\x89PNG\r\n\x1a\n" . str_repeat( 'x', 64 ) ) );
+check( 'Danach gibt es immer noch kein Zeichen', ! IconService::hasGlyph() );
+
+check( 'Ein SVG ohne viewBox wird abgewiesen',
+	'keine Form' === $hochladen( '<svg xmlns="http://www.w3.org/2000/svg"><circle r="5"/></svg>' ) );
+
+check( 'Ein brauchbares SVG kommt durch',
+	null === $hochladen( '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><circle cx="24" cy="24" r="20" fill="#f00"/></svg>' ) );
+check( 'Und ist danach hinterlegt', IconService::hasGlyph() );
 
 $glyph = IconService::menuGlyph();
 
-check( 'Mit Logo gibt es ein Menuesymbol', $glyph['ok'], $glyph['reason'] );
+check( 'menuGlyph liefert es', $glyph['ok'], $glyph['reason'] );
 check( 'Als Daten-URI', str_starts_with( $glyph['data'], 'data:image/svg+xml;base64,' ) );
 check( 'Es laedt nichts von aussen nach', ! str_contains( $glyph['data'], 'http' ) );
 check( 'Und ist klein genug fuers Backend', strlen( $glyph['data'] ) <= IconService::GLYPH_MAX_BYTES );
+check( 'Die Farbe aus der Vorlage ist verworfen',
+	! str_contains( (string) base64_decode( substr( $glyph['data'], 26 ) ), '#f00' ) );
 
-// Ein grosses Rasterlogo gehoert nicht in jede Backend-Seite.
-$store->invoke( null, str_repeat( "\x89PNG\r\n", 4000 ), 'image/png' );
-$gross = IconService::menuGlyph();
-check( 'Ein zu grosses Logo wird abgelehnt', ! $gross['ok'] );
-check( 'Mit einem Grund, der weiterhilft', str_contains( $gross['reason'], 'SVG' ), $gross['reason'] );
+/* --------------------------------- Die beiden kommen sich nicht ins Gehege */
 
+// Das Favicon bleibt ein PNG, das Kundenmenue bleibt die Silhouette.
+$store->invoke( null, "\x89PNG\r\n\x1a\n" . str_repeat( 'x', 512 ), 'image/png' );
+
+check( 'Das Panel-Symbol ist jetzt ein PNG', 'image/png' === IconService::sourceMime() );
+check( 'Das Zeichen fuers Kundenmenue steht trotzdem noch', IconService::hasGlyph() );
+check( 'Und bleibt ein SVG', str_starts_with( IconService::menuGlyph()['data'], 'data:image/svg+xml' ) );
+
+// Und andersherum: das Zeichen zuruecknehmen laesst das Favicon in Ruhe.
+IconService::clearGlyph();
+
+check( 'Das Zeichen laesst sich zuruecknehmen', ! IconService::hasGlyph() );
+check( 'Das Panel-Symbol ist noch da', IconService::hasSource() );
+check( 'Und immer noch das PNG', 'image/png' === IconService::sourceMime() );
+
+// Das Panel-Symbol zuruecksetzen raeumt das Kundenzeichen nicht mit weg.
+$hochladen( '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><circle cx="24" cy="24" r="20"/></svg>' );
 IconService::reset();
+
+check( 'Panel-Symbol zuruecksetzen laesst das Kundenzeichen stehen', IconService::hasGlyph() );
+check( 'Das Panel-Symbol ist dabei weg', ! IconService::hasSource() );
+
+IconService::clearGlyph();
 
 printf( "%d Prüfungen, %d Fehler\n", $n, $fails );
 exit( $fails ? 1 : 0 );

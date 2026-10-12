@@ -39,6 +39,7 @@ final class SettingsController extends BaseController {
 				// Wie es dort aussieht, gehoert hierher — sonst sieht man es
 				// erst auf einer fremden Seite.
 				'menuGlyph'  => IconService::menuGlyph(),
+				'hasGlyph'   => IconService::hasGlyph(),
 				'jobs'      => Scheduler::overview(),
 				'cronToken' => Setting::get( 'cron_token', '' ),
 				'cronUrl'   => rtrim( (string) Config::get( 'app.url', '' ), '/' ) . '/api/cron/' . Setting::get( 'cron_token', '' ),
@@ -145,6 +146,32 @@ final class SettingsController extends BaseController {
 				} elseif ( IconService::hasSource() ) {
 					Session::flash( 'info', 'Logo übernommen. Bitte unten die Vorschau prüfen und die Symbole erzeugen.' );
 				}
+				break;
+
+			case 'glyph':
+				// Eigener Weg, eigene Datei: das Panel-Symbol bleibt davon
+				// unberuehrt. Ein farbiges PNG ist ein gutes Favicon und eine
+				// schlechte Silhouette — darum nicht dieselbe Quelle.
+				if ( empty( $_FILES['glyph_file']['name'] ) ) {
+					Session::flash( 'error', 'Bitte eine SVG-Datei auswählen.' );
+					break;
+				}
+
+				$glyphFehler = IconService::uploadGlyph( (array) $_FILES['glyph_file'] );
+
+				if ( null !== $glyphFehler ) {
+					Session::flash( 'error', $glyphFehler );
+				} else {
+					Session::flash(
+						'success',
+						'Zeichen übernommen. Es geht beim nächsten Branding-Durchgang an die Kundenseiten.'
+					);
+				}
+				break;
+
+			case 'glyph_reset':
+				IconService::clearGlyph();
+				Session::flash( 'success', 'Im Kundenmenü steht wieder das mitgelieferte Schild.' );
 				break;
 
 			case 'icon_reset':

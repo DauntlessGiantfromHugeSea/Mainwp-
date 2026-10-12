@@ -276,78 +276,109 @@ final class IconService {
 	 * So gross darf der Glyph fuers Menue werden.
 	 *
 	 * Er haengt als Daten-URI in jeder Backend-Seite der Kundenseite. Ein
-	 * Logo, das ein Viertel davon ausmacht, gehoert dort nicht hinein.
+	 * Logo, das ein Viertelmegabyte ausmacht, gehoert dort nicht hinein.
 	 */
 	public const GLYPH_MAX_BYTES = 12288;
 
 	/**
-	 * Das Logo als einfarbige Silhouette fuers Menue der Kundenseite.
+	 * Wo das Zeichen fuers Kundenmenue liegt.
 	 *
-	 * Verwendet wird es als CSS-Maske: dabei zaehlt nur, wo etwas
+	 * Bewusst eine eigene Datei und nicht die Quelle des Panel-Symbols:
+	 * das Favicon darf ein farbiges PNG mit Hintergrund sein — als
+	 * Silhouette taugt genau das nicht. Zwei Zwecke, zwei Dateien.
+	 */
+	public static function glyphPath(): ?string {
+		$pfad = self::directory() . '/glyph.svg';
+
+		return is_file( $pfad ) ? $pfad : null;
+	}
+
+	public static function hasGlyph(): bool {
+		return null !== self::glyphPath();
+	}
+
+	/**
+	 * Das Zeichen fuers Kundenmenue hinterlegen. Nur SVG.
+	 *
+	 * @param array<string,mixed> $file Ein Eintrag aus $_FILES.
+	 * @return string|null Fehlermeldung oder null bei Erfolg.
+	 */
+	public static function uploadGlyph( array $file ): ?string {
+		if ( ( $file['error'] ?? UPLOAD_ERR_NO_FILE ) !== UPLOAD_ERR_OK ) {
+			return 'Es wurde keine Datei übertragen.';
+		}
+
+		$tmp = (string) ( $file['tmp_name'] ?? '' );
+
+		if ( '' === $tmp || ! is_uploaded_file( $tmp ) ) {
+			return 'Die hochgeladene Datei ist nicht auffindbar.';
+		}
+
+		if ( 'image/svg+xml' !== self::sniff( $tmp ) ) {
+			return 'Für das Menü der Kundenseiten wird eine SVG-Datei gebraucht. '
+				. 'Ein Pixelbild ergibt dort keine saubere Silhouette.';
+		}
+
+		$form = self::silhouette( (string) file_get_contents( $tmp ) );
+
+		if ( '' === $form ) {
+			return 'Aus dieser Datei liess sich keine Form gewinnen. '
+				. 'Sie braucht eine viewBox und mindestens eine Fläche (Pfad, Kreis, Rechteck …).';
+		}
+
+		if ( strlen( $form ) > self::GLYPH_MAX_BYTES ) {
+			return sprintf(
+				'Die Form ist mit %d KB zu verschachtelt für ein Menüsymbol. Ein einfacheres Zeichen tut es.',
+				(int) ceil( strlen( $form ) / 1024 )
+			);
+		}
+
+		file_put_contents( self::ensureDirectory() . '/glyph.svg', $form, LOCK_EX );
+		self::touch();
+
+		return null;
+	}
+
+	public static function clearGlyph(): void {
+		$pfad = self::directory() . '/glyph.svg';
+
+		if ( is_file( $pfad ) ) {
+			unlink( $pfad );
+		}
+
+		self::touch();
+	}
+
+	/**
+	 * Das Zeichen fuers Menue im Backend der Kundenseiten.
+	 *
+	 * Verwendet wird es dort als CSS-Maske: dabei zaehlt nur, wo etwas
 	 * undurchsichtig ist, nicht welche Farbe es hat. Dadurch nimmt das Symbol
 	 * von selbst die Farbe des WordPress-Menues an — grau, weiss wenn der
 	 * Punkt aktiv ist — statt als Fremdkoerper danebenzustehen. Und weil ein
 	 * Bild als Maske nie ausgefuehrt wird, ist das zugleich der sichere Weg,
-	 * fremdes SVG zu benutzen.
+	 * ein hochgeladenes SVG zu benutzen.
 	 *
 	 * @return array{ok:bool,data:string,reason:string}
 	 */
 	public static function menuGlyph(): array {
-		$pfad = self::sourcePath();
+		$pfad = self::glyphPath();
 
 		if ( null === $pfad ) {
-			return self::keinGlyph( 'Es ist kein Logo hinterlegt.' );
+			return array(
+				'ok'     => false,
+				'data'   => '',
+				'reason' => 'Es ist noch kein Zeichen für das Kundenmenü hinterlegt.',
+			);
 		}
 
-		$mime = self::sourceMime();
-
-		if ( 'image/svg+xml' === $mime ) {
-			$svg = self::silhouette( (string) file_get_contents( $pfad ) );
-
-			if ( '' === $svg ) {
-				return self::keinGlyph( 'Aus dem Logo liess sich keine Form gewinnen.' );
-			}
-
-			return self::glyph( 'image/svg+xml', $svg );
-		}
-
-		$roh = (string) file_get_contents( $pfad );
-
-		// Ohne SVG bleibt nur die Datei selbst. Ihr Alphakanal ist die Maske —
-		// ein Logo mit durchsichtigem Hintergrund wird dadurch zur Silhouette,
-		// eines auf weissem Grund zu einem Klotz. Das lauft hier nicht auf,
-		// weil es keine Bildbibliothek voraussetzen soll; zu gross ist es
-		// ohnehin meistens.
-		if ( strlen( $roh ) > self::GLYPH_MAX_BYTES ) {
-			// Bewusst ohne den Anzeige-Helfer: ein Dienst soll nicht von den
-			// Ansichten abhaengen, nur um eine Zahl huebsch zu machen.
-			return self::keinGlyph( sprintf(
-				'Das Logo ist mit %d KB zu gross für das Menü. Als SVG hinterlegt wäre es winzig.',
-				(int) ceil( strlen( $roh ) / 1024 )
-			) );
-		}
-
-		return self::glyph( $mime, $roh );
-	}
-
-	/**
-	 * @return array{ok:bool,data:string,reason:string}
-	 */
-	private static function glyph( string $mime, string $inhalt ): array {
-		$daten = 'data:' . $mime . ';base64,' . base64_encode( $inhalt );
+		$daten = 'data:image/svg+xml;base64,' . base64_encode( (string) file_get_contents( $pfad ) );
 
 		if ( strlen( $daten ) > self::GLYPH_MAX_BYTES ) {
-			return self::keinGlyph( 'Das Logo ist für das Menü zu gross.' );
+			return array( 'ok' => false, 'data' => '', 'reason' => 'Das hinterlegte Zeichen ist zu gross.' );
 		}
 
 		return array( 'ok' => true, 'data' => $daten, 'reason' => '' );
-	}
-
-	/**
-	 * @return array{ok:bool,data:string,reason:string}
-	 */
-	private static function keinGlyph( string $grund ): array {
-		return array( 'ok' => false, 'data' => '', 'reason' => $grund );
 	}
 
 	/**

@@ -811,6 +811,7 @@ $settingsPage = render(
 		'iconOwn'    => true,
 		'iconStamp'  => '1700000000',
 		'menuGlyph'  => array( 'ok' => true, 'data' => 'data:image/svg+xml;base64,' . base64_encode( '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" fill="#000"><circle cx="24" cy="24" r="20"/></svg>' ), 'reason' => '' ),
+		'hasGlyph'   => true,
 		'jobs'      => array(),
 		'cronToken' => 'x',
 		'cronUrl'   => 'https://panel.test/api/cron/x',
@@ -869,7 +870,8 @@ $noLogo = render(
 		'iconSource' => false,
 		'iconOwn'    => false,
 		'iconStamp'  => '0',
-		'menuGlyph'  => array( 'ok' => false, 'data' => '', 'reason' => 'Es ist kein Logo hinterlegt.' ),
+		'menuGlyph'  => array( 'ok' => false, 'data' => '', 'reason' => 'Es ist noch kein Zeichen für das Kundenmenü hinterlegt.' ),
+		'hasGlyph'   => false,
 		'jobs'       => array(),
 		'cronToken'  => 'x',
 		'cronUrl'    => 'https://panel.test/api/cron/x',
@@ -885,19 +887,28 @@ check( 'Sondern das mitgelieferte Symbol', str_contains( $noLogo, 'Noch kein eig
 // Dasselbe Logo wird zum Menuepunkt im Backend der Kunden. Wie es dort
 // aussieht, gehoert hierher — sonst sieht man es erst auf einer fremden
 // Seite und kann es dort nicht mehr aendern.
-check( 'Die Seite sagt, dass das Logo auch beim Kunden landet',
-	str_contains( $settingsPage, 'Menüsymbol im WordPress-Backend' ) );
-check( 'Mit einer Vorschau davon', str_contains( $settingsPage, 'Im Backend deiner Kunden' ) );
+// Zwei Zwecke, zwei Dateien: das Favicon darf ein farbiges PNG mit
+// Hintergrund sein — als Silhouette taugt genau das nicht. Das eine darf
+// das andere nicht mitaendern.
+check( 'Das Kundenmenue hat einen eigenen Abschnitt', str_contains( $settingsPage, 'Zeichen im Kundenmenü' ) );
+check( 'Mit eigenem Upload', str_contains( $settingsPage, 'name="glyph_file"' ) );
+check( 'Der nur SVG annimmt', str_contains( $settingsPage, 'accept="image/svg+xml"' ) );
+check( 'Und einem eigenen Abschnittsnamen', str_contains( $settingsPage, 'value="glyph"' ) );
+check( 'Das Panel-Symbol bleibt unberuehrt', str_contains( $settingsPage, 'bleibt davon unberührt' ) );
+check( 'Die alte Behauptung ist weg', ! str_contains( $settingsPage, 'Dasselbe Logo' ) );
+check( 'Das Favicon darf weiter ein PNG sein', str_contains( $settingsPage, 'darf es farbig sein und ein PNG sein' ) );
+
 // Als Maske, nicht als Bild: nur so sieht man die einfarbige Fassung und
 // nicht das bunte Logo.
-check( 'Und zwar als Maske', str_contains( $settingsPage, 'mask:url(' ) );
+check( 'Die Vorschau zeichnet als Maske', str_contains( $settingsPage, 'mask:url(' ) );
 check( 'In der Farbe des WordPress-Menues', str_contains( $settingsPage, '#a7aaad' ) );
 check( 'Mit dem Namen der Agentur daneben', str_contains( $settingsPage, '>NorthLab<' ) );
+check( 'Und laesst sich zuruecknehmen', str_contains( $settingsPage, 'value="glyph_reset"' ) );
 
-check( 'Ohne brauchbares Logo wird keine Vorschau vorgegaukelt', ! str_contains( $noLogo, 'mask:url(' ) );
-check( 'Sondern gesagt, woran es liegt', str_contains( $noLogo, 'Es ist kein Logo hinterlegt' ) );
-check( 'Und was dann im Menue steht', str_contains( $noLogo, 'bleibt solange das mitgelieferte Schild' ) );
-check( 'Dazu der Rat, es als SVG zu hinterlegen', str_contains( $noLogo, 'durchsichtigen' ) );
+check( 'Ohne Zeichen wird keine Vorschau vorgegaukelt', ! str_contains( $noLogo, 'mask:url(' ) );
+check( 'Sondern gesagt, woran es liegt', str_contains( $noLogo, 'noch kein Zeichen für das Kundenmenü' ) );
+check( 'Und was dann im Menue steht', str_contains( $noLogo, 'solange das mitgelieferte Schild' ) );
+check( 'Zum Zuruecknehmen gibt es dann nichts', ! str_contains( $noLogo, 'value="glyph_reset"' ) );
 check( 'Und kein Zuruecksetzen', ! str_contains( $noLogo, 'value="icon_reset"' ) );
 check( 'Push zeigt die Zahl der Geraete', str_contains( $settingsPage, '2 Gerät(e) angemeldet' ) );
 check( 'Ein- und Ausschalter sind angelegt', str_contains( $settingsPage, 'data-push-enable' ) && str_contains( $settingsPage, 'data-push-disable' ) );
