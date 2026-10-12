@@ -193,33 +193,14 @@ final class IconService {
 	}
 
 	/**
-	 * Wo das mitgelieferte Logo liegt — die Welle.
+	 * Wo das mitgelieferte Zeichen liegt — das N mit der Welle.
 	 *
-	 * Sie ist zugleich die Rueckfallzeichnung in mark.svg; hier steht sie
-	 * blank, also ohne Grundflaeche, damit der Zusammenbau Hintergrund und
-	 * Rand selbst bestimmen kann.
+	 * Blank, also ohne Grundfläche und in Schwarz: so taugt es als Maske,
+	 * wo nur zählt, wo etwas undurchsichtig ist. Das fertige Symbol mit
+	 * dunkler Kachel ist mark.svg.
 	 */
 	public static function shippedPath(): string {
-		return NL_ROOT . '/public/assets/icons/welle.svg';
-	}
-
-	/**
-	 * Das mitgelieferte Logo als Quelle übernehmen.
-	 *
-	 * Erspart den Umweg über einen Upload: die Datei liegt ohnehin im Panel.
-	 * Denselben Weg wie ein Upload nimmt sie trotzdem, damit sie dieselbe
-	 * Prüfung durchläuft und nicht an ihr vorbei in den Ordner kommt.
-	 *
-	 * @return string|null Fehlermeldung oder null bei Erfolg.
-	 */
-	public static function useShipped(): ?string {
-		$pfad = self::shippedPath();
-
-		if ( ! is_file( $pfad ) ) {
-			return 'Das mitgelieferte Logo fehlt in dieser Installation.';
-		}
-
-		return self::store( (string) file_get_contents( $pfad ), 'image/svg+xml' );
+		return NL_ROOT . '/public/assets/icons/logo.svg';
 	}
 
 	public static function clearSource(): void {
@@ -320,7 +301,26 @@ final class IconService {
 	public static function glyphPath(): ?string {
 		$pfad = self::directory() . '/glyph.svg';
 
-		return is_file( $pfad ) ? $pfad : null;
+		if ( is_file( $pfad ) ) {
+			return $pfad;
+		}
+
+		// Nichts hochgeladen heisst nicht: kein Zeichen. Das mitgelieferte
+		// liegt im Panel, und damit steht es auf jeder betreuten Seite —
+		// ohne dass jemand dafür etwas einstellen muss.
+		$mitgeliefert = self::shippedPath();
+
+		return is_file( $mitgeliefert ) ? $mitgeliefert : null;
+	}
+
+	/**
+	 * Liegt ein eigenes Zeichen vor — oder gilt das mitgelieferte?
+	 *
+	 * Die Einstellungsseite muss das auseinanderhalten: nur ein eigenes
+	 * lässt sich zurücknehmen.
+	 */
+	public static function hasOwnGlyph(): bool {
+		return is_file( self::directory() . '/glyph.svg' );
 	}
 
 	public static function hasGlyph(): bool {
@@ -402,7 +402,18 @@ final class IconService {
 			);
 		}
 
-		$daten = 'data:image/svg+xml;base64,' . base64_encode( (string) file_get_contents( $pfad ) );
+		// Auch das mitgelieferte Zeichen geht denselben Weg: ein Hochladen
+		// hat die Form schon beim Verwahren bereinigt, hier kommt dasselbe
+		// noch einmal darüber. Das kostet wenig — verschickt wird nur, wenn
+		// sich etwas geändert hat — und erspart zwei Fassungen derselben
+		// Sache, von denen eine irgendwann abweicht.
+		$form = self::silhouette( (string) file_get_contents( $pfad ) );
+
+		if ( '' === $form ) {
+			return array( 'ok' => false, 'data' => '', 'reason' => 'Aus dem hinterlegten Zeichen liess sich keine Form gewinnen.' );
+		}
+
+		$daten = 'data:image/svg+xml;base64,' . base64_encode( $form );
 
 		if ( strlen( $daten ) > self::GLYPH_MAX_BYTES ) {
 			return array( 'ok' => false, 'data' => '', 'reason' => 'Das hinterlegte Zeichen ist zu gross.' );
@@ -535,7 +546,7 @@ final class IconService {
 			'icon-512'         => '/assets/icons/icon-512.png',
 			'icon-192'         => '/assets/icons/icon-192.png',
 			'apple-touch-icon' => '/assets/icons/apple-touch-icon.png',
-			'favicon-32'       => '/assets/icons/icon-192.png',
+			'favicon-32'       => '/assets/icons/favicon-32.png',
 		);
 
 		$path = NL_ROOT . '/public' . $shipped[ $name ];

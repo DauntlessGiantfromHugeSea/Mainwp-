@@ -159,9 +159,12 @@ check( 'Danach kommt wieder das mitgelieferte Symbol',
 IconService::reset();
 IconService::clearGlyph();
 
-check( 'Ohne Hinterlegung gibt es kein Zeichen', ! IconService::hasGlyph() );
-check( 'Und menuGlyph sagt das auch', ! IconService::menuGlyph()['ok'] );
-check( 'Mit einem Grund', str_contains( IconService::menuGlyph()['reason'], 'Kundenmenü' ) );
+check( 'Ohne Hinterlegung gibt es kein eigenes Zeichen', ! IconService::hasOwnGlyph() );
+// Es bleibt trotzdem eines uebrig: das mitgelieferte. Der Menuepunkt auf
+// den Kundenseiten soll ohne Zutun stimmen.
+check( 'Das mitgelieferte springt ein', IconService::hasGlyph() );
+check( 'Und menuGlyph liefert es', IconService::menuGlyph()['ok'] );
+check( 'Es ist die mitgelieferte Datei', IconService::shippedPath() === IconService::glyphPath() );
 
 /* ------------------------------------------- Die Form, und nur die Form */
 
@@ -231,14 +234,15 @@ $hochladen = static function ( string $inhalt ): ?string {
 };
 
 check( 'Ein Pixelbild wird abgewiesen', 'kein SVG' === $hochladen( "\x89PNG\r\n\x1a\n" . str_repeat( 'x', 64 ) ) );
-check( 'Danach gibt es immer noch kein Zeichen', ! IconService::hasGlyph() );
+check( 'Danach gibt es immer noch kein eigenes Zeichen', ! IconService::hasOwnGlyph() );
 
 check( 'Ein SVG ohne viewBox wird abgewiesen',
 	'keine Form' === $hochladen( '<svg xmlns="http://www.w3.org/2000/svg"><circle r="5"/></svg>' ) );
 
 check( 'Ein brauchbares SVG kommt durch',
 	null === $hochladen( '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><circle cx="24" cy="24" r="20" fill="#f00"/></svg>' ) );
-check( 'Und ist danach hinterlegt', IconService::hasGlyph() );
+check( 'Und ist danach hinterlegt', IconService::hasOwnGlyph() );
+check( 'Es verdraengt das mitgelieferte', IconService::shippedPath() !== IconService::glyphPath() );
 
 $glyph = IconService::menuGlyph();
 
@@ -255,13 +259,14 @@ check( 'Die Farbe aus der Vorlage ist verworfen',
 $store->invoke( null, "\x89PNG\r\n\x1a\n" . str_repeat( 'x', 512 ), 'image/png' );
 
 check( 'Das Panel-Symbol ist jetzt ein PNG', 'image/png' === IconService::sourceMime() );
-check( 'Das Zeichen fuers Kundenmenue steht trotzdem noch', IconService::hasGlyph() );
+check( 'Das Zeichen fuers Kundenmenue steht trotzdem noch', IconService::hasOwnGlyph() );
 check( 'Und bleibt ein SVG', str_starts_with( IconService::menuGlyph()['data'], 'data:image/svg+xml' ) );
 
 // Und andersherum: das Zeichen zuruecknehmen laesst das Favicon in Ruhe.
 IconService::clearGlyph();
 
-check( 'Das Zeichen laesst sich zuruecknehmen', ! IconService::hasGlyph() );
+check( 'Das eigene Zeichen laesst sich zuruecknehmen', ! IconService::hasOwnGlyph() );
+check( 'Danach gilt wieder das mitgelieferte', IconService::shippedPath() === IconService::glyphPath() );
 check( 'Das Panel-Symbol ist noch da', IconService::hasSource() );
 check( 'Und immer noch das PNG', 'image/png' === IconService::sourceMime() );
 
@@ -269,7 +274,7 @@ check( 'Und immer noch das PNG', 'image/png' === IconService::sourceMime() );
 $hochladen( '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><circle cx="24" cy="24" r="20"/></svg>' );
 IconService::reset();
 
-check( 'Panel-Symbol zuruecksetzen laesst das Kundenzeichen stehen', IconService::hasGlyph() );
+check( 'Panel-Symbol zuruecksetzen laesst das Kundenzeichen stehen', IconService::hasOwnGlyph() );
 check( 'Das Panel-Symbol ist dabei weg', ! IconService::hasSource() );
 
 IconService::clearGlyph();

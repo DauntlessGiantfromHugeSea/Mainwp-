@@ -108,13 +108,21 @@ $zweit   = seite( 'Zweite', 'https://zweite.de', '2.0.0' );
 
 /* ------------------------------------------------------------- Der Stand */
 
-check( 'Ohne hinterlegtes Zeichen heisst der Stand "ohne"', 'ohne' === MenuGlyphService::stamp() );
+// Der Punkt dieser Runde: ohne dass jemand etwas hinterlegt, gilt das
+// mitgelieferte Zeichen — und damit hat jede Seite eines.
+check( 'Das mitgelieferte Zeichen liegt im Panel', is_file( IconService::shippedPath() ) );
+check( 'Ohne Upload gibt es trotzdem ein Zeichen', IconService::menuGlyph()['ok'] );
+check( 'Aber keines eigenes', ! IconService::hasOwnGlyph() );
+$mitgeliefert = MenuGlyphService::stamp();
+check( 'Und damit auch einen Stand', 'ohne' !== $mitgeliefert && 32 === strlen( $mitgeliefert ) );
 
 $svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><circle cx="32" cy="32" r="28"/></svg>';
 file_put_contents( NL_STORAGE . '/branding/glyph.svg', $svg );
 
 $stand = MenuGlyphService::stamp();
-check( 'Mit Zeichen ist der Stand ein Hash', 32 === strlen( $stand ) && 'ohne' !== $stand );
+check( 'Mit eigenem Zeichen ist der Stand ein Hash', 32 === strlen( $stand ) && 'ohne' !== $stand );
+check( 'Und ein anderer als der des mitgelieferten', $stand !== $mitgeliefert );
+check( 'Jetzt gibt es ein eigenes', IconService::hasOwnGlyph() );
 check( 'Derselbe Inhalt ergibt denselben Stand', $stand === MenuGlyphService::stamp() );
 
 file_put_contents( NL_STORAGE . '/branding/glyph.svg', str_replace( 'r="28"', 'r="24"', $svg ) );
@@ -199,23 +207,45 @@ ChildClient::$gesendet = array();
 $dritte = MenuGlyphService::pushAll();
 check( 'Ein neues Zeichen geht erneut an alle', 2 === $dritte['sent'], 'gesendet: ' . $dritte['sent'] );
 
-// Und das Entfernen ebenso: die Seiten sollen das Schild zurueckbekommen.
-unlink( NL_STORAGE . '/branding/glyph.svg' );
+// Ein eigenes Zeichen zuruecknehmen fuehrt nicht ins Nichts, sondern auf
+// das mitgelieferte — auch das will verteilt werden.
+IconService::clearGlyph();
 ChildClient::$gesendet = array();
 $vierte = MenuGlyphService::pushAll();
-check( 'Auch das Entfernen wird verteilt', 2 === $vierte['sent'], 'gesendet: ' . $vierte['sent'] );
-check( 'Dann ohne Zeichen', '' === ( ChildClient::$gesendet[0]['body']['glyph'] ?? 'x' ) );
-check( 'Und mit dem Stand "ohne"', 'ohne' === ( ChildClient::$gesendet[0]['body']['stamp'] ?? '' ) );
+check( 'Auch das Zuruecknehmen wird verteilt', 2 === $vierte['sent'], 'gesendet: ' . $vierte['sent'] );
+check( 'Danach gilt wieder das mitgelieferte', $mitgeliefert === ( ChildClient::$gesendet[0]['body']['stamp'] ?? '' ) );
+check( 'Und es ist etwas unterwegs, nicht nichts', '' !== ( ChildClient::$gesendet[0]['body']['glyph'] ?? '' ) );
+
+// Nur wenn die mitgelieferte Datei selbst fehlt, bleibt es beim Schild von
+// WordPress. Das ist der einzige Fall, in dem eine Seite ohne Zeichen bleibt.
+$beiseite = NL_STORAGE . '/logo-beiseite.svg';
+rename( IconService::shippedPath(), $beiseite );
+check( 'Ohne die mitgelieferte Datei gibt es kein Zeichen', ! IconService::menuGlyph()['ok'] );
+check( 'Und der Stand heisst "ohne"', 'ohne' === MenuGlyphService::stamp() );
+rename( $beiseite, IconService::shippedPath() );
+check( 'Zurueckgelegt gilt sie wieder', $mitgeliefert === MenuGlyphService::stamp() );
 
 /* ----------------------------------------------------- Mitgeliefertes Logo */
 
-check( 'Das mitgelieferte Logo liegt im Panel', is_file( IconService::shippedPath() ) );
 check( 'Es ist eine SVG-Datei', str_contains( (string) file_get_contents( IconService::shippedPath() ), '<svg' ) );
-check( 'Noch ist keine Quelle gesetzt', ! IconService::hasSource() );
-check( 'Uebernehmen gelingt ohne Upload', null === IconService::useShipped() );
-check( 'Danach gibt es eine Quelle', IconService::hasSource() );
-check( 'Als SVG', 'image/svg+xml' === IconService::sourceMime() );
-check( 'Und sie steckt im zusammengebauten Symbol', str_contains( IconService::svg(), 'data:image/svg+xml;base64,' ) );
+check( 'Es laesst sich zu einer Form bereinigen', '' !== IconService::silhouette( (string) file_get_contents( IconService::shippedPath() ) ) );
+check( 'Ohne eigene Quelle gilt das fertige Symbol', ! IconService::hasSource() );
+check( 'Und das ist das mitgelieferte', str_contains( IconService::svg(), '<rect width="512" height="512"' ) );
+
+// Die Dateien, die der Browser-Reiter und das Handy wirklich anfassen:
+// liegen sie nicht bereit, zeigt das Panel ueberall das alte Zeichen.
+foreach ( array_keys( IconService::SIZES ) as $groesse ) {
+	check( 'Die Fassung ' . $groesse . ' ist mitgeliefert', null !== IconService::rasterPath( $groesse ) );
+	check( 'Und sie ist ein PNG', 'image/png' === (string) ( @getimagesize( (string) IconService::rasterPath( $groesse ) )['mime'] ?? '' ) );
+}
+
+// Jede Groesse eine eigene Datei: frueher lieferte das Panel fuer 32 Pixel
+// ein 192er aus, das der Browser dann selbst herunterrechnen musste.
+$wege = array();
+foreach ( array_keys( IconService::SIZES ) as $groesse ) {
+	$wege[] = basename( (string) IconService::rasterPath( $groesse ) );
+}
+check( 'Keine Groesse leiht sich die Datei einer anderen', count( $wege ) === count( array_unique( $wege ) ) );
 
 echo "\n$n Prüfungen, $fails Fehler\n";
 exit( $fails > 0 ? 1 : 0 );

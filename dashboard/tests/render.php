@@ -816,6 +816,7 @@ $settingsPage = render(
 		'iconStamp'  => '1700000000',
 		'menuGlyph'  => array( 'ok' => true, 'data' => 'data:image/svg+xml;base64,' . base64_encode( '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" fill="#000"><circle cx="24" cy="24" r="20"/></svg>' ), 'reason' => '' ),
 		'hasGlyph'   => true,
+		'ownGlyph'   => true,
 		'jobs'      => array(),
 		'cronToken' => 'x',
 		'cronUrl'   => 'https://panel.test/api/cron/x',
@@ -874,8 +875,9 @@ $noLogo = render(
 		'iconSource' => false,
 		'iconOwn'    => false,
 		'iconStamp'  => '0',
-		'menuGlyph'  => array( 'ok' => false, 'data' => '', 'reason' => 'Es ist noch kein Zeichen für das Kundenmenü hinterlegt.' ),
-		'hasGlyph'   => false,
+		'menuGlyph'  => array( 'ok' => true, 'data' => 'data:image/svg+xml;base64,' . base64_encode( '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" fill="#000"><circle cx="24" cy="24" r="20"/></svg>' ), 'reason' => '' ),
+		'hasGlyph'   => true,
+		'ownGlyph'   => false,
 		'jobs'       => array(),
 		'cronToken'  => 'x',
 		'cronUrl'    => 'https://panel.test/api/cron/x',
@@ -908,10 +910,15 @@ check( 'Die Vorschau zeichnet als Maske', str_contains( $settingsPage, 'mask:url
 check( 'In der Farbe des WordPress-Menues', str_contains( $settingsPage, '#a7aaad' ) );
 check( 'Mit dem Namen der Agentur daneben', str_contains( $settingsPage, '>NorthLab<' ) );
 check( 'Und laesst sich zuruecknehmen', str_contains( $settingsPage, 'value="glyph_reset"' ) );
+check( 'Zurueck fuehrt aufs mitgelieferte, nicht ins Nichts', str_contains( $settingsPage, 'Zurück auf das mitgelieferte Zeichen' ) );
 
-check( 'Ohne Zeichen wird keine Vorschau vorgegaukelt', ! str_contains( $noLogo, 'mask:url(' ) );
-check( 'Sondern gesagt, woran es liegt', str_contains( $noLogo, 'noch kein Zeichen für das Kundenmenü' ) );
-check( 'Und was dann im Menue steht', str_contains( $noLogo, 'solange das mitgelieferte Schild' ) );
+// Ohne eigenes Zeichen ist trotzdem eines da — das mitgelieferte. Die
+// Seite muss beides auseinanderhalten: Vorschau ja, Zuruecknehmen nein.
+check( 'Auch ohne eigenes Zeichen gibt es eine Vorschau', str_contains( $noLogo, 'mask:url(' ) );
+check( 'Sie ist als mitgeliefert ausgewiesen', str_contains( $noLogo, 'mitgeliefertes Zeichen' ) );
+check( 'Und gilt nicht als eigenes', ! str_contains( $noLogo, 'eigenes Zeichen aktiv' ) );
+check( 'Zuruecknehmen gibt es dafuer nicht', ! str_contains( $noLogo, 'value="glyph_reset"' ) );
+check( 'Es steht da, dass es von Haus aus wirkt', str_contains( $noLogo, 'Steht von Haus aus auf' ) );
 check( 'Zum Zuruecknehmen gibt es dann nichts', ! str_contains( $noLogo, 'value="glyph_reset"' ) );
 check( 'Und kein Zuruecksetzen', ! str_contains( $noLogo, 'value="icon_reset"' ) );
 check( 'Push zeigt die Zahl der Geraete', str_contains( $settingsPage, '2 Gerät(e) angemeldet' ) );

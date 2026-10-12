@@ -1,13 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="NorthLab">
 	<rect width="512" height="512" rx="112" fill="#0d0d11"/>
 	<!--
-		Dieselbe Welle wie in welle.svg, nur mittig auf den dunklen Grund
-		gesetzt. Ein Strich, keine Flaechen: das bleibt auch als 32-Pixel-
-		Zeichen im Browser-Reiter lesbar.
+		Dasselbe Zeichen wie in logo.svg, hier hell auf dunkler Kachel:
+		das ist das mitgelieferte Symbol, wenn niemand ein eigenes Logo
+		hochgeladen hat. Als eigenstaendige Datei und nicht aus logo.svg
+		zusammengesetzt, damit sie ohne Zutun vollstaendig ist.
 	-->
-	<g transform="translate(-6 -30) scale(1.13)">
-		<path d="M72 299C120 268 190 268 238 302C286 336 340 318 390 240"
-			fill="none" stroke="#ff9e9b" stroke-width="20"
-			stroke-linecap="round" stroke-linejoin="round"/>
-	</g>
+	<svg x="76" y="140" width="360" height="227" viewBox="28 73 244 154" fill="#f9907a">
+		<path d="M215.39,217.82h-44.74l-56.03-115.11.25-.05v87.8h-30.26v-115.46h47.74l53.03,108.32-.25.05v-108.36h30.26v142.82Z"/>
+		<path d="M267.57,157.49c2.25,1.07,3.14,3.81,1.96,6-2.69,4.97-7.91,13.9-15.38,23.48-6.55,8.41-13.49,15.57-20.62,21.29-9.06,7.27-18.47,12.24-27.97,14.76-4.98,1.32-9.97,1.98-14.98,1.98s-10.46-.72-15.7-2.16c-2.88-.79-5.77-1.8-8.65-3.03-5.09-2.17-10.16-5.01-15.22-8.53-4.57-3.18-9.23-5.99-13.97-8.41-6.11-3.13-12.35-5.62-18.69-7.47-3.51-1.03-7.05-1.85-10.62-2.48-.33-.06-.67-.12-1-.17-2.14-.35-4.3-.63-6.46-.84-3.58-.35-7.19-.5-10.81-.45-4.65.06-9.32.44-13.99,1.15-2.08.31-4.15.69-6.23,1.13-15.53,3.3-27.28,9.4-32.73,12.62-1.94,1.15-4.44.61-5.75-1.22h0c-1.48-2.08-.87-4.97,1.32-6.27,5.99-3.56,18.4-9.97,34.99-13.55,13.71-2.96,27.45-3.36,40.84-1.19,16.72,2.71,32.89,9.44,48.08,20.01,2.77,1.92,5.54,3.62,8.3,5.09,2.46,1.31,4.92,2.43,7.38,3.37,3.52,1.35,7.03,2.33,10.53,2.93,2.46.43,4.92.67,7.38.72,3.75.08,7.48-.26,11.19-1.05.85-.18,1.69-.38,2.54-.6,1.64-.43,3.25-.95,4.84-1.53,16.74-6.16,30.31-20.16,39.03-31.31,7.12-9.11,12.16-17.75,14.71-22.44,1.1-2.03,3.6-2.84,5.69-1.85h0Z"/>
+	</svg>
 </svg>

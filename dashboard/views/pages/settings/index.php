@@ -444,15 +444,19 @@ $get = static fn( string $key, string $default = '' ): string => $settings[ $key
 				<div class="card-head">
 					<h3>Zeichen im Kundenmenü</h3>
 					<div class="spacer"></div>
-					<?php if ( ! empty( $hasGlyph ) ) : ?>
+					<?php if ( ! empty( $ownGlyph ) ) : ?>
 						<span class="badge ok">eigenes Zeichen aktiv</span>
+					<?php elseif ( ! empty( $hasGlyph ) ) : ?>
+						<span class="badge">mitgeliefertes Zeichen</span>
 					<?php endif; ?>
 				</div>
 				<div class="card-body">
 					<p class="small muted">
-						Der Menüpunkt im WordPress-Backend deiner Kunden. Einfarbig, weil die Farbe
-						vom Menü kommt — grau wie die anderen Punkte, weiss wenn deiner aktiv ist.
-						Nur die Form zählt, Farben aus der Datei werden verworfen.
+						Der Menüpunkt im WordPress-Backend deiner Kunden. Steht von Haus aus auf
+						jeder Seite, die das Plugin hat — hier musst du nur etwas tun, wenn ein
+						anderes Zeichen hin soll. Einfarbig, weil die Farbe vom Menü kommt — grau
+						wie die anderen Punkte, weiss wenn deiner aktiv ist. Nur die Form zählt,
+						Farben aus der Datei werden verworfen.
 					</p>
 
 					<?php $glyph = (array) ( $menuGlyph ?? array() ); ?>
@@ -471,7 +475,7 @@ $get = static fn( string $key, string $default = '' ): string => $settings[ $key
 						<?php else : ?>
 							<div class="notice" style="text-align:left">
 								<?= e( (string) ( $glyph['reason'] ?? 'Es ist noch kein Zeichen hinterlegt.' ) ) ?>
-								Im Kundenmenü steht solange das mitgelieferte Schild.
+								Im Kundenmenü steht solange das Schild von WordPress.
 							</div>
 						<?php endif; ?>
 					</div>
@@ -496,12 +500,12 @@ $get = static fn( string $key, string $default = '' ): string => $settings[ $key
 						</div>
 					</form>
 
-					<?php if ( ! empty( $hasGlyph ) ) : ?>
+					<?php if ( ! empty( $ownGlyph ) ) : ?>
 						<form method="post" action="<?= e( url( '/settings' ) ) ?>" class="mt"
-							data-confirm="Eigenes Zeichen entfernen? Im Kundenmenü steht dann wieder das Schild.">
+							data-confirm="Eigenes Zeichen entfernen? Im Kundenmenü steht dann wieder das mitgelieferte.">
 							<?= csrf_field() ?>
 							<input type="hidden" name="section" value="glyph_reset">
-							<button class="btn ghost sm">Zurück auf das Schild</button>
+							<button class="btn ghost sm">Zurück auf das mitgelieferte Zeichen</button>
 						</form>
 					<?php endif; ?>
 				</div>
@@ -522,15 +526,10 @@ $get = static fn( string $key, string $default = '' ): string => $settings[ $key
 						Grösse scharf.
 					</p>
 					<p>
-						Mitgeliefert ist die Welle. Sie lässt sich ohne Upload übernehmen und
-						bekommt dann denselben Grund und Rand wie jedes andere Logo.
+						Ohne eigenes Logo gilt das mitgelieferte Zeichen — das N mit der Welle,
+						hell auf dunkler Kachel. „Zurück zum mitgelieferten Symbol“ führt jederzeit
+						dorthin.
 					</p>
-					<form method="post" action="<?= e( url( '/settings' ) ) ?>" class="mt"
-						data-confirm="Die mitgelieferte Welle als Logo übernehmen? Ein bereits hochgeladenes Logo wird dabei ersetzt.">
-						<?= csrf_field() ?>
-						<input type="hidden" name="section" value="icon_shipped">
-						<button class="btn">Mitgelieferte Welle übernehmen</button>
-					</form>
 					<?php if ( $iconSource || $iconOwn ) : ?>
 						<form method="post" action="<?= e( url( '/settings' ) ) ?>" class="mt"
 							data-confirm="Eigenes Logo und alle daraus erzeugten Symbole entfernen?">

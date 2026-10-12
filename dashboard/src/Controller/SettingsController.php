@@ -41,6 +41,7 @@ final class SettingsController extends BaseController {
 				// erst auf einer fremden Seite.
 				'menuGlyph'  => IconService::menuGlyph(),
 				'hasGlyph'   => IconService::hasGlyph(),
+				'ownGlyph'   => IconService::hasOwnGlyph(),
 				'jobs'      => Scheduler::overview(),
 				'cronToken' => Setting::get( 'cron_token', '' ),
 				'cronUrl'   => rtrim( (string) Config::get( 'app.url', '' ), '/' ) . '/api/cron/' . Setting::get( 'cron_token', '' ),
@@ -169,17 +170,7 @@ final class SettingsController extends BaseController {
 
 			case 'glyph_reset':
 				IconService::clearGlyph();
-				Session::flash( 'success', $this->glyphVerteilt( 'Im Kundenmenü steht wieder das mitgelieferte Schild.' ) );
-				break;
-
-			case 'icon_shipped':
-				$mitFehler = IconService::useShipped();
-
-				if ( null !== $mitFehler ) {
-					Session::flash( 'error', $mitFehler );
-				} else {
-					Session::flash( 'info', 'Die mitgelieferte Welle ist übernommen. Bitte unten die Vorschau prüfen und die Symbole erzeugen.' );
-				}
+				Session::flash( 'success', $this->glyphVerteilt( 'Im Kundenmenü steht wieder das mitgelieferte Zeichen.' ) );
 				break;
 
 			case 'icon_reset':
