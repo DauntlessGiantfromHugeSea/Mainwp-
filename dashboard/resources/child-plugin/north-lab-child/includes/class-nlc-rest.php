@@ -58,6 +58,7 @@ class NLC_REST {
 			'/backup'      => array( 'POST', 'backup' ),
 			'/links'       => array( 'POST', 'links' ),
 			'/maintlog'    => array( 'POST', 'maintlog' ),
+			'/restore'     => array( 'POST', 'restore' ),
 			'/disconnect'  => array( 'POST', 'disconnect' ),
 		);
 
@@ -691,6 +692,79 @@ class NLC_REST {
 		}
 
 		return rest_ensure_response( array( 'log' => $log, 'stand' => $stand ) );
+	}
+
+	/**
+	 * Zurückspielen — der einzige schreibende Weg ins Dateisystem und in
+	 * die Datenbank.
+	 *
+	 * Jeder Wert kommt aus dem signierten Rumpf, keiner aus der Abfrage.
+	 *
+	 * @param WP_REST_Request $request
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function restore( WP_REST_Request $request ) {
+		if ( ! NLC_Options::setting( 'allow_restore' ) ) {
+			return new WP_Error(
+				'nlc_restore_disabled',
+				'Das Zurückspielen ist auf dieser Seite nicht freigegeben.',
+				array( 'status' => 403 )
+			);
+		}
+
+		$aktion = sanitize_key( (string) $this->signed( $request, 'action' ) );
+
+		self::raise_limits();
+
+		switch ( $aktion ) {
+			case 'file':
+				return $this->antwort(
+					NLC_Restore::receive(
+						(string) $this->signed( $request, 'root', 'content' ),
+						(string) $this->signed( $request, 'path' ),
+						(int) $this->signed( $request, 'offset', 0 ),
+						(string) $this->signed( $request, 'data' )
+					)
+				);
+
+			case 'commit':
+				return $this->antwort(
+					NLC_Restore::commit(
+						(string) $this->signed( $request, 'root', 'content' ),
+						(string) $this->signed( $request, 'path' ),
+						(string) $this->signed( $request, 'sha256' )
+					)
+				);
+
+			case 'db-start':
+				return $this->antwort( NLC_Restore::start_database() );
+
+			case 'db-receive':
+				return $this->antwort(
+					NLC_Restore::receive_database(
+						(int) $this->signed( $request, 'offset', 0 ),
+						(string) $this->signed( $request, 'data' )
+					)
+				);
+
+			case 'db-step':
+				return $this->antwort( NLC_Restore::step_database() );
+
+			case 'cleanup':
+				return $this->antwort( NLC_Restore::cleanup() );
+		}
+
+		return new WP_Error( 'nlc_restore_action', 'Unbekannte Aktion.', array( 'status' => 400 ) );
+	}
+
+	/**
+	 * Ein Ergebnis durchreichen — Fehler bleiben Fehler.
+	 *
+	 * @param array<string,mixed>|WP_Error $ergebnis
+	 * @return WP_REST_Response|WP_Error
+	 */
+	private function antwort( $ergebnis ) {
+		return is_wp_error( $ergebnis ) ? $ergebnis : rest_ensure_response( $ergebnis );
 	}
 
 	/**

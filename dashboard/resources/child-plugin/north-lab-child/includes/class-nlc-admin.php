@@ -64,7 +64,7 @@ class NLC_Admin {
 	public function handle_save_settings() {
 		$this->guard( 'nlc_save_settings' );
 
-		$booleans = array( 'allow_updates', 'allow_install', 'allow_user_mgmt', 'allow_maintenance', 'allow_content', 'allow_backup', 'allow_autologin', 'allow_mmode', 'allow_self_update', 'allow_branding', 'allow_links', 'allow_maintlog', 'require_ssl' );
+		$booleans = array( 'allow_updates', 'allow_install', 'allow_user_mgmt', 'allow_maintenance', 'allow_content', 'allow_backup', 'allow_autologin', 'allow_mmode', 'allow_self_update', 'allow_branding', 'allow_links', 'allow_maintlog', 'allow_restore', 'require_ssl' );
 		$values   = array();
 		foreach ( $booleans as $key ) {
 			$values[ $key ] = ! empty( $_POST[ $key ] );
@@ -176,6 +176,7 @@ class NLC_Admin {
 						'allow_branding'    => 'Support-Leiste und Login-Branding der Agentur zeigen',
 						'allow_links'       => 'Einmal pro Woche nach toten Links suchen',
 						'allow_maintlog'    => 'Zeigen, wann zuletzt gewartet wurde',
+						'allow_restore'     => 'Eine Sicherung zurückspielen dürfen (überschreibt diese Website)',
 						'require_ssl'       => 'Nur HTTPS-Requests akzeptieren',
 					);
 					foreach ( $labels as $key => $label ) :

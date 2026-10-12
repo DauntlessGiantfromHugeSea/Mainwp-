@@ -33,6 +33,7 @@ final class ChildFeature {
 		'branding'   => array( 'min' => '1.4.0', 'flag' => 'allow_branding', 'label' => 'Das Agentur-Branding' ),
 		'links'      => array( 'min' => '1.5.0', 'flag' => 'allow_links', 'label' => 'Die Link-Prüfung' ),
 		'maintlog'   => array( 'min' => '1.7.0', 'flag' => 'allow_maintlog', 'label' => 'Die Wartungsübersicht auf der Kundenseite' ),
+		'restore'    => array( 'min' => '1.8.0', 'flag' => 'allow_restore', 'label' => 'Das Zurückspielen einer Sicherung' ),
 		'backuplog'  => array( 'min' => '1.6.0', 'flag' => 'allow_backup', 'label' => 'Die Sicherungsübersicht auf der Kundenseite' ),
 	);
 

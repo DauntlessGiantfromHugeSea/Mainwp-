@@ -30,6 +30,9 @@ final class Scheduler {
 		'restore_test' => array( 'label' => 'Wiederherstellung prüfen', 'interval' => 86400 ),
 		'vulnerabilities' => array( 'label' => 'Sicherheitslücken abgleichen', 'interval' => 86400 ),
 		'maintlog'     => array( 'label' => 'Wartungsübersicht auf den Kundenseiten', 'interval' => 86400 ),
+		// Jede Minute nachsehen: wer gerade den Code eingetippt hat, soll
+		// nicht noch eine Viertelstunde auf eine kaputte Seite schauen.
+		'restores'     => array( 'label' => 'Freigegebene Wiederherstellungen', 'interval' => 60 ),
 		// Jede Minute nachsehen. Der Durchgang ist billig, wenn nichts ansteht,
 		// und eine von Hand angestossene Sicherung soll nicht erst in fuenf
 		// Minuten loslaufen.
@@ -50,7 +53,7 @@ final class Scheduler {
 	 * halbe Stunde ist dafür nichts. Liefe die Sperre vorher ab, startete der
 	 * nächste Durchgang dieselbe Sicherung ein zweites Mal.
 	 */
-	private const LOCK_TIMEOUTS = array( 'backups' => 21600, 'updates' => 3600 );
+	private const LOCK_TIMEOUTS = array( 'backups' => 21600, 'updates' => 3600, 'restores' => 21600 );
 
 	/**
 	 * Alle fälligen Aufgaben ausführen.
@@ -199,6 +202,9 @@ final class Scheduler {
 
 			case 'maintlog':
 				return MaintLogService::pushAll();
+
+			case 'restores':
+				return RestoreRunner::runDue();
 
 			case 'cleanup':
 				$activity = ActivityRepository::prune( Setting::getInt( 'activity_retention', 180 ) );

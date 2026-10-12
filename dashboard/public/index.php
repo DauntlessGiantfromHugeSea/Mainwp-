@@ -12,6 +12,7 @@ require_once dirname( __DIR__ ) . '/src/bootstrap.php';
 use NorthLab\Controller\ActivityController;
 use NorthLab\Controller\ApiController;
 use NorthLab\Controller\ChildUpdateController;
+use NorthLab\Controller\RestoreReleaseController;
 use NorthLab\Controller\IconController;
 use NorthLab\Controller\PushController;
 use NorthLab\Controller\PwaController;
@@ -103,6 +104,10 @@ $router->post( '/push/subscribe', array( PushController::class, 'subscribe' ) );
 $router->post( '/push/unsubscribe', array( PushController::class, 'unsubscribe' ) );
 $router->post( '/push/test', array( PushController::class, 'test' ) );
 $router->get( '/api/child/package/{connection:[A-Za-z0-9_-]{8,64}}', array( ChildUpdateController::class, 'package' ) );
+// Der Freigabecode wird hier geprueft, nicht auf der Kundenseite: so
+// verlaesst das Geheimnis das Panel nie und jeder Versuch wird mitgezaehlt.
+$router->post( '/api/child/restore/{connection:[A-Za-z0-9_-]{8,64}}', array( RestoreReleaseController::class, 'redeem' ) );
+$router->get( '/api/child/restore/{connection:[A-Za-z0-9_-]{8,64}}', array( RestoreReleaseController::class, 'status' ) );
 
 $router->get( '/login', array( AuthController::class, 'showLogin' ) );
 $router->post( '/login', array( AuthController::class, 'login' ) );
@@ -153,6 +158,9 @@ $router->post( '/backups/{id:\d+}/restore-test', array( BackupController::class,
 $router->get( '/backups/{id:\d+}/snapshots', array( BackupController::class, 'snapshots' ) );
 $router->get( '/sites/{id:\d+}/restore', array( RestoreController::class, 'index' ) );
 $router->get( '/sites/{id:\d+}/restore/download', array( RestoreController::class, 'download' ) );
+$router->post( '/sites/{id:\d+}/restore/release', array( RestoreController::class, 'release' ) );
+$router->post( '/sites/{id:\d+}/restore/start', array( RestoreController::class, 'start' ) );
+$router->post( '/sites/{id:\d+}/restore/cancel', array( RestoreController::class, 'cancel' ) );
 
 // Uptime
 $router->get( '/uptime', array( UptimeController::class, 'index' ) );

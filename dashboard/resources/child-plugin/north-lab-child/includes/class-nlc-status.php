@@ -28,6 +28,7 @@ class NLC_Status {
 		add_action( 'wp_ajax_nlc_fortschritt', array( $this, 'handle_progress' ) );
 		add_action( 'wp_dashboard_setup', array( $this, 'widget' ) );
 		add_action( 'admin_head', array( $this, 'menu_style' ) );
+		add_action( 'admin_post_nlc_restore', array( $this, 'handle_restore' ) );
 	}
 
 	/**
@@ -300,6 +301,109 @@ class NLC_Status {
 		return 'vor ' . human_time_diff( $ts );
 	}
 
+	/**
+	 * Der Abschnitt zum Zurückspielen.
+	 *
+	 * Steht bewusst über der Wartung und nicht ganz unten: wer hier landet,
+	 * hat in der Regel ein Problem.
+	 *
+	 * Der Kunde kann das Zurückspielen auslösen, aber nichts daran ändern.
+	 * Welcher Stand das ist und was davon zurückgeht, hat die Agentur beim
+	 * Ausgeben des Codes festgelegt.
+	 */
+	protected function zurueckspielen() {
+		if ( ! NLC_Options::setting( 'allow_restore' ) ) {
+			return;
+		}
+
+		$hinweis = get_transient( 'nlc_restore_hinweis_' . get_current_user_id() );
+
+		if ( is_array( $hinweis ) ) {
+			delete_transient( 'nlc_restore_hinweis_' . get_current_user_id() );
+
+			printf(
+				'<div class="notice notice-%s"><p>%s</p></div>',
+				empty( $hinweis['ok'] ) ? 'error' : 'success',
+				esc_html( (string) ( $hinweis['text'] ?? '' ) )
+			);
+		}
+
+		$lauf = NLC_Restore::remote_state();
+		?>
+		<h2 class="title">Sicherung zurückspielen</h2>
+
+		<?php if ( ! empty( $lauf['running'] ) ) : ?>
+			<div class="notice notice-info">
+				<p>
+					<strong>Es wird gerade zurückgespielt.</strong>
+					<?php echo esc_html( (string) ( $lauf['phase'] ?? '' ) ); ?>
+				</p>
+				<p class="description" style="margin-bottom:8px">
+					Die Website ist währenddessen im Wartungsmodus. Bitte in dieser Zeit nichts
+					bearbeiten — es würde gleich wieder überschrieben.
+				</p>
+			</div>
+		<?php else : ?>
+			<p style="max-width:760px">
+				Wenn an dieser Website etwas schiefgegangen ist, können wir einen früheren Stand
+				zurückspielen. Damit das nicht versehentlich passiert, braucht es einen Freigabecode
+				von <?php echo esc_html( self::agency() ); ?> — melde dich bei uns, wir legen fest,
+				welcher Stand zurückgeht, und nennen dir sechs Ziffern.
+			</p>
+			<p class="description" style="max-width:760px">
+				Der Code gilt eine Stunde und nur ein einziges Mal. Vor dem Zurückspielen wird der
+				jetzige Stand gesichert — es geht also nichts verloren, was sich nicht wiederholen
+				liesse.
+			</p>
+
+			<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="margin-top:14px">
+				<input type="hidden" name="action" value="nlc_restore">
+				<?php wp_nonce_field( 'nlc_restore' ); ?>
+				<label for="nlc-code" class="screen-reader-text">Freigabecode</label>
+				<input type="text" id="nlc-code" name="code" inputmode="numeric" autocomplete="off"
+					pattern="[0-9]*" maxlength="6" placeholder="123456" required
+					style="font-size:20px;letter-spacing:.3em;width:160px;text-align:center;font-family:ui-monospace,monospace">
+				<button type="submit" class="button button-primary">Zurückspielen starten</button>
+			</form>
+		<?php endif; ?>
+		<?php
+	}
+
+	/**
+	 * Den Freigabecode entgegennehmen.
+	 *
+	 * Geprüft wird er beim Dashboard — hier wird nur weitergereicht. Der
+	 * Hinweis landet in einem Transient, weil danach umgeleitet wird und
+	 * eine Meldung in der Adresszeile nichts zu suchen hat.
+	 */
+	public function handle_restore() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'Dafür fehlen die Rechte.', 'north-lab-child' ), '', array( 'response' => 403 ) );
+		}
+
+		check_admin_referer( 'nlc_restore' );
+
+		$ergebnis = NLC_Restore::redeem( isset( $_POST['code'] ) ? wp_unslash( $_POST['code'] ) : '' );
+
+		set_transient(
+			'nlc_restore_hinweis_' . get_current_user_id(),
+			array(
+				'ok'   => ! empty( $ergebnis['ok'] ),
+				'text' => ! empty( $ergebnis['ok'] )
+					? sprintf(
+						'Freigabe angenommen (%s). Das Zurückspielen beginnt in Kürze — die Website geht '
+							. 'währenddessen kurz in den Wartungsmodus.',
+						(string) ( $ergebnis['label'] ?? '' )
+					)
+					: (string) ( $ergebnis['error'] ?? 'Der Code stimmt nicht.' ),
+			),
+			60
+		);
+
+		wp_safe_redirect( admin_url( 'admin.php?page=' . self::SLUG ) );
+		exit;
+	}
+
 	public function render() {
 		$laeuft  = NLC_Backuplog::running();
 		$log     = NLC_Backuplog::entries();
@@ -387,6 +491,8 @@ class NLC_Status {
 			<?php endif; ?>
 
 			<?php $this->stand_karten( $stand, $log, $wartung ); ?>
+
+			<?php $this->zurueckspielen(); ?>
 
 			<h2 class="title">Wartung</h2>
 			<?php if ( ! $wartung ) : ?>

@@ -7,6 +7,10 @@
  * @var string                   $snapshot
  * @var array<string,mixed>      $view
  * @var bool                     $ready
+ * @var array<string,string>     $scopes
+ * @var array<string,mixed>|null $offen
+ * @var string                   $code
+ * @var bool                     $canWrite
  */
 
 use NorthLab\Core\View;
@@ -48,6 +52,98 @@ $basis = '/sites/' . (int) $site['id'] . '/restore';
 		<?php endif; ?>
 	</div>
 </div>
+
+<?php
+// Der eben ausgegebene Code. Er steht genau hier einmal und sonst nirgends
+// — in der Tabelle liegt nur sein Hash.
+if ( '' !== $code ) :
+	?>
+	<div class="card">
+		<div class="card-body">
+			<p class="small muted" style="margin-top:0">
+				Diesen Code dem Kunden durchgeben. Er gilt <strong>eine Stunde</strong> und genau
+				<strong>einmal</strong>. Danach ist er auch hier nicht mehr zu sehen —
+				wer ihn verliert, fordert einen neuen an.
+			</p>
+			<div class="copy-row" style="max-width:320px">
+				<input type="text" id="restore-code" readonly class="mono" value="<?= e( $code ) ?>"
+					data-select-all style="font-size:26px;letter-spacing:.3em;text-align:center">
+				<button class="btn sm" type="button" data-copy="#restore-code">Kopieren</button>
+			</div>
+		</div>
+	</div>
+<?php endif; ?>
+
+<?php if ( null !== $offen ) : ?>
+	<div class="card">
+		<div class="card-head">
+			<h2>Offenes Vorhaben</h2>
+			<div class="spacer"></div>
+			<?php if ( 'laeuft' === $offen['status'] ) : ?>
+				<span class="badge warn"><span class="dot"></span>läuft</span>
+			<?php elseif ( 'vorgemerkt' === $offen['status'] ) : ?>
+				<span class="badge warn">freigegeben</span>
+			<?php else : ?>
+				<span class="badge">wartet auf den Code</span>
+			<?php endif; ?>
+		</div>
+		<div class="card-body">
+			<p class="small">
+				<strong><?= e( $scopes[ (string) $offen['scope'] ] ?? (string) $offen['scope'] ) ?></strong>
+				aus dem Stand vom
+				<?= e( $offen['snapshot_at'] ? nl_date( (string) $offen['snapshot_at'] ) : substr( (string) $offen['snapshot'], 0, 8 ) ) ?>.
+			</p>
+			<?php if ( 'laeuft' === $offen['status'] && '' !== (string) $offen['phase'] ) : ?>
+				<p class="small muted"><?= e( (string) $offen['phase'] ) ?></p>
+			<?php endif; ?>
+			<?php if ( $canWrite && 'laeuft' !== $offen['status'] ) : ?>
+				<form method="post" action="<?= e( url( $basis . '/cancel' ) ) ?>"
+					data-confirm="Freigabe zurücknehmen? Der Code gilt dann nicht mehr.">
+					<?= csrf_field() ?>
+					<button class="btn ghost sm">Freigabe zurücknehmen</button>
+				</form>
+			<?php endif; ?>
+		</div>
+	</div>
+<?php endif; ?>
+
+<?php if ( '' !== $snapshot && $canWrite && null === $offen ) : ?>
+	<div class="card">
+		<div class="card-head"><h2>Diesen Stand zurückspielen</h2></div>
+		<div class="card-body">
+			<p class="small muted" style="margin-top:0">
+				Überschreibt die laufende Website. Vorher wird der jetzige Stand gesichert —
+				immer, auch wenn es eilt. Während des Zurückspielens ist die Seite im
+				Wartungsmodus.
+			</p>
+
+			<div class="field" style="max-width:320px">
+				<label for="scope">Was soll zurück?</label>
+				<select id="scope" name="scope" form="restore-release">
+					<?php foreach ( $scopes as $wert => $label ) : ?>
+						<option value="<?= e( $wert ) ?>"<?= 'both' === $wert ? ' selected' : '' ?>><?= e( $label ) ?></option>
+					<?php endforeach; ?>
+				</select>
+			</div>
+
+			<form method="post" id="restore-release" action="<?= e( url( $basis . '/release' ) ) ?>">
+				<?= csrf_field() ?>
+				<input type="hidden" name="snapshot" value="<?= e( $snapshot ) ?>">
+				<div class="btn-row">
+					<button class="btn" data-busy="…">Code für den Kunden anfordern</button>
+					<button class="btn danger" formaction="<?= e( url( $basis . '/start' ) ) ?>"
+						data-confirm="Diesen Stand jetzt zurückspielen? Die laufende Website wird überschrieben."
+						data-busy="…">Jetzt selbst zurückspielen</button>
+				</div>
+			</form>
+
+			<p class="hint">
+				Der Kunde kann mit dem Code nur genau das auslösen, was hier steht — nicht einen
+				anderen Stand und nichts Weiteres.
+			</p>
+		</div>
+	</div>
+<?php endif; ?>
 
 <?php if ( '' !== $snapshot ) : ?>
 	<div class="card">

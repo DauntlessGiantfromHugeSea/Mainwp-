@@ -41,6 +41,10 @@ class NLC_Options {
 			'allow_branding'    => true,
 			'allow_links'       => true,
 			'allow_maintlog'    => true,
+			// Als einziger Schalter aus: das ist der einzige Weg, der
+			// in die Installation schreibt und die Datenbank
+			// ueberschreibt. Wer das will, schaltet es bewusst ein.
+			'allow_restore'     => false,
 			'ip_allowlist'      => '',
 			'require_ssl'       => false,
 		);

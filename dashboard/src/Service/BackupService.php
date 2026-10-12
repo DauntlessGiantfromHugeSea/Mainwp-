@@ -182,7 +182,9 @@ final class BackupService {
 				)
 			);
 
-			return array( 'ok' => true, 'error' => '', 'stats' => $stats );
+			// Die Kennung gehoert mit zurueck: wer vor einem Zurueckspielen
+			// sichert, muss hinterher sagen koennen, worauf man zurueck kann.
+			return array( 'ok' => true, 'error' => '', 'stats' => $stats, 'snapshot' => (string) $backup['snapshot'] );
 
 		} catch ( Throwable $e ) {
 			Logger::exception( $e );
@@ -216,7 +218,7 @@ final class BackupService {
 				)
 			);
 
-			return array( 'ok' => false, 'error' => $e->getMessage(), 'stats' => $stats );
+			return array( 'ok' => false, 'error' => $e->getMessage(), 'stats' => $stats, 'snapshot' => '' );
 		}
 	}
 
@@ -1520,7 +1522,7 @@ final class BackupService {
 			ActivityRepository::log( 'backup.failed', $error, array( 'site_id' => $siteId, 'level' => 'error' ) );
 		}
 
-		return array( 'ok' => false, 'error' => $error, 'stats' => array() );
+		return array( 'ok' => false, 'error' => $error, 'stats' => array(), 'snapshot' => '' );
 	}
 
 	/**

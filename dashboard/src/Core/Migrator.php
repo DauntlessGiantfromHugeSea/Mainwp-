@@ -9,7 +9,7 @@ namespace NorthLab\Core;
  */
 final class Migrator {
 
-	public const SCHEMA_VERSION = 17;
+	public const SCHEMA_VERSION = 18;
 
 	/**
 	 * Alle Tabellen anlegen (idempotent).
@@ -337,6 +337,38 @@ final class Migrator {
 				PRIMARY KEY (`id`),
 				KEY `site_time` (`site_id`, `started_at`),
 				KEY `status` (`status`)
+			) {$charset}",
+
+			// Schema 18: Zurueckspielen einer Sicherung.
+			//
+			// Jede Zeile ist ein Vorhaben mit genau einem Ziel: diese Seite,
+			// dieser Sicherungspunkt, dieser Umfang. Der Freigabecode haengt
+			// daran und gilt fuer nichts anderes — damit kann der Kunde nicht
+			// aus Versehen einen ein Jahr alten Stand erwischen.
+			"CREATE TABLE IF NOT EXISTS `{$p}restore_jobs` (
+				`id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+				`site_id` BIGINT UNSIGNED NOT NULL,
+				`snapshot` VARCHAR(64) NOT NULL,
+				`snapshot_at` DATETIME NULL DEFAULT NULL,
+				`scope` VARCHAR(10) NOT NULL DEFAULT 'both',
+				`status` VARCHAR(20) NOT NULL DEFAULT 'wartet_code',
+				`code_hash` CHAR(64) NOT NULL DEFAULT '',
+				`code_expires_at` DATETIME NULL DEFAULT NULL,
+				`code_tries` SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+				`requested_at` DATETIME NOT NULL,
+				`requested_by` BIGINT UNSIGNED NULL DEFAULT NULL,
+				`released_at` DATETIME NULL DEFAULT NULL,
+				`started_at` DATETIME NULL DEFAULT NULL,
+				`finished_at` DATETIME NULL DEFAULT NULL,
+				`heartbeat_at` DATETIME NULL DEFAULT NULL,
+				`phase` VARCHAR(60) NOT NULL DEFAULT '',
+				`phase_done` INT UNSIGNED NOT NULL DEFAULT 0,
+				`phase_total` INT UNSIGNED NOT NULL DEFAULT 0,
+				`safety_snapshot` VARCHAR(64) NOT NULL DEFAULT '',
+				`note` TEXT NULL,
+				PRIMARY KEY (`id`),
+				KEY `offen` (`status`, `requested_at`),
+				KEY `site_id` (`site_id`)
 			) {$charset}",
 
 			// Schema 17: vorgemerkte Updates. Ein Update lief frueher im

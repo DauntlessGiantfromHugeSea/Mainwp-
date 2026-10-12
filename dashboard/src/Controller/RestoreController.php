@@ -7,9 +7,11 @@ namespace NorthLab\Controller;
 use NorthLab\Core\Auth;
 use NorthLab\Core\Request;
 use NorthLab\Core\Response;
+use NorthLab\Core\Session;
 use NorthLab\Repository\SiteRepository;
 use NorthLab\Service\BackupService;
 use NorthLab\Service\Restic;
+use NorthLab\Service\RestoreRunService;
 use NorthLab\Service\RestoreService;
 
 /**
@@ -56,7 +58,103 @@ final class RestoreController extends BaseController {
 				'snapshot'  => $snapshot,
 				'view'      => $ansicht,
 				'ready'     => Restic::configured() && Restic::available(),
+				'scopes'    => RestoreRunService::SCOPES,
+				'offen'     => RestoreRunService::openFor( $siteId ),
+				'code'      => $this->freshCode(),
+				'canWrite'  => Auth::canWrite(),
 			)
+		);
+	}
+
+	/**
+	 * Der eben ausgegebene Code, genau einmal.
+	 *
+	 * Er steht nur in der Sitzung und wird beim Anzeigen verbraucht — in der
+	 * Tabelle liegt bloss sein Hash, und beim naechsten Aufruf der Seite ist
+	 * er auch hier weg.
+	 */
+	private function freshCode(): string {
+		$code = (string) Session::get( '_restore_code', '' );
+
+		if ( '' !== $code ) {
+			Session::forget( '_restore_code' );
+		}
+
+		return $code;
+	}
+
+	/**
+	 * Eine Freigabe erstellen — der Kunde loest sie mit dem Code aus.
+	 */
+	public function release( Request $request ): void {
+		Auth::requireWrite();
+
+		$siteId = (int) $request->params['id'];
+		Auth::requireSite( $siteId );
+
+		$ergebnis = RestoreRunService::request(
+			$siteId,
+			trim( $request->string( 'snapshot' ) ),
+			$request->string( 'scope', 'both' )
+		);
+
+		if ( ! $ergebnis['ok'] ) {
+			$this->respond( $request, false, $ergebnis['error'], '/sites/' . $siteId . '/restore' );
+		}
+
+		// Nicht in die Adresszeile und nicht ins Protokoll: einmal zeigen,
+		// dann ist er auch hier weg.
+		Session::set( '_restore_code', $ergebnis['code'] );
+
+		$this->respond(
+			$request,
+			true,
+			'Freigabecode erstellt. Er gilt eine Stunde und genau einmal.',
+			'/sites/' . $siteId . '/restore'
+		);
+	}
+
+	/**
+	 * Aus dem Panel heraus starten — ohne Code.
+	 */
+	public function start( Request $request ): void {
+		Auth::requireWrite();
+
+		$siteId = (int) $request->params['id'];
+		Auth::requireSite( $siteId );
+
+		$ergebnis = RestoreRunService::startNow(
+			$siteId,
+			trim( $request->string( 'snapshot' ) ),
+			$request->string( 'scope', 'both' )
+		);
+
+		$this->respond(
+			$request,
+			$ergebnis['ok'],
+			$ergebnis['ok']
+				? 'Vorgemerkt. Der Zeitplaner sichert zuerst den jetzigen Stand und spielt dann zurück.'
+				: $ergebnis['error'],
+			'/sites/' . $siteId . '/restore'
+		);
+	}
+
+	/**
+	 * Eine Freigabe zuruecknehmen.
+	 */
+	public function cancel( Request $request ): void {
+		Auth::requireWrite();
+
+		$siteId = (int) $request->params['id'];
+		Auth::requireSite( $siteId );
+
+		$weg = RestoreRunService::discardOpen( $siteId, 'Von Hand zurückgenommen.' );
+
+		$this->respond(
+			$request,
+			true,
+			$weg > 0 ? 'Freigabe zurückgenommen. Der Code gilt nicht mehr.' : 'Es war nichts offen.',
+			'/sites/' . $siteId . '/restore'
 		);
 	}
 

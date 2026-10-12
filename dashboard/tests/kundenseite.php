@@ -48,11 +48,17 @@ function nlc_test_http( $methode, $url, $args ) {
 
 	if ( $eintrag instanceof WP_Error ) { return $eintrag; }
 
-	return array( 'response' => array( 'code' => (int) $eintrag ) );
+	return array(
+		'response' => array( 'code' => (int) $eintrag ),
+		'body'     => (string) ( $GLOBALS['antwort_body'][ $url ] ?? '' ),
+	);
 }
 function wp_remote_head( $url, $args = array() ) { return nlc_test_http( 'HEAD', $url, $args ); }
 function wp_remote_get( $url, $args = array() ) { return nlc_test_http( 'GET', $url, $args ); }
 function wp_remote_retrieve_response_code( $r ) { return is_array( $r ) ? (int) ( $r['response']['code'] ?? 0 ) : 0; }
+function wp_remote_post( $url, $args = array() ) { $GLOBALS['posted'] = $args['body'] ?? array(); return nlc_test_http( 'POST', $url, $args ); }
+/** Der Rumpf kommt aus der Tabelle; ohne Eintrag ist er leer. */
+function wp_remote_retrieve_body( $r ) { return is_array( $r ) ? (string) ( $r['body'] ?? '' ) : ''; }
 
 class NLC_Test_WPDB {
 	public $posts = 'wp_posts';
@@ -743,6 +749,90 @@ check( 'Das Logo wird als Maske gesetzt', str_contains( $stil, 'mask:url(' ) || 
 check( 'Auch mit Praefix fuer aeltere Browser', str_contains( $stil, '-webkit-mask:' ) );
 check( 'Die Farbe kommt vom Menue', str_contains( $stil, 'background-color:currentColor' ) );
 check( 'Und es trifft den richtigen Menuepunkt', str_contains( $stil, 'toplevel_page_north-lab' ) );
+
+/* ========================= Zurückspielen: der Weg für den Kunden */
+
+// Ein echtes Verzeichnis, damit realpath() etwas zu tun hat — die
+// Pfadpruefung ist genau das, was hier geprueft wird.
+$wpInhalt = sys_get_temp_dir() . '/nlc-kundenseite/wp-content';
+@mkdir( $wpInhalt . '/plugins/north-lab-child', 0700, true );
+@mkdir( $wpInhalt . '/plugins/woocommerce', 0700, true );
+
+define( 'WP_CONTENT_DIR', $wpInhalt );
+
+require_once dirname( __DIR__ ) . '/resources/child-plugin/north-lab-child/includes/class-nlc-backup.php';
+require_once dirname( __DIR__ ) . '/resources/child-plugin/north-lab-child/includes/class-nlc-restore.php';
+
+// Standardmaessig aus. Das ist der einzige Schalter im Plugin, der so
+// steht — alles andere liest nur, das hier ueberschreibt die Website.
+check( 'Zurückspielen ist von Haus aus abgeschaltet',
+	false === NLC_Options::default_settings()['allow_restore'] );
+
+NLC_Options::save_settings( array( 'allow_restore' => false ) );
+$ohne = seite();
+check( 'Abgeschaltet steht davon nichts auf der Seite', false === strpos( $ohne, 'Sicherung zurückspielen' ) );
+
+NLC_Options::save_settings( array( 'allow_restore' => true ) );
+$mit = seite();
+
+check( 'Eingeschaltet gibt es den Abschnitt', false !== strpos( $mit, 'Sicherung zurückspielen' ) );
+check( 'Mit einem Feld für sechs Ziffern', false !== strpos( $mit, 'maxlength="6"' ) );
+check( 'Und der Erklärung, woher der Code kommt', false !== strpos( $mit, 'Freigabecode' ) );
+// Der Kunde soll wissen, dass nichts verloren geht — sonst traut sich
+// niemand, den Knopf zu druecken.
+check( 'Es steht da, dass vorher gesichert wird', false !== strpos( $mit, 'jetzige Stand gesichert' ) );
+check( 'Und dass der Code nur einmal gilt', false !== strpos( $mit, 'ein einziges Mal' ) );
+
+// Läuft gerade etwas, gibt es kein Eingabefeld — sonst tippt jemand
+// mittendrin einen zweiten Code ein.
+$verbindung = NLC_Options::connection();
+$adresse    = rtrim( (string) $verbindung['dashboard_url'], '/' ) . '/api/child/restore/' . rawurlencode( (string) $verbindung['connection_id'] );
+
+$GLOBALS['antworten'][ $adresse ]['GET'] = 200;
+$laufend = seite();
+check( 'Ohne laufenden Vorgang gibt es das Feld', false !== strpos( $laufend, 'maxlength="6"' ) );
+
+// Jetzt mit Antwort "laeuft".
+function nlc_test_body( string $url, array $daten ): void {
+	$GLOBALS['antwort_body'][ $url ] = wp_json_encode( $daten );
+}
+
+$GLOBALS['antwort_body'][ $adresse ] = wp_json_encode( array( 'running' => true, 'phase' => 'Datenbank wird eingespielt' ) );
+
+$laeuft = seite();
+check( 'Während eines Laufs steht die Phase da', false !== strpos( $laeuft, 'Datenbank wird eingespielt' ) );
+check( 'Und kein zweites Eingabefeld', false === strpos( $laeuft, 'maxlength="6"' ) );
+check( 'Mit der Bitte, nichts zu bearbeiten', false !== strpos( $laeuft, 'es würde gleich wieder überschrieben' ) );
+
+unset( $GLOBALS['antwort_body'][ $adresse ] );
+
+/* ------------------------------------- Pfade: was abprallt, prallt ab */
+
+// Die gefaehrlichste Stelle im ganzen Plugin. Hier entsteht aus einer
+// Angabe von aussen ein Pfad, in den geschrieben wird.
+$basis = realpath( NLC_Backup::roots()['content'] );
+
+foreach ( array(
+	'../../../etc/passwd',
+	'..',
+	'wp-content/../../wp-config.php',
+	'a/../../b',
+	"boese\0.php",
+) as $boese ) {
+	check( 'Abgewiesen: ' . str_replace( "\0", '\\0', $boese ), null === NLC_Restore::target( 'content', $boese ) );
+}
+
+// Das Plugin darf sich nicht selbst ueberschreiben, waehrend es laeuft.
+check( 'Das eigene Plugin ist tabu', null === NLC_Restore::target( 'content', 'plugins/north-lab-child/north-lab-child.php' ) );
+check( 'Auch der Ordner selbst', null === NLC_Restore::target( 'content', 'plugins/north-lab-child' ) );
+
+// Ein gewoehnlicher Pfad muss natuerlich durchkommen.
+$gut = NLC_Restore::target( 'content', 'plugins/woocommerce/woocommerce.php' );
+check( 'Ein normaler Pfad kommt durch', null !== $gut );
+check( 'Und liegt unterhalb von wp-content',
+	is_string( $gut ) && 0 === strpos( $gut, (string) $basis . '/' ), (string) $gut );
+check( 'Das wp-content-Präfix wird nicht doppelt gesetzt',
+	NLC_Restore::target( 'content', 'wp-content/plugins/x/y.php' ) === NLC_Restore::target( 'content', 'plugins/x/y.php' ) );
 
 echo "$n Prüfungen, $fails Fehler\n";
 exit( $fails > 0 ? 1 : 0 );

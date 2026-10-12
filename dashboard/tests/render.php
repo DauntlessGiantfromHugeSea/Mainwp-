@@ -220,6 +220,10 @@ $wiederData = static function ( array $over = array() ): array {
 			'snapshot'  => '',
 			'view'      => array( 'ok' => false, 'error' => '', 'entries' => array(), 'crumbs' => array(), 'path' => '' ),
 			'ready'     => true,
+			'scopes'    => \NorthLab\Service\RestoreRunService::SCOPES,
+			'offen'     => null,
+			'code'      => '',
+			'canWrite'  => true,
 		),
 		$over
 	);
@@ -994,6 +998,60 @@ check( 'Bericht zeigt die Verfügbarkeit beider Seiten', substr_count( $reportHt
 // ------------------------------------------------------ Reine Typlogik
 check( 'isManaged: Standard ist WordPress', SiteRepository::isManaged( array() ) );
 check( 'isManaged: monitor ist nicht verwaltet', ! SiteRepository::isManaged( array( 'site_type' => 'monitor' ) ) );
+/* ============================ Zurueckspielen: Freigabe und Code */
+
+// Der einzige Vorgang, der die Kundenseite ueberschreibt. Die Oberflaeche
+// muss sagen, was passiert, und darf den Code nicht liegen lassen.
+$wMitStand = render( 'backups/restore', $wiederData( array( 'snapshot' => 'a1b2c3d4' ) ) );
+
+check( 'Mit gewaehltem Stand gibt es das Zurueckspielen', str_contains( $wMitStand, 'Diesen Stand zurückspielen' ) );
+check( 'Der Umfang ist waehlbar', str_contains( $wMitStand, 'nur die Datenbank' ) && str_contains( $wMitStand, 'Datenbank und Dateien' ) );
+check( 'Es gibt den Weg ueber den Kunden', str_contains( $wMitStand, 'Code für den Kunden anfordern' ) );
+check( 'Und den direkten', str_contains( $wMitStand, 'Jetzt selbst zurückspielen' ) );
+// Ein Knopf, der eine Website ueberschreibt, fragt vorher.
+check( 'Der direkte fragt vorher nach', str_contains( $wMitStand, 'Die laufende Website wird überschrieben' ) );
+check( 'Und es steht da, dass vorher gesichert wird', str_contains( $wMitStand, 'jetzige Stand gesichert' ) );
+
+// Ohne Schreibrecht wird gar nichts angeboten.
+$wLesen = render( 'backups/restore', $wiederData( array( 'snapshot' => 'a1b2c3d4', 'canWrite' => false ) ) );
+check( 'Ein Lesekonto bekommt den Knopf nicht', ! str_contains( $wLesen, 'Jetzt selbst zurückspielen' ) );
+check( 'Und auch keinen Code', ! str_contains( $wLesen, 'Code für den Kunden anfordern' ) );
+
+// Der Code steht genau einmal da.
+$wCode = render( 'backups/restore', $wiederData( array( 'snapshot' => 'a1b2c3d4', 'code' => '481516' ) ) );
+check( 'Der frische Code wird gezeigt', str_contains( $wCode, '481516' ) );
+check( 'Mit dem Hinweis, dass er einmal gilt', str_contains( $wCode, 'einmal' ) );
+check( 'Und eine Stunde', str_contains( $wCode, 'eine Stunde' ) );
+check( 'Ohne frischen Code steht keiner da', ! str_contains( $wMitStand, 'restore-code' ) );
+
+// Solange etwas offen ist, wird nicht noch einmal angeboten.
+$wOffen = render( 'backups/restore', $wiederData( array(
+	'snapshot' => 'a1b2c3d4',
+	'offen'    => array(
+		'status' => 'wartet_code', 'scope' => 'db', 'snapshot' => 'a1b2c3d4',
+		'snapshot_at' => '2026-10-04 02:00:00', 'phase' => '',
+	),
+) ) );
+
+check( 'Ein offenes Vorhaben wird genannt', str_contains( $wOffen, 'Offenes Vorhaben' ) );
+check( 'Mit dem Umfang', str_contains( $wOffen, 'nur die Datenbank' ) );
+check( 'Und dem Stand', str_contains( $wOffen, '04.10.2026' ) );
+check( 'Es laesst sich zuruecknehmen', str_contains( $wOffen, 'Freigabe zurücknehmen' ) );
+// Zwei gleichzeitig waeren zwei gueltige Codes fuer zwei Staende.
+check( 'Solange wird kein zweites angeboten', ! str_contains( $wOffen, 'Code für den Kunden anfordern' ) );
+
+$wLaeuft = render( 'backups/restore', $wiederData( array(
+	'snapshot' => 'a1b2c3d4',
+	'offen'    => array(
+		'status' => 'laeuft', 'scope' => 'both', 'snapshot' => 'a1b2c3d4',
+		'snapshot_at' => '2026-10-04 02:00:00', 'phase' => 'Datenbank wird eingespielt',
+	),
+) ) );
+
+check( 'Ein laufendes Zurueckspielen zeigt die Phase', str_contains( $wLaeuft, 'Datenbank wird eingespielt' ) );
+// Mittendrin abbrechen waere schlimmer als zu Ende laufen zu lassen.
+check( 'Und laesst sich nicht mehr zuruecknehmen', ! str_contains( $wLaeuft, 'Freigabe zurücknehmen' ) );
+
 /* ===================================== Updateseite: die Warteschlange */
 
 // Ein Fehler hier ist ein weisser Bildschirm statt der Updateseite. Die

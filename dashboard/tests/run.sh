@@ -115,6 +115,7 @@ if [ "$hat_db" -eq 1 ]; then
 	lauf "luecken" "php '$HIER/luecken.php'"
 	lauf "zugriff" "php '$HIER/zugriff.php'"
 	lauf "anmeldung" "php '$HIER/anmeldung.php'"
+	lauf "freigabe" "php '$HIER/freigabe.php'"
 	lauf "warteschlange" "php '$HIER/warteschlange.php'"
 
 	if [ "$hat_restic" -eq 1 ]; then
@@ -129,7 +130,7 @@ if [ "$hat_db" -eq 1 ]; then
 		ueberspringe "backup-e2e, backup-setup" "restic ist nicht installiert"
 	fi
 else
-	ueberspringe "setting, update, paneldump, mmode-verify, pdf, luecken, zugriff, anmeldung, warteschlange, backup-e2e, backup-setup" "keine MariaDB auf 127.0.0.1:3306"
+	ueberspringe "setting, update, paneldump, mmode-verify, pdf, luecken, zugriff, anmeldung, freigabe, warteschlange, backup-e2e, backup-setup" "keine MariaDB auf 127.0.0.1:3306"
 fi
 
 # --- Laeufe im Browser -------------------------------------------------------
